@@ -1,0 +1,23 @@
+name: sae-api
+
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      NODE_ENV: "${NODE_ENV:-production}"
+      DATABASE_URL: "postgres://postgres:postgres@db:5432/sae"
+      JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
+      JWT_EXPIRES_IN: "${JWT_EXPIRES_IN:-15m}"
+      REFRESH_TOKEN_EXPIRES_IN: "${REFRESH_TOKEN_EXPIRES_IN:-7d}"
+      CORS_ORIGIN: "${CORS_ORIGIN:-http://localhost:5173}"
+    restart: on-failure
+    networks:
+      - sae_net
+
+networks:
+  sae_net:
+    external: true
+    name: sae_net
