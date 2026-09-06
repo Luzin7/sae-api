@@ -64,7 +64,7 @@ export default async function authRoutes(app: FastifyInstance) {
       const result = await authService.login(body);
 
       reply
-        .setCookie('token', result.accessToken, { httpOnly: true, secure: true,  path: '/', sameSite: 'lax' })
+        .setCookie('token', result.accessToken, { httpOnly: true, secure: true,  path: '/', sameSite: 'none' })
         .send({ player: { id: result.player.id, name: result.player.name } });
     },
   );
@@ -88,7 +88,7 @@ export default async function authRoutes(app: FastifyInstance) {
     const result = await authService.refresh(token);
 
     reply
-      .setCookie('token', result.accessToken, { httpOnly: true, path: '/', sameSite: 'lax' })
+      .setCookie('token', result.accessToken, { httpOnly: true, path: '/', sameSite: 'none' })
       .send({ ok: true });
   });
 
