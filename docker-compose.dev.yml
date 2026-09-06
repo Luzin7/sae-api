@@ -1,0 +1,51 @@
+name: sae-api
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sae-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sae
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sae"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+    networks:
+      sae_net:
+        aliases:
+          - db
+
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      NODE_ENV: "${NODE_ENV:-production}"
+      DATABASE_URL: "postgres://postgres:postgres@db:5432/sae"
+      JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
+      JWT_EXPIRES_IN: "${JWT_EXPIRES_IN:-15m}"
+      REFRESH_TOKEN_EXPIRES_IN: "${REFRESH_TOKEN_EXPIRES_IN:-7d}"
+      CORS_ORIGIN: "${CORS_ORIGIN:-http://localhost:5173}"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - sae_net
+
+volumes:
+  pgdata:
+
+networks:
+  sae_net:
+    external: true
+    name: sae_net
