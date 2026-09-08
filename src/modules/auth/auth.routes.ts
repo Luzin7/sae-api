@@ -51,7 +51,11 @@ export default async function authRoutes(app: FastifyInstance) {
       reply
         .setCookie('token', result.accessToken, { httpOnly: true, secure: true, path: '/', sameSite: 'none' })
         .status(201)
-        .send({ player: { id: result.player.id, name: result.player.name } });
+        .send({
+          player: { id: result.player.id, name: result.player.name },
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+        });
     },
   );
 
@@ -64,8 +68,12 @@ export default async function authRoutes(app: FastifyInstance) {
       const result = await authService.login(body);
 
       reply
-        .setCookie('token', result.accessToken, { httpOnly: true, secure: true,  path: '/', sameSite: 'none' })
-        .send({ player: { id: result.player.id, name: result.player.name } });
+        .setCookie('token', result.accessToken, { httpOnly: true, secure: true, path: '/', sameSite: 'none' })
+        .send({
+          player: { id: result.player.id, name: result.player.name },
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+        });
     },
   );
 
@@ -83,16 +91,13 @@ export default async function authRoutes(app: FastifyInstance) {
     '/auth/refresh',
     { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request, reply) => {
-    const { refreshToken: token } = RefreshBodySchema.parse(request.body);
-    const authService = buildAuthService(app);
-    const result = await authService.refresh(token);
+      const { refreshToken: token } = RefreshBodySchema.parse(request.body);
+      const authService = buildAuthService(app);
+      const result = await authService.refresh(token);
 
-    reply
-      .setCookie('token', result.accessToken, { httpOnly: true, path: '/', sameSite: 'none' })
-      .send({ ok: true });
-  });
-
-  app.get('/auth/ws-token', { preHandler: authenticate }, async (request) => {
-    return { token: request.cookies['token'] ?? '' };
-  });
+      reply
+        .setCookie('token', result.accessToken, { httpOnly: true, path: '/', sameSite: 'none' })
+        .send({ accessToken: result.accessToken });
+    },
+  );
 }
