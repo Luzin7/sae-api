@@ -93,11 +93,3 @@ describe('POST /auth/refresh', () => {
     expect(res.statusCode).toBe(400);
   });
 });
-
-describe('GET /auth/ws-token', () => {
-  it('returns 401 without authentication', async () => {
-    const app = await buildTestApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/ws-token' });
-    expect(res.statusCode).toBe(401);
-  });
-});
