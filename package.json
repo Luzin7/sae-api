@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc && tsc-alias",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run build && npm run test",
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
