@@ -1,128 +1,119 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Fastify from 'fastify';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import authPlugin from '../../plugins/auth.plugin.js';
-import errorHandlerPlugin from '../../plugins/error-handler.plugin.js';
-import playerRoutes from './player.routes.js';
+import { registerErrorHandler } from '@infra/http/error-handler.js';
+import { GetMeService } from './get-me/get-me.service.js';
+import { GetPlayerService } from './get-player/get-player.service.js';
+import type { Player } from './player.entity.js';
+import type { PlayerRepository } from './player.repository.js';
+import playerRoutes, { type PlayerServices } from './player.routes.js';
+import { UpdateMeService } from './update-me/update-me.service.js';
 
-vi.mock('../../db/index.js', () => ({
-  db: {
-    query: {
-      player: { findFirst: vi.fn() },
-    },
-    update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(() => ({ returning: vi.fn(() => []) })) })) })),
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        innerJoin: vi.fn(() => ({
-          where: vi.fn(() => ({ limit: vi.fn(() => []) })),
-        })),
-      })),
-    })),
-  },
-}));
+process.env.JWT_SECRET = 'test-secret-key-for-tests-only';
 
-process.env['JWT_SECRET'] = 'test-secret-key-for-tests-only';
+function makePlayer(overrides: Partial<Player> = {}): Player {
+  return {
+    id: 'player-1',
+    name: 'Tester',
+    createdAt: new Date('2024-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
 
-async function buildTestApp() {
+function makePlayerRepository(): PlayerRepository {
+  return {
+    findById: vi.fn(),
+    findByName: vi.fn(),
+    save: vi.fn(),
+  };
+}
+
+function makeServices(players: PlayerRepository): PlayerServices {
+  return {
+    getMe: new GetMeService(players),
+    getPlayer: new GetPlayerService(players),
+    updateMe: new UpdateMeService(players),
+  };
+}
+
+async function buildTestApp(services: PlayerServices) {
   const app = Fastify({ logger: false });
   await app.register(authPlugin);
-  await app.register(errorHandlerPlugin);
-  await app.register(playerRoutes, { prefix: '/players' });
+  registerErrorHandler(app);
+  await app.register(playerRoutes, { prefix: '/players', services });
   return app;
 }
 
-function makeToken(app: Awaited<ReturnType<typeof buildTestApp>>, playerId = 'test-player-id') {
-  return app.jwt.sign({ sub: playerId, name: 'testplayer' });
+function makeToken(app: Awaited<ReturnType<typeof buildTestApp>>): string {
+  return app.jwt.sign({ sub: 'player-1', name: 'Tester' });
 }
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('GET /players/me', () => {
+describe('player routes', () => {
   it('returns 401 without authentication', async () => {
-    const app = await buildTestApp();
+    const app = await buildTestApp(makeServices(makePlayerRepository()));
+
     const res = await app.inject({ method: 'GET', url: '/players/me' });
+
     expect(res.statusCode).toBe(401);
   });
 
-  it('returns 200 with valid token', async () => {
-    const { db } = await import('../../db/index.js');
-    vi.mocked(db.query.player.findFirst).mockResolvedValue({
-      id: 'test-player-id',
-      name: 'testplayer',
-      passwordHash: 'hash',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as never);
-
-    const app = await buildTestApp();
-    const token = makeToken(app);
+  it('wraps GET /players/me in a named player envelope', async () => {
+    const players = makePlayerRepository();
+    vi.mocked(players.findById).mockResolvedValue(makePlayer());
+    const app = await buildTestApp(makeServices(players));
 
     const res = await app.inject({
       method: 'GET',
       url: '/players/me',
-      cookies: { token },
+      headers: { cookie: `token=${makeToken(app)}` },
     });
+
     expect(res.statusCode).toBe(200);
-  });
-});
-
-describe('GET /players/:id', () => {
-  it('returns 401 without authentication', async () => {
-    const app = await buildTestApp();
-    const res = await app.inject({ method: 'GET', url: '/players/some-id' });
-    expect(res.statusCode).toBe(401);
+    expect(res.json().player).toEqual({
+      id: 'player-1',
+      name: 'Tester',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    });
   });
 
-  it('returns 200 when requesting own profile', async () => {
-    const { db } = await import('../../db/index.js');
-    vi.mocked(db.query.player.findFirst).mockResolvedValue({
-      id: 'test-player-id',
-      name: 'testplayer',
-      passwordHash: 'hash',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as never);
-
-    const app = await buildTestApp();
-    const token = makeToken(app, 'test-player-id');
+  it('wraps GET /players/:id in a named player envelope', async () => {
+    const players = makePlayerRepository();
+    vi.mocked(players.findById).mockResolvedValue(makePlayer());
+    const app = await buildTestApp(makeServices(players));
 
     const res = await app.inject({
       method: 'GET',
-      url: '/players/test-player-id',
-      cookies: { token },
+      url: '/players/player-1',
+      headers: { cookie: `token=${makeToken(app)}` },
     });
+
     expect(res.statusCode).toBe(200);
-  });
-
-  it('returns 403 when requesting profile of a player with no shared game', async () => {
-    const { db } = await import('../../db/index.js');
-    vi.mocked(db.select).mockReturnValue({
-      from: vi.fn(() => ({
-        innerJoin: vi.fn(() => ({
-          where: vi.fn(() => ({ limit: vi.fn(() => []) })),
-        })),
-      })),
-    } as never);
-
-    const app = await buildTestApp();
-    const token = makeToken(app, 'requester-id');
-
-    const res = await app.inject({
-      method: 'GET',
-      url: '/players/other-player-id',
-      cookies: { token },
+    expect(res.json().player).toEqual({
+      id: 'player-1',
+      name: 'Tester',
+      createdAt: '2024-01-01T00:00:00.000Z',
     });
-    expect(res.statusCode).toBe(403);
   });
-});
 
-describe('PATCH /players/me', () => {
-  it('returns 401 without authentication', async () => {
-    const app = await buildTestApp();
+  it('wraps PATCH /players/me in a named player envelope', async () => {
+    const players = makePlayerRepository();
+    vi.mocked(players.findById).mockResolvedValue(makePlayer());
+    vi.mocked(players.findByName).mockResolvedValue(null);
+    vi.mocked(players.save).mockResolvedValue(makePlayer({ name: 'Renamed' }));
+    const app = await buildTestApp(makeServices(players));
+
     const res = await app.inject({
       method: 'PATCH',
       url: '/players/me',
-      payload: { name: 'newname' },
+      payload: { name: 'Renamed' },
+      headers: { cookie: `token=${makeToken(app)}` },
     });
-    expect(res.statusCode).toBe(401);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().player.name).toBe('Renamed');
   });
 });

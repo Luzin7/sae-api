@@ -1,108 +1,261 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AuthService } from './auth.service.js';
-import { ConflictError, NotFoundError, UnauthorizedError } from '../../lib/errors.js';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  InvalidCredentialsError,
+  SessionExpiredError,
+  UsernameTakenError,
+} from './auth.errors.js';
+import type {
+  AuthSessionRepository,
+  CredentialsRepository,
+} from './auth.repository.js';
+import { LoginService } from './login/login.service.js';
+import { LogoutService } from './logout/logout.service.js';
+import { RefreshService } from './refresh/refresh.service.js';
+import { RegisterService } from './register/register.service.js';
+import { WsTokenService } from './ws-token/ws-token.service.js';
 
-const mockPlayerRepo = {
-  findByName: vi.fn(),
-  create: vi.fn(),
-};
+function makeCredentialsRepository(): CredentialsRepository {
+  return {
+    findByUsername: vi.fn(),
+    create: vi.fn(),
+  };
+}
 
-const mockRefreshTokenRepo = {
-  create: vi.fn(),
-  findByToken: vi.fn(),
-  deleteByToken: vi.fn(),
-  deleteByPlayerId: vi.fn(),
-};
+function makeSessionsRepository(): AuthSessionRepository {
+  return {
+    create: vi.fn(),
+    findByHash: vi.fn(),
+    deleteByHash: vi.fn(),
+    deleteByPlayerId: vi.fn(),
+  };
+}
 
-const mockHash = {
-  hashPassword: vi.fn(),
-  verifyPassword: vi.fn(),
-};
+function makeRefreshTokens() {
+  return {
+    generate: vi.fn().mockReturnValue('refresh-token'),
+    hash: vi.fn((token: string) => `hash:${token}`),
+  };
+}
 
-const mockJwt = {
-  sign: vi.fn(),
-};
+describe('RegisterService', () => {
+  function makeSubject() {
+    const credentials = makeCredentialsRepository();
+    const sessions = makeSessionsRepository();
+    const sign = vi.fn().mockReturnValue('access-token');
+    const passwords = {
+      hash: vi.fn().mockResolvedValue('password-hash'),
+      verify: vi.fn(),
+    };
+    const refreshTokens = makeRefreshTokens();
 
-const service = new AuthService(mockPlayerRepo, mockRefreshTokenRepo, mockHash, mockJwt);
-
-beforeEach(() => vi.clearAllMocks());
-
-describe('AuthService.register', () => {
-  it('throws ConflictError when name is taken', async () => {
-    mockPlayerRepo.findByName.mockResolvedValue({ id: '1', name: 'existing' });
-    await expect(service.register({ name: 'existing', password: 'pass' })).rejects.toThrow(
-      ConflictError,
+    const service = new RegisterService(
+      credentials,
+      sessions,
+      { sign },
+      passwords,
+      refreshTokens,
     );
-  });
 
-  it('creates player and returns auth response', async () => {
-    mockPlayerRepo.findByName.mockResolvedValue(null);
-    mockHash.hashPassword.mockResolvedValue('hashed');
-    mockPlayerRepo.create.mockResolvedValue({ id: 'uuid-1', name: 'Alice' });
-    mockRefreshTokenRepo.create.mockResolvedValue({ token: 'refresh-token' });
-    mockJwt.sign.mockReturnValue('access-token');
+    return { service, credentials, sessions, passwords, refreshTokens };
+  }
 
-    const result = await service.register({ name: 'Alice', password: 'secret123' });
-
-    expect(result.player.name).toBe('Alice');
-    expect(result.accessToken).toBe('access-token');
-    expect(mockHash.hashPassword).toHaveBeenCalledWith('secret123');
-  });
-});
-
-describe('AuthService.login', () => {
-  it('throws NotFoundError when player does not exist', async () => {
-    mockPlayerRepo.findByName.mockResolvedValue(null);
-    await expect(service.login({ name: 'nobody', password: 'x' })).rejects.toThrow(NotFoundError);
-  });
-
-  it('throws UnauthorizedError when password is wrong', async () => {
-    mockPlayerRepo.findByName.mockResolvedValue({ id: '1', name: 'Alice', passwordHash: 'hash' });
-    mockHash.verifyPassword.mockResolvedValue(false);
-    await expect(service.login({ name: 'Alice', password: 'wrong' })).rejects.toThrow(
-      UnauthorizedError,
-    );
-  });
-
-  it('returns accessToken and refreshToken on success', async () => {
-    mockPlayerRepo.findByName.mockResolvedValue({ id: '1', name: 'Alice', passwordHash: 'hash' });
-    mockHash.verifyPassword.mockResolvedValue(true);
-    mockRefreshTokenRepo.create.mockResolvedValue({ token: 'refresh-token' });
-    mockJwt.sign.mockReturnValue('access-token');
-
-    const result = await service.login({ name: 'Alice', password: 'correct' });
-
-    expect(result.accessToken).toBe('access-token');
-    expect(result.player.name).toBe('Alice');
-  });
-});
-
-describe('AuthService.refresh', () => {
-  it('throws UnauthorizedError when token not found', async () => {
-    mockRefreshTokenRepo.findByToken.mockResolvedValue(null);
-    await expect(service.refresh('invalid-token')).rejects.toThrow(UnauthorizedError);
-  });
-
-  it('throws UnauthorizedError when token is expired', async () => {
-    mockRefreshTokenRepo.findByToken.mockResolvedValue({
-      token: 'tok',
-      expiresAt: new Date(Date.now() - 1000),
-      playerId: 'p1',
+  it('throws UsernameTakenError when the name is taken', async () => {
+    const { service, credentials, sessions } = makeSubject();
+    vi.mocked(credentials.findByUsername).mockResolvedValue({
+      id: 'taken-id',
+      name: 'Taken',
+      passwordHash: 'hash',
     });
-    await expect(service.refresh('tok')).rejects.toThrow(UnauthorizedError);
+
+    await expect(
+      service.execute({ name: 'Taken', password: 'secret123' }),
+    ).rejects.toBeInstanceOf(UsernameTakenError);
+    expect(sessions.create).not.toHaveBeenCalled();
   });
 
-  it('returns new accessToken on valid refresh token', async () => {
-    mockRefreshTokenRepo.findByToken.mockResolvedValue({
-      token: 'valid',
+  it('hashes the password and opens a refresh session', async () => {
+    const { service, credentials, sessions, passwords } = makeSubject();
+    vi.mocked(credentials.findByUsername).mockResolvedValue(null);
+    vi.mocked(credentials.create).mockResolvedValue({
+      id: 'player-1',
+      name: 'Alice',
+    });
+
+    const result = await service.execute({
+      name: 'Alice',
+      password: 'secret123',
+    });
+
+    expect(passwords.hash).toHaveBeenCalledWith('secret123');
+    expect(credentials.create).toHaveBeenCalledWith({
+      name: 'Alice',
+      passwordHash: 'password-hash',
+    });
+    expect(sessions.create).toHaveBeenCalledWith({
+      playerId: 'player-1',
+      tokenHash: 'hash:refresh-token',
+      expiresAt: expect.any(Date),
+    });
+    expect(result).toEqual({
+      player: { id: 'player-1', name: 'Alice' },
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+    });
+  });
+});
+
+describe('LoginService', () => {
+  function makeSubject() {
+    const credentials = makeCredentialsRepository();
+    const sessions = makeSessionsRepository();
+    const sign = vi.fn().mockReturnValue('access-token');
+    const passwords = {
+      hash: vi.fn(),
+      verify: vi.fn(),
+    };
+    const refreshTokens = makeRefreshTokens();
+
+    const service = new LoginService(
+      credentials,
+      sessions,
+      { sign },
+      passwords,
+      refreshTokens,
+    );
+
+    return { service, credentials, sessions, passwords };
+  }
+
+  it('throws the generic error when the user does not exist', async () => {
+    const { service, credentials } = makeSubject();
+    vi.mocked(credentials.findByUsername).mockResolvedValue(null);
+
+    await expect(
+      service.execute({ name: 'nobody', password: 'secret123' }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsError);
+  });
+
+  it('throws the same generic error when the password is wrong', async () => {
+    const { service, credentials, passwords } = makeSubject();
+    vi.mocked(credentials.findByUsername).mockResolvedValue({
+      id: 'player-1',
+      name: 'Alice',
+      passwordHash: 'hash',
+    });
+    vi.mocked(passwords.verify).mockResolvedValue(false);
+
+    await expect(
+      service.execute({ name: 'Alice', password: 'wrong' }),
+    ).rejects.toBeInstanceOf(InvalidCredentialsError);
+  });
+
+  it('returns tokens and opens a refresh session on success', async () => {
+    const { service, credentials, sessions, passwords } = makeSubject();
+    vi.mocked(credentials.findByUsername).mockResolvedValue({
+      id: 'player-1',
+      name: 'Alice',
+      passwordHash: 'hash',
+    });
+    vi.mocked(passwords.verify).mockResolvedValue(true);
+
+    const result = await service.execute({
+      name: 'Alice',
+      password: 'secret123',
+    });
+
+    expect(sessions.create).toHaveBeenCalledWith({
+      playerId: 'player-1',
+      tokenHash: 'hash:refresh-token',
+      expiresAt: expect.any(Date),
+    });
+    expect(result.accessToken).toBe('access-token');
+    expect(result.player).toEqual({ id: 'player-1', name: 'Alice' });
+  });
+});
+
+describe('RefreshService', () => {
+  function makeSubject() {
+    const sessions = makeSessionsRepository();
+    const sign = vi.fn().mockReturnValue('new-access-token');
+    const refreshTokens = {
+      generate: vi.fn().mockReturnValue('new-refresh-token'),
+      hash: vi.fn((token: string) => `hash:${token}`),
+    };
+
+    const service = new RefreshService(sessions, { sign }, refreshTokens);
+
+    return { service, sessions, refreshTokens };
+  }
+
+  it('throws SessionExpiredError when the presented token is unknown', async () => {
+    const { service, sessions } = makeSubject();
+    vi.mocked(sessions.findByHash).mockResolvedValue(null);
+
+    await expect(service.execute('unknown')).rejects.toBeInstanceOf(
+      SessionExpiredError,
+    );
+  });
+
+  it('throws SessionExpiredError when the session expired', async () => {
+    const { service, sessions } = makeSubject();
+    vi.mocked(sessions.findByHash).mockResolvedValue({
+      playerId: 'player-1',
+      name: 'Alice',
+      expiresAt: new Date(Date.now() - 1_000),
+      lastUsedAt: null,
+    });
+
+    await expect(service.execute('expired')).rejects.toBeInstanceOf(
+      SessionExpiredError,
+    );
+  });
+
+  it('rotates the session and signs a new access token', async () => {
+    const { service, sessions } = makeSubject();
+    vi.mocked(sessions.findByHash).mockResolvedValue({
+      playerId: 'player-1',
+      name: 'Alice',
       expiresAt: new Date(Date.now() + 100_000),
-      playerId: 'p1',
-      player: { id: 'p1', name: 'Alice' },
+      lastUsedAt: null,
     });
-    mockJwt.sign.mockReturnValue('new-token');
 
-    const result = await service.refresh('valid');
+    const result = await service.execute('old-token');
 
-    expect(result.accessToken).toBe('new-token');
+    expect(sessions.deleteByHash).toHaveBeenCalledWith('hash:old-token');
+    expect(sessions.create).toHaveBeenCalledWith({
+      playerId: 'player-1',
+      tokenHash: 'hash:new-refresh-token',
+      expiresAt: expect.any(Date),
+    });
+    expect(result).toEqual({
+      accessToken: 'new-access-token',
+      refreshToken: 'new-refresh-token',
+    });
+  });
+});
+
+describe('LogoutService', () => {
+  it('revokes every session for the player', async () => {
+    const sessions = makeSessionsRepository();
+    const service = new LogoutService(sessions);
+
+    await service.execute('player-1');
+
+    expect(sessions.deleteByPlayerId).toHaveBeenCalledWith('player-1');
+  });
+});
+
+describe('WsTokenService', () => {
+  it('signs a short-lived ws-scoped token', () => {
+    const sign = vi.fn().mockReturnValue('ws-token');
+    const service = new WsTokenService({ sign });
+
+    const token = service.execute('player-1');
+
+    expect(sign).toHaveBeenCalledWith(
+      { sub: 'player-1', scope: 'ws' },
+      { expiresIn: '60s' },
+    );
+    expect(token).toBe('ws-token');
   });
 });

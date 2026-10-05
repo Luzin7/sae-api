@@ -1,196 +1,210 @@
 import type { FastifyInstance } from 'fastify';
-import { authenticate } from '../../middleware/authenticate.js';
-import { CharacterService } from './character.service.js';
+import { authenticate } from '@infra/http/authenticate.js';
+import type { AddItemService } from './items/add-item/add-item.service.js';
+import type { DeleteItemService } from './items/delete-item/delete-item.service.js';
+import type { UpdateItemService } from './items/update-item/update-item.service.js';
+import type { CharacterQueryService } from './character-query.service.js';
+import { CharacterPresenter } from './character.presenter.js';
 import {
+  CharacterGameParamsSchema,
+  CharacterItemParamsSchema,
+  CharacterListQuerySchema,
+  CharacterParamsSchema,
   CreateCharacterBodySchema,
   CreateItemBodySchema,
   UpdateCharacterBodySchema,
-  UpdateEffortBodySchema,
-  UpdateHpBodySchema,
   UpdateItemBodySchema,
+  UpdateVitalsBodySchema,
   UpsertSkillBodySchema,
 } from './character.schemas.js';
-import { db } from '../../db/index.js';
-import { character, characterItem, characterSkill, playerGame } from '../../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import type { CreateCharacterService } from './create-character/create-character.service.js';
+import type { DeleteCharacterService } from './delete-character/delete-character.service.js';
+import type { GetCharacterService } from './get-character/get-character.service.js';
+import type { UpsertSkillService } from './skills/upsert-skill/upsert-skill.service.js';
+import type { UpdateCharacterService } from './update-character/update-character.service.js';
+import type { UpdateVitalsService } from './update-vitals/update-vitals.service.js';
 
-function buildCharacterService(): CharacterService {
-  return new CharacterService(
-    {
-      create: async (data) => {
-        const [created] = await db
-          .insert(character)
-          .values(data as typeof character.$inferInsert)
-          .returning();
-        return created!;
-      },
-      findById: async (id) =>
-        (await db.query.character.findFirst({ where: eq(character.id, id) })) ?? null,
-      findByPlayerId: (playerId, { limit, offset }) =>
-        db.select().from(character).where(eq(character.playerId, playerId)).limit(limit).offset(offset),
-      findByGameId: (gameId) =>
-        db.select().from(character).where(eq(character.gameId, gameId)),
-      update: async (id, data) => {
-        const [updated] = await db
-          .update(character)
-          .set(data as Partial<typeof character.$inferInsert>)
-          .where(eq(character.id, id))
-          .returning();
-        return updated!;
-      },
-      delete: async (id) => {
-        await db.delete(character).where(eq(character.id, id));
-      },
-      createItem: async (characterId, data) => {
-        const [created] = await db
-          .insert(characterItem)
-          .values({ characterId, ...data })
-          .returning();
-        return created!;
-      },
-      updateItem: async (itemId, data) => {
-        const [updated] = await db
-          .update(characterItem)
-          .set(data)
-          .where(eq(characterItem.id, itemId))
-          .returning();
-        return updated!;
-      },
-      deleteItem: async (itemId) => {
-        await db.delete(characterItem).where(eq(characterItem.id, itemId));
-      },
-      findItems: async (characterId) =>
-        db.select().from(characterItem).where(eq(characterItem.characterId, characterId)),
-      findSkills: async (characterId) =>
-        db.select().from(characterSkill).where(eq(characterSkill.characterId, characterId)),
-      upsertSkill: async (characterId, skill, points) => {
-        const [result] = await db
-          .insert(characterSkill)
-          .values({ characterId, skill: skill as typeof characterSkill.$inferInsert['skill'], points })
-          .onConflictDoUpdate({
-            target: [characterSkill.characterId, characterSkill.skill],
-            set: { points },
-          })
-          .returning();
-        return result!;
-      },
-    },
-    {
-      isPlayerInGame: async (gameId, playerId) => {
-        const row = await db.query.playerGame.findFirst({
-          where: and(eq(playerGame.gameId, gameId), eq(playerGame.playerId, playerId)),
-        });
-        return row !== undefined;
-      },
-    },
-  );
+export interface CharacterServices {
+  createCharacter: CreateCharacterService;
+  getCharacter: GetCharacterService;
+  updateCharacter: UpdateCharacterService;
+  deleteCharacter: DeleteCharacterService;
+  updateVitals: UpdateVitalsService;
+  addItem: AddItemService;
+  updateItem: UpdateItemService;
+  deleteItem: DeleteItemService;
+  upsertSkill: UpsertSkillService;
+  query: CharacterQueryService;
 }
 
-export default async function characterRoutes(app: FastifyInstance) {
+export interface CharacterRoutesOptions {
+  services: CharacterServices;
+}
+
+export default async function characterRoutes(
+  app: FastifyInstance,
+  opts: CharacterRoutesOptions,
+) {
   app.post('/', { preHandler: authenticate }, async (request, reply) => {
     const body = CreateCharacterBodySchema.parse(request.body);
-    const service = buildCharacterService();
-    const character = await service.create(body, request.playerId);
-    return reply.status(201).send({ character });
+    const character = await opts.services.createCharacter.execute(
+      request.playerId,
+      body,
+    );
+
+    return reply
+      .status(201)
+      .send({ character: CharacterPresenter.toHTTP(character) });
   });
 
   app.get('/mine', { preHandler: authenticate }, async (request) => {
-    const { limit = '20', offset = '0' } = request.query as { limit?: string; offset?: string };
-    const service = buildCharacterService();
-    const characters = await service.getMine(request.playerId, {
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
-    });
-    return { characters };
+    const page = CharacterListQuerySchema.parse(request.query);
+    const characters = await opts.services.query.listMine(
+      request.playerId,
+      page,
+    );
+
+    return { characters: characters.map(CharacterPresenter.toHTTP) };
   });
 
-  app.get('/game/:gameId', { preHandler: authenticate }, async (request) => {
-    const { gameId } = request.params as { gameId: string };
-    const service = buildCharacterService();
-    const characters = await service.getByGame(gameId);
-    return { characters };
-  });
+  app.get(
+    '/game/:gameId',
+    { preHandler: authenticate },
+    async (request) => {
+      const { gameId } = CharacterGameParamsSchema.parse(request.params);
+      const characters = await opts.services.query.listByGame(
+        gameId,
+        request.playerId,
+      );
+
+      return { characters: characters.map(CharacterPresenter.toHTTP) };
+    },
+  );
 
   app.get('/:id', { preHandler: authenticate }, async (request) => {
-    const { id } = request.params as { id: string };
-    const service = buildCharacterService();
-    const character = await service.getById(id, request.playerId);
-    return { character };
+    const { id } = CharacterParamsSchema.parse(request.params);
+    const character = await opts.services.getCharacter.execute(
+      id,
+      request.playerId,
+    );
+
+    return { character: CharacterPresenter.toHTTP(character) };
   });
 
   app.patch('/:id', { preHandler: authenticate }, async (request) => {
-    const { id } = request.params as { id: string };
+    const { id } = CharacterParamsSchema.parse(request.params);
     const body = UpdateCharacterBodySchema.parse(request.body);
-    const service = buildCharacterService();
-    const character = await service.update(id, body, request.playerId);
-    return { character };
+    const character = await opts.services.updateCharacter.execute(
+      id,
+      request.playerId,
+      body,
+    );
+
+    return { character: CharacterPresenter.toHTTP(character) };
   });
 
   app.patch('/:id/hp', { preHandler: authenticate }, async (request) => {
-    const { id } = request.params as { id: string };
-    const { currentHp } = UpdateHpBodySchema.parse(request.body);
-    const service = buildCharacterService();
-    const character = await service.update(id, { currentHp }, request.playerId);
-    return { character };
+    const { id } = CharacterParamsSchema.parse(request.params);
+    const { currentHp } = UpdateVitalsBodySchema.parse(request.body);
+    const character = await opts.services.updateVitals.execute(
+      id,
+      request.playerId,
+      { currentHp },
+    );
+
+    return { character: CharacterPresenter.toHTTP(character) };
   });
 
   app.patch('/:id/pe', { preHandler: authenticate }, async (request) => {
-    const { id } = request.params as { id: string };
-    const { currentEffort } = UpdateEffortBodySchema.parse(request.body);
-    const service = buildCharacterService();
-    const character = await service.update(id, { currentEffort }, request.playerId);
-    return { character };
+    const { id } = CharacterParamsSchema.parse(request.params);
+    const { currentEffort } = UpdateVitalsBodySchema.parse(request.body);
+    const character = await opts.services.updateVitals.execute(
+      id,
+      request.playerId,
+      { currentEffort },
+    );
+
+    return { character: CharacterPresenter.toHTTP(character) };
   });
 
   app.get('/:id/items', { preHandler: authenticate }, async (request) => {
-    const { id } = request.params as { id: string };
-    const service = buildCharacterService();
-    const items = await service.getItems(id, request.playerId);
+    const { id } = CharacterParamsSchema.parse(request.params);
+    const items = await opts.services.query.listItems(id, request.playerId);
+
     return { items };
   });
 
-  app.post('/:id/items', { preHandler: authenticate }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const body = CreateItemBodySchema.parse(request.body);
-    const service = buildCharacterService();
-    const item = await service.createItem(id, body, request.playerId);
-    return reply.status(201).send({ item });
-  });
+  app.post(
+    '/:id/items',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = CharacterParamsSchema.parse(request.params);
+      const body = CreateItemBodySchema.parse(request.body);
+      const item = await opts.services.addItem.execute(
+        id,
+        request.playerId,
+        body,
+      );
 
-  app.patch('/:id/items/:itemId', { preHandler: authenticate }, async (request) => {
-    const { id, itemId } = request.params as { id: string; itemId: string };
-    const body = UpdateItemBodySchema.parse(request.body);
-    const service = buildCharacterService();
-    const item = await service.updateItem(id, itemId, body, request.playerId);
-    return { item };
-  });
+      return reply.status(201).send({ item });
+    },
+  );
 
-  app.delete('/:id/items/:itemId', { preHandler: authenticate }, async (request, reply) => {
-    const { id, itemId } = request.params as { id: string; itemId: string };
-    const service = buildCharacterService();
-    await service.deleteItem(id, itemId, request.playerId);
-    return reply.status(204).send();
-  });
+  app.patch(
+    '/:id/items/:itemId',
+    { preHandler: authenticate },
+    async (request) => {
+      const { id, itemId } = CharacterItemParamsSchema.parse(request.params);
+      const body = UpdateItemBodySchema.parse(request.body);
+      const item = await opts.services.updateItem.execute(
+        id,
+        itemId,
+        request.playerId,
+        body,
+      );
 
-  app.delete('/:id', { preHandler: authenticate }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const service = buildCharacterService();
-    await service.delete(id, request.playerId);
-    return reply.status(204).send();
-  });
+      return { item };
+    },
+  );
+
+  app.delete(
+    '/:id/items/:itemId',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id, itemId } = CharacterItemParamsSchema.parse(request.params);
+      await opts.services.deleteItem.execute(id, itemId, request.playerId);
+
+      return reply.status(204).send();
+    },
+  );
 
   app.get('/:id/skills', { preHandler: authenticate }, async (request) => {
-    const { id } = request.params as { id: string };
-    const service = buildCharacterService();
-    const skills = await service.getSkills(id, request.playerId);
+    const { id } = CharacterParamsSchema.parse(request.params);
+    const skills = await opts.services.query.listSkills(id, request.playerId);
+
     return { skills };
   });
 
-  app.post('/:id/skills', { preHandler: authenticate }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const { skill: skillName, points } = UpsertSkillBodySchema.parse(request.body);
-    const service = buildCharacterService();
-    const skill = await service.upsertSkill(id, request.playerId, skillName, points);
-    return reply.status(200).send({ skill });
+  app.post(
+    '/:id/skills',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = CharacterParamsSchema.parse(request.params);
+      const body = UpsertSkillBodySchema.parse(request.body);
+      const skill = await opts.services.upsertSkill.execute(
+        id,
+        request.playerId,
+        body,
+      );
+
+      return reply.status(200).send({ skill });
+    },
+  );
+
+  app.delete('/:id', { preHandler: authenticate }, async (request, reply) => {
+    const { id } = CharacterParamsSchema.parse(request.params);
+    await opts.services.deleteCharacter.execute(id, request.playerId);
+
+    return reply.status(204).send();
   });
 }
