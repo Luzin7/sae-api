@@ -14,16 +14,15 @@
 		"outDir": "./dist",
 		"rootDir": "./src",
 		"resolveJsonModule": true,
-		"baseUrl": "./src",
 		"paths": {
-			"@shared/*": ["./shared/*"],
-			"@infra/*": ["./infra/*"],
-			"@config/*": ["./config/*"],
-			"@@types/*": ["./@types/*"],
-			"@constants/*": ["./constants/*"],
-			"@modules/*": ["./modules/*"],
-			"@providers/*": ["./providers/*"],
-			"@test/*": ["./test/*"]
+			"@shared/*": ["./src/shared/*"],
+			"@infra/*": ["./src/infra/*"],
+			"@config/*": ["./src/config/*"],
+			"@@types/*": ["./src/@types/*"],
+			"@constants/*": ["./src/constants/*"],
+			"@modules/*": ["./src/modules/*"],
+			"@providers/*": ["./src/providers/*"],
+			"@test/*": ["./src/test/*"]
 		}
 	},
 	"include": ["src/**/*.ts"],
