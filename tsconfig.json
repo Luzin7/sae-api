@@ -1,24 +1,31 @@
 {
-  "compilerOptions": {
-    "types": ["node"],
-    "target": "esnext",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "lib": ["ES2022", "ESNext", "DOM"],
-    "outDir": "dist",
-    "rootDir": "src",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
-  },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"lib": ["ES2018", "ESNext"],
+		"strict": true,
+		"experimentalDecorators": true,
+		"allowSyntheticDefaultImports": true,
+		"emitDecoratorMetadata": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"resolveJsonModule": true,
+		"baseUrl": "./src",
+		"paths": {
+			"@shared/*": ["./shared/*"],
+			"@infra/*": ["./infra/*"],
+			"@config/*": ["./config/*"],
+			"@@types/*": ["./@types/*"],
+			"@constants/*": ["./constants/*"],
+			"@modules/*": ["./modules/*"],
+			"@providers/*": ["./providers/*"],
+			"@test/*": ["./test/*"]
+		}
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules", "dist"]
 }

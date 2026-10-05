@@ -1,12 +1,23 @@
 import type { FastifyInstance } from 'fastify';
-import { authenticate } from '../../middleware/authenticate.js';
-import { DiceService } from './dice.service.js';
-import { DiceRollBodySchema } from './dice.schemas.js';
+import { authenticate } from '@infra/http/authenticate.js';
+import { RollInputSchema } from './dice.schemas.js';
+import type { RollService } from './roll/roll.service.js';
 
-export default async function diceRoutes(app: FastifyInstance) {
+export interface DiceServices {
+  roll: RollService;
+}
+
+export interface DiceRoutesOptions {
+  services: DiceServices;
+}
+
+export default async function diceRoutes(
+  app: FastifyInstance,
+  opts: DiceRoutesOptions,
+) {
   app.post('/roll', { preHandler: authenticate }, async (request) => {
-    const body = DiceRollBodySchema.parse(request.body);
-    const service = new DiceService();
-    return service.roll(body);
+    const input = RollInputSchema.parse(request.body);
+
+    return opts.services.roll.execute(input);
   });
 }

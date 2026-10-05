@@ -15,6 +15,6 @@ FROM base AS runtime
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY src/db/migrations ./src/db/migrations
+COPY --from=build /app/src/infra/db/migrations ./src/infra/db/migrations
 EXPOSE 3000
-CMD ["sh", "-c", "node dist/db/migrate.js && node dist/server.js"]
+CMD ["sh", "-c", "node dist/infra/db/migrate.js && node dist/server.js"]

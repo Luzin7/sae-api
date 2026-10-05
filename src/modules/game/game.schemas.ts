@@ -17,6 +17,16 @@ export const JoinGameBodySchema = z.object({
   inviteCode: z.string().min(1),
 });
 
+export const GameParamsSchema = z.object({
+  id: z.string().min(1),
+});
+
+export const GameListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 export type CreateGameBody = z.infer<typeof CreateGameBodySchema>;
 export type UpdateGameBody = z.infer<typeof UpdateGameBodySchema>;
 export type JoinGameBody = z.infer<typeof JoinGameBodySchema>;
+export type GameListQuery = z.infer<typeof GameListQuerySchema>;
