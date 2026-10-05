@@ -13,7 +13,7 @@ jobs:
   check:
     name: Typecheck, build e testes
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,24 +36,12 @@ jobs:
       - name: Test
         run: npm run test
 
-  production-build:
-    name: Build em modo produção (Render)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      NODE_ENV: production
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-          cache: npm
-
-      - name: Install dependencies
+      - name: Install dependencies (produção)
         run: npm ci
+        env:
+          NODE_ENV: production
 
-      - name: Build
+      - name: Build (produção)
         run: npm run build
+        env:
+          NODE_ENV: production
