@@ -1,5 +1,6 @@
 import type { AttributeValue } from '@shared/rules/attributes.js';
 import {
+  ATTRIBUTE_NAMES,
   ATTRIBUTE_SCALE,
   attributeBudget,
   attributeCost,
@@ -8,7 +9,7 @@ import {
   AttributeBudgetExceededError,
   InvalidAttributeError,
 } from './character.errors.js';
-import { ATTRIBUTE_NAMES, type AttributeScores } from './character.entity.js';
+import type { AttributeScores } from './character.entity.js';
 
 export { attributeBudget };
 

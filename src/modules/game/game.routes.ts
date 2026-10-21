@@ -43,13 +43,13 @@ export default async function gameRoutes(
     const page = GameListQuerySchema.parse(request.query);
     const games = await opts.services.query.getMine(request.playerId, page);
 
-    return { games: games.map(GamePresenter.toSummary) };
+    return { games: games.map(GamePresenter.toHTTP) };
   });
 
   app.get('/mastered', { preHandler: authenticate }, async (request) => {
     const games = await opts.services.query.getMastered(request.playerId);
 
-    return { games: games.map(GamePresenter.toSummary) };
+    return { games: games.map(GamePresenter.toHTTP) };
   });
 
   app.post('/join', { preHandler: authenticate }, async (request) => {
@@ -71,9 +71,9 @@ export default async function gameRoutes(
 
   app.get('/:id/players', { preHandler: authenticate }, async (request) => {
     const { id } = GameParamsSchema.parse(request.params);
-    const players = await opts.services.query.getPlayers(id, request.playerId);
+    const roster = await opts.services.query.getPlayers(id, request.playerId);
 
-    return { players: players.map(GamePresenter.toPlayer) };
+    return GamePresenter.toRoster(roster);
   });
 
   app.patch('/:id', { preHandler: authenticate }, async (request) => {

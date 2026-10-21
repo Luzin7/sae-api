@@ -1,4 +1,5 @@
 import type { ProficiencyLevel } from '@shared/rules/proficiency.js';
+import type { SizeExtremeBand } from '@shared/rules/size.js';
 import type { SocialClassKey } from '@shared/rules/social-classes.js';
 
 export type { ProficiencyLevel };
@@ -10,15 +11,6 @@ export type AttributeName =
   | 'constitution'
   | 'motricity'
   | 'perception';
-
-export const ATTRIBUTE_NAMES: readonly AttributeName[] = [
-  'cognition',
-  'psyche',
-  'instinct',
-  'constitution',
-  'motricity',
-  'perception',
-];
 
 export interface AttributeScores {
   cognition: number;
@@ -57,7 +49,7 @@ export interface Character extends AttributeScores, ProficiencyScores {
   background: string | null;
   profession: string | null;
   motivation: string | null;
-  affliction: string | null;
+  afflictions: string[];
   socialClass: SocialClassKey | null;
   vaalaques: number;
   bonds: string | null;
@@ -71,13 +63,14 @@ export interface CharacterSheetInput extends AttributeScores {
   nickname: string;
   epithet?: string;
   np: number;
-  hairColor?: string;
   heightCm?: number;
+  heightRoll?: SizeExtremeBand;
   weightKg?: number;
+  weightRoll?: SizeExtremeBand;
   background?: string;
   profession?: string;
   motivation?: string;
-  affliction?: string;
+  afflictions?: string[];
   personality: string;
   posture: string;
   socialClass: SocialClassKey;
@@ -88,6 +81,7 @@ export interface CreateCharacterInput
   extends CharacterSheetInput, ProficiencyScores {
   playerId: string;
   gameId: string;
+  hairColor: string | null;
   size: string | null;
   vaalaques: number;
   maxHp: number;
@@ -118,14 +112,15 @@ export interface UpdateCharacterInput {
   bExp?: number;
   currentHp?: number;
   currentEffort?: number;
-  hairColor?: string;
   heightCm?: number;
+  heightRoll?: SizeExtremeBand;
   weightKg?: number;
+  weightRoll?: SizeExtremeBand;
   size?: string | null;
   background?: string;
   profession?: string;
   motivation?: string;
-  affliction?: string;
+  afflictions?: string[];
   socialClass?: SocialClassKey;
   vaalaques?: number;
   bonds?: string;

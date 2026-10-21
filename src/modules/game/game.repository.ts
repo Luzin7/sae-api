@@ -2,7 +2,6 @@ import type {
   CreateGameInput,
   Game,
   GamePlayer,
-  GameSummary,
   Page,
   UpdateGameInput,
 } from './game.entity.js';
@@ -14,8 +13,8 @@ export interface GameRepository {
   ): Promise<Game>;
   findById(id: string): Promise<Game | null>;
   findByInviteCode(inviteCode: string): Promise<Game | null>;
-  findMastered(masterId: string): Promise<GameSummary[]>;
-  findJoined(playerId: string, page: Page): Promise<GameSummary[]>;
+  findMastered(masterId: string): Promise<Game[]>;
+  findJoined(playerId: string, page: Page): Promise<Game[]>;
   update(id: string, input: UpdateGameInput): Promise<Game>;
   delete(id: string): Promise<void>;
   addPlayer(gameId: string, playerId: string): Promise<void>;

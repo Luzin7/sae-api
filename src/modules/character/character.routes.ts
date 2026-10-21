@@ -20,6 +20,7 @@ import {
 import type { CreateCharacterService } from './create-character/create-character.service.js';
 import type { DeleteCharacterService } from './delete-character/delete-character.service.js';
 import type { GetCharacterService } from './get-character/get-character.service.js';
+import type { GetSheetService } from './get-sheet/get-sheet.service.js';
 import type { UpsertSkillService } from './skills/upsert-skill/upsert-skill.service.js';
 import type { UpdateCharacterService } from './update-character/update-character.service.js';
 import type { UpdateVitalsService } from './update-vitals/update-vitals.service.js';
@@ -27,6 +28,7 @@ import type { UpdateVitalsService } from './update-vitals/update-vitals.service.
 export interface CharacterServices {
   createCharacter: CreateCharacterService;
   getCharacter: GetCharacterService;
+  getSheet: GetSheetService;
   updateCharacter: UpdateCharacterService;
   deleteCharacter: DeleteCharacterService;
   updateVitals: UpdateVitalsService;
@@ -89,6 +91,13 @@ export default async function characterRoutes(
     );
 
     return { character: CharacterPresenter.toHTTP(character) };
+  });
+
+  app.get('/:id/sheet', { preHandler: authenticate }, async (request) => {
+    const { id } = CharacterParamsSchema.parse(request.params);
+    const sheet = await opts.services.getSheet.execute(id, request.playerId);
+
+    return sheet;
   });
 
   app.patch('/:id', { preHandler: authenticate }, async (request) => {

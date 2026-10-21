@@ -5,11 +5,13 @@ import {
   AttributeBudgetExceededError,
   InvalidArchetypeError,
   InvalidAttributeError,
+  InvalidHeightError,
 } from '../character.errors.js';
 import {
   makeCharacter,
   makeCharacterRepository,
   makeMembership,
+  makeNotifier,
 } from '../character.testkit.js';
 import { CreateCharacterService } from './create-character.service.js';
 import type { CreateCharacterCommand } from './create-character.service.js';
@@ -44,15 +46,36 @@ describe('CreateCharacterService', () => {
   it('forbids creating a character when the player is not a game member', async () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
+    const notifier = makeNotifier();
     vi.mocked(membership.isMember).mockResolvedValue(false);
 
     await expect(
-      new CreateCharacterService(characters, membership, fixedRng(1)).execute(
-        'player-1',
-        baseCommand(),
-      ),
+      new CreateCharacterService(
+        characters,
+        membership,
+        fixedRng(1),
+        notifier,
+      ).execute('player-1', baseCommand()),
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(characters.create).not.toHaveBeenCalled();
+    expect(notifier.notifyRosterChanged).not.toHaveBeenCalled();
+  });
+
+  it('notifies the live roster with the created character game', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    const notifier = makeNotifier();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+
+    await new CreateCharacterService(
+      characters,
+      membership,
+      fixedRng(1),
+      notifier,
+    ).execute('player-1', baseCommand());
+
+    expect(notifier.notifyRosterChanged).toHaveBeenCalledWith('game-1');
   });
 
   it('allows the game master who is not a member to create a character', async () => {
@@ -69,6 +92,7 @@ describe('CreateCharacterService', () => {
       characters,
       membership,
       fixedRng(1),
+      makeNotifier(),
     ).execute('player-1', baseCommand());
 
     expect(characters.create).toHaveBeenCalled();
@@ -80,7 +104,12 @@ describe('CreateCharacterService', () => {
     vi.mocked(membership.isMember).mockResolvedValue(true);
 
     await expect(
-      new CreateCharacterService(characters, membership, fixedRng(1)).execute(
+      new CreateCharacterService(
+        characters,
+        membership,
+        fixedRng(1),
+        makeNotifier(),
+      ).execute(
         'player-1',
         baseCommand({ cognition: 5, psyche: 5, instinct: 5, motricity: 5 }),
       ),
@@ -93,10 +122,12 @@ describe('CreateCharacterService', () => {
     vi.mocked(membership.isMember).mockResolvedValue(true);
 
     await expect(
-      new CreateCharacterService(characters, membership, fixedRng(1)).execute(
-        'player-1',
-        baseCommand({ cognition: 0 }),
-      ),
+      new CreateCharacterService(
+        characters,
+        membership,
+        fixedRng(1),
+        makeNotifier(),
+      ).execute('player-1', baseCommand({ cognition: 0 })),
     ).rejects.toBeInstanceOf(InvalidAttributeError);
   });
 
@@ -106,10 +137,12 @@ describe('CreateCharacterService', () => {
     vi.mocked(membership.isMember).mockResolvedValue(true);
 
     await expect(
-      new CreateCharacterService(characters, membership, fixedRng(1)).execute(
-        'player-1',
-        baseCommand({ posture: 'Inexistente' }),
-      ),
+      new CreateCharacterService(
+        characters,
+        membership,
+        fixedRng(1),
+        makeNotifier(),
+      ).execute('player-1', baseCommand({ posture: 'Inexistente' })),
     ).rejects.toBeInstanceOf(InvalidArchetypeError);
   });
 
@@ -123,6 +156,7 @@ describe('CreateCharacterService', () => {
       characters,
       membership,
       fixedRng(1),
+      makeNotifier(),
     ).execute('player-1', baseCommand());
 
     expect(characters.create).toHaveBeenCalledWith(
@@ -147,6 +181,7 @@ describe('CreateCharacterService', () => {
       characters,
       membership,
       fixedRng(1),
+      makeNotifier(),
     ).execute('player-1', baseCommand({ np: 5, constitution: 2 }));
 
     expect(characters.create).toHaveBeenCalledWith(
@@ -161,6 +196,24 @@ describe('CreateCharacterService', () => {
     );
   });
 
+  it('derives the hair color from the server d20 roll', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+
+    await new CreateCharacterService(
+      characters,
+      membership,
+      fixedRng(20),
+      makeNotifier(),
+    ).execute('player-1', baseCommand());
+
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.objectContaining({ hairColor: 'Vermelho Escarlate' }),
+    );
+  });
+
   it('derives size and vaalaques from the sheet', async () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
@@ -171,10 +224,51 @@ describe('CreateCharacterService', () => {
       characters,
       membership,
       fixedRng(1),
+      makeNotifier(),
     ).execute('player-1', baseCommand({ heightCm: 160, weightKg: 60 }));
 
     expect(characters.create).toHaveBeenCalledWith(
       expect.objectContaining({ size: 'pequeno', vaalaques: 2 * 40 }),
     );
+  });
+
+  it('persists the resolved extreme roll and its size', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+
+    await new CreateCharacterService(
+      characters,
+      membership,
+      fixedRng(1),
+      makeNotifier(),
+    ).execute(
+      'player-1',
+      baseCommand({ heightRoll: 'max', weightRoll: 'max' }),
+    );
+
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        heightCm: 251,
+        weightKg: 151,
+        size: 'enorme',
+      }),
+    );
+  });
+
+  it('rejects an exact height outside the 150..250 band', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+
+    await expect(
+      new CreateCharacterService(
+        characters,
+        membership,
+        fixedRng(1),
+        makeNotifier(),
+      ).execute('player-1', baseCommand({ heightCm: 140 })),
+    ).rejects.toBeInstanceOf(InvalidHeightError);
   });
 });

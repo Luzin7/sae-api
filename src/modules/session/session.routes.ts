@@ -62,7 +62,6 @@ export default async function sessionRoutes(
         gameId,
         request.playerId,
       );
-      if (!session) return reply.status(204).send();
 
       return reply.status(200).send({ session });
     },

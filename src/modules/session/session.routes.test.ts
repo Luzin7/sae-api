@@ -150,7 +150,7 @@ describe('session routes', () => {
     expect(sessions.listLogs).not.toHaveBeenCalled();
   });
 
-  it('returns 204 when there is no active session', async () => {
+  it('returns 200 with a null session when there is no active session', async () => {
     const sessions = makeSessions();
     const access = makeAccess();
     vi.mocked(access.findById).mockResolvedValue({
@@ -166,6 +166,7 @@ describe('session routes', () => {
       headers: { cookie: `token=${makeAuthToken(app)}` },
     });
 
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ session: null });
   });
 });

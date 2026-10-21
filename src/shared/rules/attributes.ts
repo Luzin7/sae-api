@@ -21,6 +21,15 @@ export const ATTRIBUTES: readonly AttributeDefinition[] = [
   { key: 'perception', name: 'Percepção', abbr: 'PER' },
 ];
 
+export const ATTRIBUTE_NAMES: readonly AttributeKey[] = [
+  'cognition',
+  'psyche',
+  'instinct',
+  'constitution',
+  'motricity',
+  'perception',
+];
+
 /** Valid attribute values. The scale excludes −1 and 0. */
 export type AttributeValue = -5 | -4 | -3 | -2 | 1 | 2 | 3 | 4 | 5;
 
