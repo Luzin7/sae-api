@@ -7,23 +7,34 @@ import {
   fixedRng,
   makeCharacterAccess,
   makeChatMessages,
+  makeCombat,
+  makeCombatants,
   makeGameAccess,
   makePlayerDirectory,
 } from './chat.testkit.js';
 import { ConnectService } from './connect/connect.service.js';
+import { DeclareTestService } from './declare-test/declare-test.service.js';
+import { EndCombatService } from './end-combat/end-combat.service.js';
 import { ForceHpService } from './force-hp/force-hp.service.js';
 import { LeaveService } from './leave/leave.service.js';
 import { MasterBroadcastService } from './master-broadcast/master-broadcast.service.js';
+import { MonsterAttackService } from './monster-attack/monster-attack.service.js';
+import { NextTurnService } from './next-turn/next-turn.service.js';
 import { RollDiceService } from './roll-dice/roll-dice.service.js';
+import { RollInitiativeService } from './roll-initiative/roll-initiative.service.js';
+import { RollMonsterTestService } from './roll-monster-test/roll-monster-test.service.js';
 import { SendMessageService } from './send-message/send-message.service.js';
-import { SetInitiativeService } from './set-initiative/set-initiative.service.js';
+import { StartCombatService } from './start-combat/start-combat.service.js';
 import { UpdateHpService } from './update-hp/update-hp.service.js';
+import { UpdateMonsterVitalsService } from './update-monster-vitals/update-monster-vitals.service.js';
 
 function buildServices(bus: InMemoryMessageBus) {
   const messages = makeChatMessages();
   const access = makeGameAccess();
   const characters = makeCharacterAccess();
   const players = makePlayerDirectory();
+  const combatants = makeCombatants();
+  const combat = makeCombat();
   const clock = () => new Date('2024-01-01T00:00:00.000Z');
 
   return {
@@ -36,6 +47,7 @@ function buildServices(bus: InMemoryMessageBus) {
       players,
       bus,
       fixedRng(10),
+      combat,
     ),
     updateHp: new UpdateHpService(messages, access, characters, bus),
     forceHp: new ForceHpService(messages, access, characters, bus),
@@ -46,8 +58,49 @@ function buildServices(bus: InMemoryMessageBus) {
       bus,
       clock,
     ),
-    setInitiative: new SetInitiativeService(messages, access, bus),
-    leave: new LeaveService(messages, players, bus),
+    leave: new LeaveService(messages, access, players, bus),
+    startCombat: new StartCombatService(
+      messages,
+      access,
+      combatants,
+      combat,
+      bus,
+    ),
+    rollInitiative: new RollInitiativeService(
+      messages,
+      access,
+      combatants,
+      combat,
+      bus,
+      fixedRng(10),
+    ),
+    nextTurn: new NextTurnService(messages, access, combat, bus),
+    endCombat: new EndCombatService(messages, access, combat, bus),
+    declareTest: new DeclareTestService(messages, access, combatants, bus),
+    rollMonsterTest: new RollMonsterTestService(
+      messages,
+      access,
+      combatants,
+      combat,
+      bus,
+      fixedRng(10),
+    ),
+    updateMonsterVitals: new UpdateMonsterVitalsService(
+      messages,
+      access,
+      combatants,
+      combat,
+      bus,
+    ),
+    monsterAttack: new MonsterAttackService(
+      messages,
+      access,
+      characters,
+      combatants,
+      combat,
+      bus,
+      fixedRng(10),
+    ),
   };
 }
 

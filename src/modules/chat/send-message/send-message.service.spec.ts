@@ -27,6 +27,8 @@ function makeMessages(): ChatMessageRepository {
     appendChat: vi.fn(),
     appendLog: vi.fn(),
     listRecentChat: vi.fn(),
+    findTestById: vi.fn(),
+    hasRolledTest: vi.fn(),
   };
 }
 

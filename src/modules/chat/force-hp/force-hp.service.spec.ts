@@ -20,6 +20,7 @@ function makeSnapshot(
     id: 'char-1',
     gameId: 'game-1',
     playerId: 'p1',
+    name: 'Hero',
     currentHp: 20,
     maxHp: 26,
     currentEffort: 0,

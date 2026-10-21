@@ -1,3 +1,4 @@
+import type { TestDeclaredPayload } from '@modules/session/session.entity.js';
 import type { ChatMessage, InitiativeEntry } from './chat.entity.js';
 
 export interface ChatSessionRef {
@@ -9,6 +10,9 @@ export interface DiceRollLogPayload {
   expression: string;
   results: number[];
   total: number;
+  testId?: string;
+  cd?: number;
+  success?: boolean;
 }
 
 export interface HpChangeLogPayload {
@@ -47,6 +51,31 @@ export interface InitiativeLogPayload {
   order: InitiativeEntry[];
 }
 
+export interface CombatantLogPayload {
+  combatantId: string;
+  kind: 'character' | 'monster';
+  refId: string;
+  name: string;
+  initiativeValue: number | null;
+  hasRolled: boolean;
+}
+
+export interface CombatStateLogPayload {
+  active: boolean;
+  turnIndex: number;
+  round: number;
+  entries: CombatantLogPayload[];
+}
+
+export interface TestDeclaredLogPayload {
+  testId: string;
+  skillId: string;
+  cd: number;
+  mode: 'open' | 'targeted';
+  targetCharacterId: string | null;
+  targetName: string | null;
+}
+
 /**
  * Typed payloads per log event. The key set mirrors the `event_type` pgEnum and
  * the session slice's payload map, so `GET .../logs` can parse every row this
@@ -61,6 +90,8 @@ export interface SessionLogPayloadMap {
   player_leave: PlayerLeaveLogPayload;
   master_broadcast: MasterBroadcastLogPayload;
   initiative: InitiativeLogPayload;
+  combat_state: CombatStateLogPayload;
+  test_declared: TestDeclaredLogPayload;
 }
 
 export type SessionLogEventType = keyof SessionLogPayloadMap;
@@ -89,4 +120,13 @@ export interface ChatMessageRepository {
   appendChat(input: AppendChatMessageInput): Promise<ChatMessage>;
   appendLog(input: AppendSessionLogInput): Promise<void>;
   listRecentChat(sessionId: string, limit: number): Promise<ChatMessage[]>;
+  findTestById(
+    sessionId: string,
+    testId: string,
+  ): Promise<TestDeclaredPayload | null>;
+  hasRolledTest(
+    sessionId: string,
+    playerId: string,
+    testId: string,
+  ): Promise<boolean>;
 }

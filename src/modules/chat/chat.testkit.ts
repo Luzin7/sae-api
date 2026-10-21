@@ -2,8 +2,15 @@ import type { Rng } from '@shared/dice/roll.js';
 import { vi } from 'vitest';
 import type { CharacterAccess } from './character-access.contract.js';
 import type { ChatMessageRepository } from './chat.repository.js';
+import type { CombatantSeed, CombatRepository } from './combat.repository.js';
+import type {
+  CombatantKind,
+  CombatantRef,
+  CombatantSource,
+} from './combatant-source.contract.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
-import type { PlayerDirectory } from './player-directory.contract.js';
+import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
+import type { CombatantPayload } from '@modules/session/session.entity.js';
 
 export function makeChatMessages(): ChatMessageRepository {
   return {
@@ -11,11 +18,32 @@ export function makeChatMessages(): ChatMessageRepository {
     appendChat: vi.fn(),
     appendLog: vi.fn(),
     listRecentChat: vi.fn(),
+    findTestById: vi.fn(),
+    hasRolledTest: vi.fn(),
   };
 }
 
 export function makeGameAccess(): GameAccess {
   return { findById: vi.fn(), isMember: vi.fn() };
+}
+
+export function makeCombatants(): CombatantSource {
+  return {
+    listByGame: vi.fn(),
+    findByRef: vi.fn(),
+    findMonsterInGame: vi.fn(),
+    saveMonsterVitals: vi.fn(),
+  };
+}
+
+export function makeCombat(): CombatRepository {
+  return {
+    findState: vi.fn(),
+    start: vi.fn(),
+    rollInitiative: vi.fn(),
+    setTurn: vi.fn(),
+    end: vi.fn(),
+  };
 }
 
 export function makeCharacterAccess(): CharacterAccess {
@@ -27,20 +55,205 @@ export function makeCharacterAccess(): CharacterAccess {
   };
 }
 
+export interface DirectoryCharacter {
+  playerId: string;
+  id: string;
+  createdAt: string;
+}
+
+export function directoryCharacter(
+  playerId: string,
+  id: string,
+  createdAt = '2024-01-01T00:00:00.000Z',
+): DirectoryCharacter {
+  return { playerId, id, createdAt };
+}
+
+function byCreatedAtThenId(a: DirectoryCharacter, b: DirectoryCharacter) {
+  const delta = Date.parse(a.createdAt) - Date.parse(b.createdAt);
+  if (delta !== 0) return delta;
+
+  return a.id.localeCompare(b.id);
+}
+
 export function makePlayerDirectory(
   names: Record<string, string> = {},
+  characters: DirectoryCharacter[] = [],
 ): PlayerDirectory {
   return {
-    async findById(playerId: string) {
+    findById: vi.fn(async (playerId: string) => {
       const name = names[playerId];
       if (name === undefined) return null;
 
       return { id: playerId, name };
-    },
+    }),
+    findCharactersByGame: vi.fn(async () => {
+      const byPlayer = new Map<string, string[]>();
+      for (const item of [...characters].sort(byCreatedAtThenId)) {
+        const ids = byPlayer.get(item.playerId) ?? [];
+        ids.push(item.id);
+        byPlayer.set(item.playerId, ids);
+      }
+
+      return byPlayer;
+    }),
   };
 }
 
 /** RNG that always rolls the same d20 face. */
 export function fixedRng(value: number): Rng {
   return () => value;
+}
+
+/** RNG that walks a fixed sequence, repeating the last value forever. */
+export function sequenceRng(values: number[]): Rng {
+  let index = 0;
+
+  return () => {
+    const value = values[index] ?? values[values.length - 1] ?? 1;
+    index += 1;
+
+    return value;
+  };
+}
+
+export function makeInMemoryCombatants(refs: CombatantRef[]): CombatantSource {
+  return {
+    async listByGame() {
+      return refs;
+    },
+    async findByRef(_gameId: string, kind: CombatantKind, refId: string) {
+      return (
+        refs.find((ref) => ref.kind === kind && ref.refId === refId) ?? null
+      );
+    },
+    async findMonsterInGame() {
+      return null;
+    },
+    async saveMonsterVitals() {
+      return undefined;
+    },
+  };
+}
+
+export interface InMemoryCombatantRow {
+  id: string;
+  kind: CombatantKind;
+  refId: string;
+  name: string;
+  initiativeValue: number | null;
+  hasRolled: boolean;
+  createdAt: Date;
+}
+
+export interface InMemoryCombat extends CombatRepository {
+  rows(): InMemoryCombatantRow[];
+}
+
+export function makeInMemoryCombat(): InMemoryCombat {
+  const state = new Map<
+    string,
+    { active: boolean; turnIndex: number; round: number }
+  >();
+  const combatants = new Map<string, InMemoryCombatantRow[]>();
+  let counter = 0;
+
+  function entries(sessionId: string): CombatantPayload[] {
+    const rows = combatants.get(sessionId) ?? [];
+
+    return [...rows]
+      .sort((a, b) => {
+        if (a.hasRolled !== b.hasRolled) return a.hasRolled ? -1 : 1;
+        if (a.hasRolled && b.hasRolled) {
+          return (b.initiativeValue ?? 0) - (a.initiativeValue ?? 0);
+        }
+
+        return a.createdAt.getTime() - b.createdAt.getTime();
+      })
+      .map((row) => ({
+        combatantId: row.id,
+        kind: row.kind,
+        refId: row.refId,
+        name: row.name,
+        initiativeValue: row.initiativeValue,
+        hasRolled: row.hasRolled,
+      }));
+  }
+
+  function payload(sessionId: string) {
+    const current = state.get(sessionId);
+    if (!current) return null;
+
+    return { ...current, entries: entries(sessionId) };
+  }
+
+  return {
+    rows() {
+      return [...combatants.values()].flat();
+    },
+
+    async findState(sessionId: string) {
+      return payload(sessionId);
+    },
+
+    async start(sessionId: string, seeds: CombatantSeed[]) {
+      state.set(sessionId, { active: true, turnIndex: 0, round: 1 });
+      combatants.set(
+        sessionId,
+        seeds.map((seed) => {
+          counter += 1;
+
+          return {
+            id: `c-${counter}`,
+            kind: seed.kind,
+            refId: seed.refId,
+            name: seed.name,
+            initiativeValue: null,
+            hasRolled: false,
+            createdAt: new Date(2024, 0, 1, 0, 0, counter),
+          };
+        }),
+      );
+
+      return payload(sessionId)!;
+    },
+
+    async rollInitiative(
+      sessionId: string,
+      kind: CombatantKind,
+      refId: string,
+      roll: () => number,
+    ) {
+      const rows = combatants.get(sessionId) ?? [];
+      const target = rows.find(
+        (item) => item.kind === kind && item.refId === refId,
+      );
+      if (!target) throw new Error('missing');
+
+      if (target.hasRolled) return payload(sessionId)!;
+
+      const taken = rows
+        .filter((item) => item.hasRolled && item.initiativeValue !== null)
+        .map((item) => item.initiativeValue as number);
+      let value = roll();
+      for (let attempt = 0; attempt < 20 && taken.includes(value); attempt++) {
+        value = roll();
+      }
+      target.initiativeValue = value;
+      target.hasRolled = true;
+
+      return payload(sessionId)!;
+    },
+
+    async setTurn(sessionId: string, turnIndex: number, round: number) {
+      state.set(sessionId, { active: true, turnIndex, round });
+
+      return payload(sessionId)!;
+    },
+
+    async end(sessionId: string) {
+      combatants.delete(sessionId);
+      state.delete(sessionId);
+    },
+  };
 }

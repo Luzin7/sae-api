@@ -10,6 +10,7 @@ export interface CharacterSnapshot {
   id: string;
   gameId: string;
   playerId: string;
+  name: string;
   currentHp: number;
   maxHp: number;
   currentEffort: number;
