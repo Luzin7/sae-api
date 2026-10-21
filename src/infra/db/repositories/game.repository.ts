@@ -2,7 +2,6 @@ import { and, eq } from 'drizzle-orm';
 import type {
   Game,
   GamePlayer,
-  GameSummary,
   Page,
   UpdateGameInput,
 } from '@modules/game/game.entity.js';
@@ -30,10 +29,6 @@ function toGame(row: GameRow): Game {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
-}
-
-function toSummary(row: SummaryRow): GameSummary {
-  return { id: row.id, name: row.name };
 }
 
 function toPlayer(row: SummaryRow): GamePlayer {
@@ -100,25 +95,25 @@ export function gameRepository(): GameRepository {
       return row ? toGame(row) : null;
     },
 
-    async findMastered(masterId: string): Promise<GameSummary[]> {
+    async findMastered(masterId: string): Promise<Game[]> {
       const rows = await db
-        .select({ id: game.id, name: game.name })
+        .select()
         .from(game)
         .where(eq(game.masterId, masterId));
 
-      return rows.map(toSummary);
+      return rows.map(toGame);
     },
 
-    async findJoined(playerId: string, page: Page): Promise<GameSummary[]> {
+    async findJoined(playerId: string, page: Page): Promise<Game[]> {
       const rows = await db
-        .select({ id: game.id, name: game.name })
+        .select({ game })
         .from(game)
         .innerJoin(playerGame, eq(playerGame.gameId, game.id))
         .where(eq(playerGame.playerId, playerId))
         .limit(page.limit)
         .offset(page.offset);
 
-      return rows.map(toSummary);
+      return rows.map((row) => toGame(row.game));
     },
 
     async update(id: string, input: UpdateGameInput): Promise<Game> {

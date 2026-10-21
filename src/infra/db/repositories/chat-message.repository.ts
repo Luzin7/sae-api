@@ -1,5 +1,9 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { ChatMessage } from '@modules/chat/chat.entity.js';
+import {
+  type TestDeclaredPayload,
+  TestDeclaredPayloadSchema,
+} from '@modules/session/session.entity.js';
 import { ChatSessionNotFoundError } from '@modules/chat/chat.errors.js';
 import type {
   AppendChatMessageInput,
@@ -82,6 +86,50 @@ export function chatMessageRepository(): ChatMessageRepository {
         .limit(limit);
 
       return rows.map(toChatMessage).reverse();
+    },
+
+    async findTestById(
+      sessionId: string,
+      testId: string,
+    ): Promise<TestDeclaredPayload | null> {
+      const [row] = await db
+        .select({ payload: sessionLog.payload })
+        .from(sessionLog)
+        .where(
+          and(
+            eq(sessionLog.sessionId, sessionId),
+            eq(sessionLog.eventType, 'test_declared'),
+            sql`${sessionLog.payload}->>'testId' = ${testId}`,
+          ),
+        )
+        .limit(1);
+      if (!row) return null;
+
+      const parsed = TestDeclaredPayloadSchema.safeParse(row.payload);
+      if (!parsed.success) return null;
+
+      return parsed.data;
+    },
+
+    async hasRolledTest(
+      sessionId: string,
+      playerId: string,
+      testId: string,
+    ): Promise<boolean> {
+      const [row] = await db
+        .select({ id: sessionLog.id })
+        .from(sessionLog)
+        .where(
+          and(
+            eq(sessionLog.sessionId, sessionId),
+            eq(sessionLog.playerId, playerId),
+            eq(sessionLog.eventType, 'dice_roll'),
+            sql`${sessionLog.payload}->>'testId' = ${testId}`,
+          ),
+        )
+        .limit(1);
+
+      return row !== undefined;
     },
   };
 }

@@ -4,7 +4,9 @@ import {
   characterItem,
   characterSkill,
 } from './character.js';
+import { combatant, combatState } from './combat.js';
 import { game, playerGame } from './game.js';
+import { monster } from './monster.js';
 import { authSession, player } from './player.js';
 import { session, sessionLog } from './session.js';
 import { skill } from './skill.js';
@@ -31,6 +33,7 @@ export const gameRelations = relations(game, ({ one, many }) => ({
 
   playerGames: many(playerGame),
   characters: many(character),
+  monsters: many(monster),
   sessions: many(session),
 }));
 
@@ -91,6 +94,34 @@ export const sessionRelations = relations(session, ({ one, many }) => ({
   }),
 
   logs: many(sessionLog),
+  combatState: one(combatState),
+  combatants: many(combatant),
+}));
+
+export const monsterRelations = relations(monster, ({ one }) => ({
+  game: one(game, {
+    fields: [monster.gameId],
+    references: [game.id],
+  }),
+
+  creator: one(player, {
+    fields: [monster.createdBy],
+    references: [player.id],
+  }),
+}));
+
+export const combatStateRelations = relations(combatState, ({ one }) => ({
+  session: one(session, {
+    fields: [combatState.sessionId],
+    references: [session.id],
+  }),
+}));
+
+export const combatantRelations = relations(combatant, ({ one }) => ({
+  session: one(session, {
+    fields: [combatant.sessionId],
+    references: [session.id],
+  }),
 }));
 
 export const sessionLogRelations = relations(sessionLog, ({ one }) => ({

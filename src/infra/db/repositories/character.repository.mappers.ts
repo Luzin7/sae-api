@@ -50,7 +50,7 @@ export function toCharacter(row: CharacterRow): Character {
     background: row.background,
     profession: row.profession,
     motivation: row.motivation,
-    affliction: row.affliction,
+    afflictions: row.afflictions ?? [],
     socialClass: row.socialClass,
     vaalaques: row.vaalaques,
     bonds: row.bonds,
@@ -125,14 +125,13 @@ export function toCharacterChanges(
   if (patch.currentHp !== undefined) changes.currentHp = patch.currentHp;
   if (patch.currentEffort !== undefined)
     changes.currentEffort = patch.currentEffort;
-  if (patch.hairColor !== undefined) changes.hairColor = patch.hairColor;
   if (patch.heightCm !== undefined) changes.heightCm = patch.heightCm;
   if (patch.weightKg !== undefined) changes.weightKg = patch.weightKg;
   if (patch.size !== undefined) changes.size = patch.size;
   if (patch.background !== undefined) changes.background = patch.background;
   if (patch.profession !== undefined) changes.profession = patch.profession;
   if (patch.motivation !== undefined) changes.motivation = patch.motivation;
-  if (patch.affliction !== undefined) changes.affliction = patch.affliction;
+  if (patch.afflictions !== undefined) changes.afflictions = patch.afflictions;
   if (patch.socialClass !== undefined) changes.socialClass = patch.socialClass;
   if (patch.vaalaques !== undefined) changes.vaalaques = patch.vaalaques;
   if (patch.bonds !== undefined) changes.bonds = patch.bonds;

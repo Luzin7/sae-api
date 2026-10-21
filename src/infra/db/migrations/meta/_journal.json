@@ -29,6 +29,13 @@
       "when": 1791168459069,
       "tag": "0003_glossy_blue_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791917108233,
+      "tag": "0004_blue_pepper_potts",
+      "breakpoints": true
     }
   ]
 }

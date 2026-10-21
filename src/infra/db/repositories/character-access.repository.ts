@@ -25,6 +25,7 @@ function toSnapshot(row: CharacterRow): CharacterSnapshot {
     id: row.id,
     gameId: row.gameId,
     playerId: row.playerId,
+    name: row.nickname,
     currentHp: row.currentHp,
     maxHp: row.maxHp,
     currentEffort: row.currentEffort,
