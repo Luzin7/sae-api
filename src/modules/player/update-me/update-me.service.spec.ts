@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Player } from '../player.entity.js';
-import {
-  PlayerNameTakenError,
-  PlayerNotFoundError,
-} from '../player.errors.js';
+import { PlayerNameTakenError, PlayerNotFoundError } from '../player.errors.js';
 import type { PlayerRepository } from '../player.repository.js';
 import { UpdateMeService } from './update-me.service.js';
 

@@ -73,11 +73,7 @@ export default async function authRoutes(
     return reply.send({ ok: true });
   });
 
-  app.get(
-    '/auth/ws-token',
-    { preHandler: authenticate },
-    async (request) => {
-      return { token: opts.services.wsToken.execute(request.playerId) };
-    },
-  );
+  app.get('/auth/ws-token', { preHandler: authenticate }, async (request) => {
+    return { token: opts.services.wsToken.execute(request.playerId) };
+  });
 }

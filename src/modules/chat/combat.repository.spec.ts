@@ -105,10 +105,17 @@ describe('CombatRepository contract (in-memory fake)', () => {
     const messages = makeChatMessages();
     const combat = makeInMemoryCombat(messages);
     await combat.start('s-1', SEEDS, PLAYER_ID);
-    await combat.rollInitiative('s-1', 'character', 'char-1', () => 9, PLAYER_ID);
+    await combat.rollInitiative(
+      's-1',
+      'character',
+      'char-1',
+      () => 9,
+      PLAYER_ID,
+    );
     await combat.rollInitiative('s-1', 'monster', 'mon-1', () => 15, PLAYER_ID);
-    const before = (messages.appendLog as unknown as { mock: { calls: unknown[] } })
-      .mock.calls.length;
+    const before = (
+      messages.appendLog as unknown as { mock: { calls: unknown[] } }
+    ).mock.calls.length;
 
     await advance(combat, 0);
     await advance(combat, 0);

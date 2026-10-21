@@ -71,9 +71,9 @@ describe('StartCombatService', () => {
       [{ kind: 'character', refId: 'char-1', name: 'Ana' }],
       'p1',
     );
-    expect(
-      vi.mocked(combat.start).mock.invocationCallOrder[0],
-    ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
+    expect(vi.mocked(combat.start).mock.invocationCallOrder[0]).toBeLessThan(
+      publish.mock.invocationCallOrder[0] ?? 0,
+    );
     expect(publish).toHaveBeenCalledWith('session:session-1', {
       type: 'session.combat',
       state: STATE,

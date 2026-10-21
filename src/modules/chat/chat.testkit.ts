@@ -7,7 +7,10 @@ import type {
   CombatantSeed,
   CombatRepository,
 } from './combat.repository.js';
-import { CombatNotReadyError, CombatStateNotFoundError } from './chat.errors.js';
+import {
+  CombatNotReadyError,
+  CombatStateNotFoundError,
+} from './chat.errors.js';
 import type {
   CombatantKind,
   CombatantRef,

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CharacterAccess, CharacterSnapshot } from './character-access.contract.js';
+import type {
+  CharacterAccess,
+  CharacterSnapshot,
+} from './character-access.contract.js';
 import type { ChatMessageRepository } from './chat.repository.js';
 import { InMemoryMessageBus } from './chat.bus.js';
 import {
@@ -159,7 +162,13 @@ function buildFlow(options: FlowOptions = {}): CombatFlow {
     combatants,
     combat,
     bus,
-    startCombat: new StartCombatService(messages, access, combatants, combat, bus),
+    startCombat: new StartCombatService(
+      messages,
+      access,
+      combatants,
+      combat,
+      bus,
+    ),
     rollInitiative: new RollInitiativeService(
       messages,
       access,
@@ -201,7 +210,9 @@ function entryValue(
   entries: { refId: string; initiativeValue: number | null }[],
   refId: string,
 ): number | null {
-  return entries.find((entry) => entry.refId === refId)?.initiativeValue ?? null;
+  return (
+    entries.find((entry) => entry.refId === refId)?.initiativeValue ?? null
+  );
 }
 
 describe('StartCombatService', () => {
@@ -237,7 +248,10 @@ describe('StartCombatService', () => {
 describe('RollInitiativeService', () => {
   it('lets an owner roll their own character', async () => {
     const flow = buildFlow();
-    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await flow.startCombat.execute({
+      playerId: MASTER_ID,
+      sessionId: SESSION_ID,
+    });
 
     const state = await rollAs(flow, OWNER_ID, 'character', CHARACTER_ID);
 
@@ -246,7 +260,10 @@ describe('RollInitiativeService', () => {
 
   it('rejects a player rolling another player character', async () => {
     const flow = buildFlow();
-    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await flow.startCombat.execute({
+      playerId: MASTER_ID,
+      sessionId: SESSION_ID,
+    });
 
     await expect(
       rollAs(flow, OTHER_ID, 'character', CHARACTER_ID),
@@ -255,7 +272,10 @@ describe('RollInitiativeService', () => {
 
   it('lets only the master roll a monster', async () => {
     const flow = buildFlow();
-    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await flow.startCombat.execute({
+      playerId: MASTER_ID,
+      sessionId: SESSION_ID,
+    });
 
     await expect(
       rollAs(flow, OWNER_ID, 'monster', MONSTER_ID),
@@ -267,10 +287,18 @@ describe('RollInitiativeService', () => {
 
   it('rerolls on collision and keeps values unique', async () => {
     const flow = buildFlow({ rng: sequenceRng([5, 5, 12]) });
-    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await flow.startCombat.execute({
+      playerId: MASTER_ID,
+      sessionId: SESSION_ID,
+    });
 
     await rollAs(flow, MASTER_ID, 'character', CHARACTER_ID);
-    const state = await rollAs(flow, MASTER_ID, 'character', FOREIGN_CHARACTER_ID);
+    const state = await rollAs(
+      flow,
+      MASTER_ID,
+      'character',
+      FOREIGN_CHARACTER_ID,
+    );
 
     const values = state.entries
       .filter((entry) => entry.hasRolled)
@@ -281,7 +309,10 @@ describe('RollInitiativeService', () => {
 
   it('is idempotent when the same combatant rolls twice', async () => {
     const flow = buildFlow({ rng: sequenceRng([9, 20]) });
-    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await flow.startCombat.execute({
+      playerId: MASTER_ID,
+      sessionId: SESSION_ID,
+    });
 
     const first = await rollAs(flow, OWNER_ID, 'character', CHARACTER_ID);
     const second = await rollAs(flow, OWNER_ID, 'character', CHARACTER_ID);
@@ -294,7 +325,10 @@ describe('RollInitiativeService', () => {
 describe('NextTurnService', () => {
   it('blocks while any combatant has not rolled', async () => {
     const flow = buildFlow();
-    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await flow.startCombat.execute({
+      playerId: MASTER_ID,
+      sessionId: SESSION_ID,
+    });
 
     await expect(
       flow.nextTurn.execute({ playerId: MASTER_ID, sessionId: SESSION_ID }),
@@ -303,7 +337,10 @@ describe('NextTurnService', () => {
 
   it('wraps the round when advancing past the last combatant', async () => {
     const flow = buildFlow();
-    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await flow.startCombat.execute({
+      playerId: MASTER_ID,
+      sessionId: SESSION_ID,
+    });
     await rollAs(flow, MASTER_ID, 'character', CHARACTER_ID);
     await rollAs(flow, MASTER_ID, 'character', FOREIGN_CHARACTER_ID);
     await rollAs(flow, MASTER_ID, 'monster', MONSTER_ID);
@@ -321,7 +358,10 @@ describe('NextTurnService', () => {
 
   it('advances the turn once when two next turns run concurrently', async () => {
     const flow = buildFlow();
-    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await flow.startCombat.execute({
+      playerId: MASTER_ID,
+      sessionId: SESSION_ID,
+    });
     await rollAs(flow, MASTER_ID, 'character', CHARACTER_ID);
     await rollAs(flow, MASTER_ID, 'character', FOREIGN_CHARACTER_ID);
     await rollAs(flow, MASTER_ID, 'monster', MONSTER_ID);
@@ -342,7 +382,10 @@ describe('NextTurnService', () => {
 describe('EndCombatService', () => {
   it('ends the combat and clears the state', async () => {
     const flow = buildFlow();
-    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await flow.startCombat.execute({
+      playerId: MASTER_ID,
+      sessionId: SESSION_ID,
+    });
 
     const state = await flow.endCombat.execute({
       playerId: MASTER_ID,
@@ -434,7 +477,10 @@ describe('persisted log payloads', () => {
   it('logs combat_state when combat starts', async () => {
     const flow = buildFlow();
 
-    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await flow.startCombat.execute({
+      playerId: MASTER_ID,
+      sessionId: SESSION_ID,
+    });
 
     expect(flow.messages.appendLog).toHaveBeenCalledWith(
       expect.objectContaining({

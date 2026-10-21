@@ -17,7 +17,8 @@ export function rollAttribute(attrValue: number, rng: Rng): AttributeRoll {
   const rolls = Array.from({ length: qty }, () => rollDie(20, rng));
 
   if (attrValue > 0) return { rolls, result: Math.max(...rolls), kind: 'best' };
-  if (attrValue < 0) return { rolls, result: Math.min(...rolls), kind: 'worst' };
+  if (attrValue < 0)
+    return { rolls, result: Math.min(...rolls), kind: 'worst' };
   return { rolls, result: rolls[0]!, kind: 'single' };
 }
 

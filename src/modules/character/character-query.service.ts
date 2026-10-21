@@ -29,10 +29,7 @@ export class CharacterQueryService {
     return this.characters.findByPlayer(playerId, page);
   }
 
-  async listByGame(
-    gameId: string,
-    requesterId: string,
-  ): Promise<Character[]> {
+  async listByGame(gameId: string, requesterId: string): Promise<Character[]> {
     await requireMembership(this.membership, gameId, requesterId);
 
     return this.characters.findByGame(gameId);

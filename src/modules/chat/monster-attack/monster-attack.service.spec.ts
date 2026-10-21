@@ -55,7 +55,9 @@ function makeMonster(overrides: Partial<MonsterRef> = {}): MonsterRef {
   };
 }
 
-function makeTarget(overrides: Partial<CharacterSnapshot> = {}): CharacterSnapshot {
+function makeTarget(
+  overrides: Partial<CharacterSnapshot> = {},
+): CharacterSnapshot {
   return {
     id: 'char-1',
     gameId: 'game-1',

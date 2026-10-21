@@ -55,7 +55,9 @@ describe('GET /rules', () => {
     }>();
     expect(body.skillCatalog).toHaveLength(30);
     expect(body.skillCatalog.map((skill) => skill.name)).toContain('Erudição');
-    expect(body.skillCatalog.map((skill) => skill.name)).toContain('Observação');
+    expect(body.skillCatalog.map((skill) => skill.name)).toContain(
+      'Observação',
+    );
     expect(body.skillCatalog.every((skill) => skill.id.length > 0)).toBe(true);
   });
 

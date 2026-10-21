@@ -69,19 +69,15 @@ export default async function characterRoutes(
     return { characters: characters.map(CharacterPresenter.toHTTP) };
   });
 
-  app.get(
-    '/game/:gameId',
-    { preHandler: authenticate },
-    async (request) => {
-      const { gameId } = CharacterGameParamsSchema.parse(request.params);
-      const characters = await opts.services.query.listByGame(
-        gameId,
-        request.playerId,
-      );
+  app.get('/game/:gameId', { preHandler: authenticate }, async (request) => {
+    const { gameId } = CharacterGameParamsSchema.parse(request.params);
+    const characters = await opts.services.query.listByGame(
+      gameId,
+      request.playerId,
+    );
 
-      return { characters: characters.map(CharacterPresenter.toHTTP) };
-    },
-  );
+    return { characters: characters.map(CharacterPresenter.toHTTP) };
+  });
 
   app.get('/:id', { preHandler: authenticate }, async (request) => {
     const { id } = CharacterParamsSchema.parse(request.params);

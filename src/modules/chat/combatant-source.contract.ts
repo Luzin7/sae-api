@@ -26,7 +26,10 @@ export interface CombatantSource {
     kind: CombatantKind,
     refId: string,
   ): Promise<CombatantRef | null>;
-  findMonsterInGame(gameId: string, monsterId: string): Promise<MonsterRef | null>;
+  findMonsterInGame(
+    gameId: string,
+    monsterId: string,
+  ): Promise<MonsterRef | null>;
   saveMonsterVitals(
     monsterId: string,
     patch: { currentHp: number; currentEffort: number },

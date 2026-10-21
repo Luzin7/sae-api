@@ -1,9 +1,5 @@
 import { relations } from 'drizzle-orm';
-import {
-  character,
-  characterItem,
-  characterSkill,
-} from './character.js';
+import { character, characterItem, characterSkill } from './character.js';
 import { combatant, combatState } from './combat.js';
 import { game, playerGame } from './game.js';
 import { monster } from './monster.js';

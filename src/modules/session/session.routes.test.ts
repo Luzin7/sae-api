@@ -75,9 +75,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('session routes', () => {
   it('returns 401 when unauthenticated', async () => {
-    const app = await buildTestApp(
-      makeServices(makeSessions(), makeAccess()),
-    );
+    const app = await buildTestApp(makeServices(makeSessions(), makeAccess()));
 
     const res = await app.inject({
       method: 'POST',

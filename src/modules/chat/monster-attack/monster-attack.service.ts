@@ -61,10 +61,7 @@ export class MonsterAttackService {
       throw new ChatCharacterNotFoundError();
     }
 
-    const roll = rollAttribute(
-      monster.attributes[input.attribute],
-      this.rng,
-    );
+    const roll = rollAttribute(monster.attributes[input.attribute], this.rng);
 
     await this.messages.appendLog({
       sessionId: input.sessionId,

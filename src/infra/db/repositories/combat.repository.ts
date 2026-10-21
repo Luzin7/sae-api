@@ -34,10 +34,7 @@ function toEntry(row: CombatantRow): CombatantPayload {
   };
 }
 
-export function pickUniqueValue(
-  taken: number[],
-  roll: () => number,
-): number {
+export function pickUniqueValue(taken: number[], roll: () => number): number {
   for (let attempt = 0; attempt < MAX_FACES; attempt++) {
     const value = roll();
     if (!taken.includes(value)) return value;
@@ -78,7 +75,9 @@ function toState(
   };
 }
 
-async function readState(sessionId: string): Promise<CombatStatePayload | null> {
+async function readState(
+  sessionId: string,
+): Promise<CombatStatePayload | null> {
   const [state] = await db
     .select()
     .from(combatState)
@@ -296,7 +295,9 @@ export function combatRepository(): CombatRepository {
           .where(eq(combatState.sessionId, sessionId))
           .for('update');
         await tx.delete(combatant).where(eq(combatant.sessionId, sessionId));
-        await tx.delete(combatState).where(eq(combatState.sessionId, sessionId));
+        await tx
+          .delete(combatState)
+          .where(eq(combatState.sessionId, sessionId));
 
         const state: CombatStatePayload = {
           active: false,

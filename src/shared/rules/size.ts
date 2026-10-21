@@ -48,11 +48,7 @@ export const WEIGHT_FACTORS: readonly SizeFactorBand[] = [
 ];
 
 export type SizeCategoryKey =
-  | 'miudo'
-  | 'pequeno'
-  | 'medio'
-  | 'grande'
-  | 'enorme';
+  'miudo' | 'pequeno' | 'medio' | 'grande' | 'enorme';
 
 export interface SizeCategoryDefinition {
   key: SizeCategoryKey;
@@ -89,7 +85,10 @@ export function weightFactor(kg: number): number | null {
 }
 
 /** Size = arithmetic mean of the height and weight factors. */
-export function sizeFactorMean(heightCm: number, weightKg: number): number | null {
+export function sizeFactorMean(
+  heightCm: number,
+  weightKg: number,
+): number | null {
   const height = heightFactor(heightCm);
   const weight = weightFactor(weightKg);
   if (height === null || weight === null) return null;

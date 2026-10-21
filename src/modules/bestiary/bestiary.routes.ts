@@ -39,19 +39,15 @@ export default async function bestiaryRoutes(
       .send({ monster: BestiaryPresenter.toHTTP(monster) });
   });
 
-  app.get(
-    '/game/:gameId',
-    { preHandler: authenticate },
-    async (request) => {
-      const { gameId } = BestiaryGameParamsSchema.parse(request.params);
-      const monsters = await opts.services.query.listByGame(
-        request.playerId,
-        gameId,
-      );
+  app.get('/game/:gameId', { preHandler: authenticate }, async (request) => {
+    const { gameId } = BestiaryGameParamsSchema.parse(request.params);
+    const monsters = await opts.services.query.listByGame(
+      request.playerId,
+      gameId,
+    );
 
-      return { monsters: monsters.map(BestiaryPresenter.toHTTP) };
-    },
-  );
+    return { monsters: monsters.map(BestiaryPresenter.toHTTP) };
+  });
 
   app.get('/:id', { preHandler: authenticate }, async (request) => {
     const { id } = BestiaryParamsSchema.parse(request.params);

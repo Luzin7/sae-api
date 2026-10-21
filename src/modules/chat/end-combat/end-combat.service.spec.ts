@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryMessageBus } from '../chat.bus.js';
 import { MasterOnlyError } from '../chat.errors.js';
-import { makeChatMessages, makeCombat, makeGameAccess } from '../chat.testkit.js';
+import {
+  makeChatMessages,
+  makeCombat,
+  makeGameAccess,
+} from '../chat.testkit.js';
 import { EndCombatService } from './end-combat.service.js';
 
 function build() {
@@ -36,9 +40,9 @@ describe('EndCombatService', () => {
     await service.execute({ playerId: 'p1', sessionId: 'session-1' });
 
     expect(combat.end).toHaveBeenCalledWith('session-1', 'p1');
-    expect(
-      vi.mocked(combat.end).mock.invocationCallOrder[0],
-    ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
+    expect(vi.mocked(combat.end).mock.invocationCallOrder[0]).toBeLessThan(
+      publish.mock.invocationCallOrder[0] ?? 0,
+    );
     expect(publish).toHaveBeenCalledWith('session:session-1', {
       type: 'session.combat',
       state: ended,

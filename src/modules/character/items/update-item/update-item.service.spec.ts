@@ -17,9 +17,14 @@ describe('UpdateItemService', () => {
     vi.mocked(characters.findItemById).mockResolvedValue(null);
 
     await expect(
-      new UpdateItemService(characters).execute('char-1', 'item-9', 'player-1', {
-        name: 'X',
-      }),
+      new UpdateItemService(characters).execute(
+        'char-1',
+        'item-9',
+        'player-1',
+        {
+          name: 'X',
+        },
+      ),
     ).rejects.toBeInstanceOf(CharacterItemNotFoundError);
   });
 
@@ -31,9 +36,14 @@ describe('UpdateItemService', () => {
     );
 
     await expect(
-      new UpdateItemService(characters).execute('char-1', 'item-1', 'player-1', {
-        name: 'X',
-      }),
+      new UpdateItemService(characters).execute(
+        'char-1',
+        'item-1',
+        'player-1',
+        {
+          name: 'X',
+        },
+      ),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
