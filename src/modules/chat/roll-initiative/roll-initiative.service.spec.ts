@@ -83,7 +83,7 @@ describe('RollInitiativeService', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('delegates the unique roll to the repository and passes a generator', async () => {
-    const { messages, access, combatants, combat, bus, service } = build();
+    const { messages, combatants, combat, bus, service } = build();
     vi.mocked(combatants.findByRef).mockResolvedValue(CHARACTER_REF);
     const publish = vi.spyOn(bus, 'publish');
 

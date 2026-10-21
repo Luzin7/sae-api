@@ -43,11 +43,11 @@ export const ATTRIBUTE_COST: Readonly<Record<AttributeValue, number>> = {
   [-4]: 1,
   [-3]: 2,
   [-2]: 3,
-  [1]: 4,
-  [2]: 5,
-  [3]: 6,
-  [4]: 7,
-  [5]: 8,
+  1: 4,
+  2: 5,
+  3: 6,
+  4: 7,
+  5: 8,
 };
 
 export function attributeCost(value: AttributeValue): number {

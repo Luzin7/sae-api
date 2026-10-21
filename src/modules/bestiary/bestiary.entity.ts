@@ -46,4 +46,4 @@ export interface CreateMonsterInput extends MonsterSheetInput {
   createdBy: string;
 }
 
-export interface UpdateMonsterInput extends Partial<MonsterSheetInput> {}
+export type UpdateMonsterInput = Partial<MonsterSheetInput>;
