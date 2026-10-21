@@ -47,6 +47,7 @@ CREATE TABLE "combatant" (
 );
 --> statement-breakpoint
 ALTER TABLE "character" ADD COLUMN "afflictions" text[];--> statement-breakpoint
+UPDATE "character" SET "afflictions" = ARRAY["affliction"] WHERE "affliction" IS NOT NULL AND "affliction" <> '';--> statement-breakpoint
 ALTER TABLE "monster" ADD CONSTRAINT "monster_game_id_game_id_fk" FOREIGN KEY ("game_id") REFERENCES "public"."game"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "monster" ADD CONSTRAINT "monster_created_by_player_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."player"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "combat_state" ADD CONSTRAINT "combat_state_session_id_session_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."session"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

@@ -6,14 +6,17 @@ import type {
 import type { CombatantKind } from '@modules/chat/combatant-source.contract.js';
 import {
   CombatantNotFoundError,
+  CombatNotReadyError,
   CombatStateNotFoundError,
 } from '@modules/chat/chat.errors.js';
 import type {
+  AdvanceTurnInput,
   CombatRepository,
   CombatantSeed,
 } from '@modules/chat/combat.repository.js';
 import { db } from '../index.js';
 import { combatant, combatState } from '../schema.js';
+import { insertSessionLog } from './session-log.js';
 
 type CombatStateRow = typeof combatState.$inferSelect;
 type CombatantRow = typeof combatant.$inferSelect;
@@ -91,6 +94,24 @@ async function readState(sessionId: string): Promise<CombatStatePayload | null> 
   return toState(state, rows);
 }
 
+function ensureCanAdvance(state: CombatStateRow, rows: CombatantRow[]): void {
+  if (!state.active) throw new CombatStateNotFoundError();
+  if (rows.length === 0) throw new CombatNotReadyError();
+  if (rows.some((row) => !row.hasRolled)) throw new CombatNotReadyError();
+}
+
+function nextTurnPosition(
+  turnIndex: number,
+  round: number,
+  total: number,
+): { turnIndex: number; round: number } {
+  const wrapping = turnIndex + 1 >= total;
+
+  return wrapping
+    ? { turnIndex: 0, round: round + 1 }
+    : { turnIndex: turnIndex + 1, round };
+}
+
 function toSeed(sessionId: string, seed: CombatantSeed) {
   return {
     sessionId,
@@ -111,6 +132,7 @@ export function combatRepository(): CombatRepository {
     async start(
       sessionId: string,
       seeds: CombatantSeed[],
+      playerId: string | null,
     ): Promise<CombatStatePayload> {
       return db.transaction(async (tx) => {
         const [state] = await tx
@@ -152,7 +174,15 @@ export function combatRepository(): CombatRepository {
           .from(combatant)
           .where(eq(combatant.sessionId, sessionId));
 
-        return toState(state, rows);
+        const next = toState(state, rows);
+        await insertSessionLog(tx, {
+          sessionId,
+          playerId,
+          eventType: 'combat_state',
+          payload: next,
+        });
+
+        return next;
       });
     },
 
@@ -161,6 +191,7 @@ export function combatRepository(): CombatRepository {
       kind: CombatantKind,
       refId: string,
       roll: () => number,
+      playerId: string | null,
     ): Promise<CombatStatePayload> {
       return db.transaction(async (tx) => {
         const [state] = await tx
@@ -198,30 +229,67 @@ export function combatRepository(): CombatRepository {
             : row,
         );
 
-        return toState(state, fresh);
+        const next = toState(state, fresh);
+        await insertSessionLog(tx, {
+          sessionId,
+          playerId,
+          eventType: 'combat_state',
+          payload: next,
+        });
+
+        return next;
       });
     },
 
-    async setTurn(
-      sessionId: string,
-      turnIndex: number,
-      round: number,
-    ): Promise<CombatStatePayload> {
-      const [row] = await db
-        .update(combatState)
-        .set({ turnIndex, round, updatedAt: new Date() })
-        .where(eq(combatState.sessionId, sessionId))
-        .returning();
-      if (!row) throw new CombatStateNotFoundError();
+    async advanceTurn(input: AdvanceTurnInput): Promise<CombatStatePayload> {
+      return db.transaction(async (tx) => {
+        const [state] = await tx
+          .select()
+          .from(combatState)
+          .where(eq(combatState.sessionId, input.sessionId))
+          .for('update');
+        if (!state) throw new CombatStateNotFoundError();
 
-      const state = await readState(sessionId);
-      if (!state) throw new CombatStateNotFoundError();
+        const rows = await tx
+          .select()
+          .from(combatant)
+          .where(eq(combatant.sessionId, input.sessionId));
+        ensureCanAdvance(state, rows);
 
-      return state;
+        const stale =
+          state.turnIndex !== input.expectedTurnIndex ||
+          state.round !== input.expectedRound;
+        if (stale) return toState(state, rows);
+
+        const { turnIndex, round } = nextTurnPosition(
+          state.turnIndex,
+          state.round,
+          rows.length,
+        );
+        const [updated] = await tx
+          .update(combatState)
+          .set({ turnIndex, round, updatedAt: new Date() })
+          .where(eq(combatState.sessionId, input.sessionId))
+          .returning();
+        if (!updated) throw new CombatStateNotFoundError();
+
+        const next = toState(updated, rows);
+        await insertSessionLog(tx, {
+          sessionId: input.sessionId,
+          playerId: input.playerId,
+          eventType: 'combat_state',
+          payload: next,
+        });
+
+        return next;
+      });
     },
 
-    async end(sessionId: string): Promise<void> {
-      await db.transaction(async (tx) => {
+    async end(
+      sessionId: string,
+      playerId: string | null,
+    ): Promise<CombatStatePayload> {
+      return db.transaction(async (tx) => {
         await tx
           .select()
           .from(combatState)
@@ -229,6 +297,21 @@ export function combatRepository(): CombatRepository {
           .for('update');
         await tx.delete(combatant).where(eq(combatant.sessionId, sessionId));
         await tx.delete(combatState).where(eq(combatState.sessionId, sessionId));
+
+        const state: CombatStatePayload = {
+          active: false,
+          turnIndex: 0,
+          round: 1,
+          entries: [],
+        };
+        await insertSessionLog(tx, {
+          sessionId,
+          playerId,
+          eventType: 'combat_state',
+          payload: state,
+        });
+
+        return state;
       });
     },
   };

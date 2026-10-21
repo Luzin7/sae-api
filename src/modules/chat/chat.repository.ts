@@ -112,8 +112,9 @@ export interface AppendChatMessageInput {
 }
 
 /**
- * I/O seam over `session_log`. The adapter is the only file that touches the
- * table; the slice never imports `session`.
+ * I/O seam over `session_log`. The insert is built in one place
+ * (`insertSessionLog`), which the combat adapter also uses inside its
+ * transaction, so a state change and its log row commit together.
  */
 export interface ChatMessageRepository {
   findSession(sessionId: string): Promise<ChatSessionRef | null>;

@@ -13,6 +13,7 @@ import type {
 } from '@modules/chat/chat.repository.js';
 import { db } from '../index.js';
 import { session, sessionLog } from '../schema.js';
+import { insertSessionLog } from './session-log.js';
 
 type SessionLogRow = typeof sessionLog.$inferSelect;
 
@@ -61,12 +62,7 @@ export function chatMessageRepository(): ChatMessageRepository {
     },
 
     async appendLog(input: AppendSessionLogInput): Promise<void> {
-      await db.insert(sessionLog).values({
-        sessionId: input.sessionId,
-        playerId: input.playerId,
-        eventType: input.eventType,
-        payload: input.payload,
-      });
+      await insertSessionLog(db, input);
     },
 
     async listRecentChat(

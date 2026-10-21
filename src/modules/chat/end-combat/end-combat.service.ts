@@ -32,20 +32,7 @@ export class EndCombatService {
     );
     requireGameMaster(game, input.playerId);
 
-    await this.combat.end(input.sessionId);
-    const state: CombatStatePayload = {
-      active: false,
-      turnIndex: 0,
-      round: 1,
-      entries: [],
-    };
-
-    await this.messages.appendLog({
-      sessionId: input.sessionId,
-      playerId: input.playerId,
-      eventType: 'combat_state',
-      payload: state,
-    });
+    const state = await this.combat.end(input.sessionId, input.playerId);
 
     const event: RealtimeEvent = { type: 'session.combat', state };
     this.bus.publish(chatRoom(input.sessionId), event);

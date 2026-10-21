@@ -2,7 +2,12 @@ import type { Rng } from '@shared/dice/roll.js';
 import { vi } from 'vitest';
 import type { CharacterAccess } from './character-access.contract.js';
 import type { ChatMessageRepository } from './chat.repository.js';
-import type { CombatantSeed, CombatRepository } from './combat.repository.js';
+import type {
+  AdvanceTurnInput,
+  CombatantSeed,
+  CombatRepository,
+} from './combat.repository.js';
+import { CombatNotReadyError, CombatStateNotFoundError } from './chat.errors.js';
 import type {
   CombatantKind,
   CombatantRef,
@@ -10,7 +15,10 @@ import type {
 } from './combatant-source.contract.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
-import type { CombatantPayload } from '@modules/session/session.entity.js';
+import type {
+  CombatStatePayload,
+  CombatantPayload,
+} from '@modules/session/session.entity.js';
 
 export function makeChatMessages(): ChatMessageRepository {
   return {
@@ -41,7 +49,7 @@ export function makeCombat(): CombatRepository {
     findState: vi.fn(),
     start: vi.fn(),
     rollInitiative: vi.fn(),
-    setTurn: vi.fn(),
+    advanceTurn: vi.fn(),
     end: vi.fn(),
   };
 }
@@ -52,6 +60,7 @@ export function makeCharacterAccess(): CharacterAccess {
     findSkillById: vi.fn(),
     findSkillForCharacter: vi.fn(),
     updateHp: vi.fn(),
+    damageHp: vi.fn(),
   };
 }
 
@@ -150,7 +159,9 @@ export interface InMemoryCombat extends CombatRepository {
   rows(): InMemoryCombatantRow[];
 }
 
-export function makeInMemoryCombat(): InMemoryCombat {
+export function makeInMemoryCombat(
+  logs?: ChatMessageRepository,
+): InMemoryCombat {
   const state = new Map<
     string,
     { active: boolean; turnIndex: number; round: number }
@@ -187,6 +198,19 @@ export function makeInMemoryCombat(): InMemoryCombat {
     return { ...current, entries: entries(sessionId) };
   }
 
+  async function writeLog(
+    sessionId: string,
+    playerId: string | null,
+    current: CombatStatePayload,
+  ): Promise<void> {
+    await logs?.appendLog({
+      sessionId,
+      playerId,
+      eventType: 'combat_state',
+      payload: current,
+    });
+  }
+
   return {
     rows() {
       return [...combatants.values()].flat();
@@ -196,7 +220,11 @@ export function makeInMemoryCombat(): InMemoryCombat {
       return payload(sessionId);
     },
 
-    async start(sessionId: string, seeds: CombatantSeed[]) {
+    async start(
+      sessionId: string,
+      seeds: CombatantSeed[],
+      playerId: string | null,
+    ) {
       state.set(sessionId, { active: true, turnIndex: 0, round: 1 });
       combatants.set(
         sessionId,
@@ -215,7 +243,10 @@ export function makeInMemoryCombat(): InMemoryCombat {
         }),
       );
 
-      return payload(sessionId)!;
+      const current = payload(sessionId)!;
+      await writeLog(sessionId, playerId, current);
+
+      return current;
     },
 
     async rollInitiative(
@@ -223,6 +254,7 @@ export function makeInMemoryCombat(): InMemoryCombat {
       kind: CombatantKind,
       refId: string,
       roll: () => number,
+      playerId: string | null,
     ) {
       const rows = combatants.get(sessionId) ?? [];
       const target = rows.find(
@@ -242,18 +274,51 @@ export function makeInMemoryCombat(): InMemoryCombat {
       target.initiativeValue = value;
       target.hasRolled = true;
 
-      return payload(sessionId)!;
+      const current = payload(sessionId)!;
+      await writeLog(sessionId, playerId, current);
+
+      return current;
     },
 
-    async setTurn(sessionId: string, turnIndex: number, round: number) {
-      state.set(sessionId, { active: true, turnIndex, round });
+    async advanceTurn(input: AdvanceTurnInput) {
+      const current = state.get(input.sessionId);
+      if (!current?.active) throw new CombatStateNotFoundError();
 
-      return payload(sessionId)!;
+      const rows = combatants.get(input.sessionId) ?? [];
+      if (rows.length === 0) throw new CombatNotReadyError();
+      if (rows.some((row) => !row.hasRolled)) throw new CombatNotReadyError();
+
+      const stale =
+        current.turnIndex !== input.expectedTurnIndex ||
+        current.round !== input.expectedRound;
+      if (stale) return payload(input.sessionId)!;
+
+      const wrapping = current.turnIndex + 1 >= rows.length;
+      state.set(input.sessionId, {
+        active: true,
+        turnIndex: wrapping ? 0 : current.turnIndex + 1,
+        round: wrapping ? current.round + 1 : current.round,
+      });
+
+      const next = payload(input.sessionId)!;
+      await writeLog(input.sessionId, input.playerId, next);
+
+      return next;
     },
 
-    async end(sessionId: string) {
+    async end(sessionId: string, playerId: string | null) {
       combatants.delete(sessionId);
       state.delete(sessionId);
+
+      const ended: CombatStatePayload = {
+        active: false,
+        turnIndex: 0,
+        round: 1,
+        entries: [],
+      };
+      await writeLog(sessionId, playerId, ended);
+
+      return ended;
     },
   };
 }

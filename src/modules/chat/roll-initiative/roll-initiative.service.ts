@@ -69,14 +69,8 @@ export class RollInitiativeService {
       input.kind,
       input.refId,
       () => this.rng(1, 20),
+      input.playerId,
     );
-
-    await this.messages.appendLog({
-      sessionId: input.sessionId,
-      playerId: input.playerId,
-      eventType: 'combat_state',
-      payload: nextState,
-    });
 
     const event: RealtimeEvent = { type: 'session.combat', state: nextState };
     this.bus.publish(chatRoom(input.sessionId), event);

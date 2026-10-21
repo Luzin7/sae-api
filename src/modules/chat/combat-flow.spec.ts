@@ -118,7 +118,7 @@ function buildFlow(options: FlowOptions = {}): CombatFlow {
     [OTHER_ID]: 'Bia',
   });
   const combatants = makeInMemoryCombatants(makeRefs());
-  const combat = makeInMemoryCombat();
+  const combat = makeInMemoryCombat(messages);
   const bus = new InMemoryMessageBus();
   const tests = new Map<string, TestDeclaredPayload>();
 
@@ -317,6 +317,25 @@ describe('NextTurnService', () => {
 
     expect(state.turnIndex).toBe(0);
     expect(state.round).toBe(2);
+  });
+
+  it('advances the turn once when two next turns run concurrently', async () => {
+    const flow = buildFlow();
+    await flow.startCombat.execute({ playerId: MASTER_ID, sessionId: SESSION_ID });
+    await rollAs(flow, MASTER_ID, 'character', CHARACTER_ID);
+    await rollAs(flow, MASTER_ID, 'character', FOREIGN_CHARACTER_ID);
+    await rollAs(flow, MASTER_ID, 'monster', MONSTER_ID);
+
+    const [first, second] = await Promise.all([
+      flow.nextTurn.execute({ playerId: MASTER_ID, sessionId: SESSION_ID }),
+      flow.nextTurn.execute({ playerId: MASTER_ID, sessionId: SESSION_ID }),
+    ]);
+
+    expect(first.turnIndex).toBe(1);
+    expect(second.turnIndex).toBe(1);
+    const state = await flow.combat.findState(SESSION_ID);
+    expect(state?.turnIndex).toBe(1);
+    expect(state?.round).toBe(1);
   });
 });
 

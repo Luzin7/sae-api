@@ -66,14 +66,27 @@ export class MonsterAttackService {
       this.rng,
     );
 
+    await this.messages.appendLog({
+      sessionId: input.sessionId,
+      playerId: input.playerId,
+      eventType: 'dice_roll',
+      payload: {
+        expression: `${monster.name} atacou ${target.name} (${input.attribute})`,
+        results: roll.rolls,
+        total: roll.result,
+      },
+    });
+
     if (input.damage > 0) {
-      const newHp = Math.max(0, target.currentHp - input.damage);
-      await this.characters.updateHp(target.id, newHp);
+      const { previousHp, character } = await this.characters.damageHp(
+        target.id,
+        input.damage,
+      );
       this.bus.publish(chatRoom(input.sessionId), {
         type: 'character.hp-changed',
-        characterId: target.id,
-        oldHp: target.currentHp,
-        newHp,
+        characterId: character.id,
+        oldHp: previousHp,
+        newHp: character.currentHp,
       });
     }
 
@@ -90,17 +103,6 @@ export class MonsterAttackService {
       damage: input.damage,
     };
     this.bus.publish(chatRoom(input.sessionId), event);
-
-    await this.messages.appendLog({
-      sessionId: input.sessionId,
-      playerId: input.playerId,
-      eventType: 'dice_roll',
-      payload: {
-        expression: `${monster.name} atacou ${target.name} (${input.attribute})`,
-        results: roll.rolls,
-        total: roll.result,
-      },
-    });
 
     return event;
   }

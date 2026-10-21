@@ -24,6 +24,11 @@ export interface SkillRef {
   attribute: AttributeKey;
 }
 
+export interface HpDamageResult {
+  previousHp: number;
+  character: CharacterSnapshot;
+}
+
 export interface CharacterSkillRef {
   skillId: string;
   proficiencyBonus: number;
@@ -36,5 +41,7 @@ export interface CharacterAccess {
     characterId: string,
     skillId: string,
   ): Promise<CharacterSkillRef | null>;
-  updateHp(characterId: string, newHp: number): Promise<void>;
+  updateHp(characterId: string, newHp: number): Promise<CharacterSnapshot>;
+  /** Decrements the stored HP in SQL so concurrent hits cannot overwrite each other. */
+  damageHp(characterId: string, damage: number): Promise<HpDamageResult>;
 }

@@ -1,11 +1,16 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { AttributeKey } from '@shared/rules/attributes.js';
 import type {
   CharacterAccess,
   CharacterSkillRef,
   CharacterSnapshot,
+  HpDamageResult,
   SkillRef,
 } from '@modules/chat/character-access.contract.js';
+import {
+  ChatCharacterNotFoundError,
+  InvalidHpError,
+} from '@modules/chat/chat.errors.js';
 import { db } from '../index.js';
 import { character, characterSkill, skill } from '../schema.js';
 
@@ -78,11 +83,46 @@ export function characterAccessRepository(): CharacterAccess {
       return row ?? null;
     },
 
-    async updateHp(characterId: string, newHp: number): Promise<void> {
-      await db
+    async updateHp(
+      characterId: string,
+      newHp: number,
+    ): Promise<CharacterSnapshot> {
+      const [row] = await db
         .update(character)
         .set({ currentHp: newHp, updatedAt: new Date() })
-        .where(eq(character.id, characterId));
+        .where(eq(character.id, characterId))
+        .returning();
+      if (!row) throw new ChatCharacterNotFoundError();
+
+      return toSnapshot(row);
+    },
+
+    async damageHp(
+      characterId: string,
+      damage: number,
+    ): Promise<HpDamageResult> {
+      if (!Number.isInteger(damage) || damage <= 0) throw new InvalidHpError();
+
+      return db.transaction(async (tx) => {
+        const [locked] = await tx
+          .select({ currentHp: character.currentHp })
+          .from(character)
+          .where(eq(character.id, characterId))
+          .for('update');
+        if (!locked) throw new ChatCharacterNotFoundError();
+
+        const [row] = await tx
+          .update(character)
+          .set({
+            currentHp: sql`GREATEST(0, ${character.currentHp} - ${damage})`,
+            updatedAt: new Date(),
+          })
+          .where(eq(character.id, characterId))
+          .returning();
+        if (!row) throw new ChatCharacterNotFoundError();
+
+        return { previousHp: locked.currentHp, character: toSnapshot(row) };
+      });
     },
   };
 }

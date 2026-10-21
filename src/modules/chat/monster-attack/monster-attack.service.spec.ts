@@ -116,6 +116,10 @@ describe('MonsterAttackService', () => {
     vi.mocked(combat.findState).mockResolvedValue(STATE);
     vi.mocked(combatants.findMonsterInGame).mockResolvedValue(makeMonster());
     vi.mocked(characters.findById).mockResolvedValue(makeTarget());
+    vi.mocked(characters.damageHp).mockResolvedValue({
+      previousHp: 20,
+      character: makeTarget({ currentHp: 15 }),
+    });
     const publish = vi.spyOn(bus, 'publish');
 
     const event = await service.execute({
@@ -127,7 +131,7 @@ describe('MonsterAttackService', () => {
       damage: 5,
     });
 
-    expect(characters.updateHp).toHaveBeenCalledWith('char-1', 15);
+    expect(characters.damageHp).toHaveBeenCalledWith('char-1', 5);
     expect(event).toEqual({
       type: 'session.monster-attacked',
       monsterId: 'monster-1',
@@ -160,6 +164,42 @@ describe('MonsterAttackService', () => {
         total: 12,
       },
     });
+    expect(
+      vi.mocked(messages.appendLog).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(characters.damageHp).mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(
+      vi.mocked(characters.damageHp).mock.invocationCallOrder[0],
+    ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it('broadcasts the HP returned by the repository, not the stale snapshot', async () => {
+    const { characters, combatants, combat, bus, service } = build();
+    vi.mocked(combat.findState).mockResolvedValue(STATE);
+    vi.mocked(combatants.findMonsterInGame).mockResolvedValue(makeMonster());
+    vi.mocked(characters.findById).mockResolvedValue(makeTarget());
+    vi.mocked(characters.damageHp).mockResolvedValue({
+      previousHp: 2,
+      character: makeTarget({ currentHp: 0 }),
+    });
+    const publish = vi.spyOn(bus, 'publish');
+
+    await service.execute({
+      playerId: 'p1',
+      sessionId: 'session-1',
+      monsterId: 'monster-1',
+      attribute: 'cognition',
+      targetCharacterId: 'char-1',
+      damage: 5,
+    });
+
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'character.hp-changed',
+      characterId: 'char-1',
+      oldHp: 2,
+      newHp: 0,
+    });
   });
 
   it('does not touch HP when there is no damage', async () => {
@@ -178,7 +218,7 @@ describe('MonsterAttackService', () => {
       damage: 0,
     });
 
-    expect(characters.updateHp).not.toHaveBeenCalled();
+    expect(characters.damageHp).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalledWith(
       'session:session-1',
       expect.objectContaining({ type: 'character.hp-changed' }),
@@ -204,7 +244,7 @@ describe('MonsterAttackService', () => {
       }),
     ).rejects.toBeInstanceOf(MasterOnlyError);
     expect(combat.findState).not.toHaveBeenCalled();
-    expect(characters.updateHp).not.toHaveBeenCalled();
+    expect(characters.damageHp).not.toHaveBeenCalled();
   });
 
   it('rejects when there is no active combat', async () => {
@@ -221,7 +261,7 @@ describe('MonsterAttackService', () => {
         damage: 5,
       }),
     ).rejects.toBeInstanceOf(CombatStateNotFoundError);
-    expect(characters.updateHp).not.toHaveBeenCalled();
+    expect(characters.damageHp).not.toHaveBeenCalled();
   });
 
   it('rejects a monster from another game', async () => {
@@ -260,6 +300,6 @@ describe('MonsterAttackService', () => {
         damage: 5,
       }),
     ).rejects.toBeInstanceOf(ChatCharacterNotFoundError);
-    expect(characters.updateHp).not.toHaveBeenCalled();
+    expect(characters.damageHp).not.toHaveBeenCalled();
   });
 });

@@ -56,8 +56,8 @@ function build() {
 describe('StartCombatService', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('seeds the roster from the game and persists before broadcasting', async () => {
-    const { messages, combatants, combat, bus, service } = build();
+  it('seeds the roster from the game and publishes after the repository commits', async () => {
+    const { combatants, combat, bus, service } = build();
     vi.mocked(combatants.listByGame).mockResolvedValue([
       { kind: 'character', refId: 'char-1', name: 'Ana', ownerPlayerId: 'p1' },
     ]);
@@ -66,18 +66,18 @@ describe('StartCombatService', () => {
 
     await service.execute({ playerId: 'p1', sessionId: 'session-1' });
 
-    expect(combat.start).toHaveBeenCalledWith('session-1', [
-      { kind: 'character', refId: 'char-1', name: 'Ana' },
-    ]);
-    expect(messages.appendLog).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      playerId: 'p1',
-      eventType: 'combat_state',
-      payload: STATE,
-    });
+    expect(combat.start).toHaveBeenCalledWith(
+      'session-1',
+      [{ kind: 'character', refId: 'char-1', name: 'Ana' }],
+      'p1',
+    );
     expect(
-      vi.mocked(messages.appendLog).mock.invocationCallOrder[0],
+      vi.mocked(combat.start).mock.invocationCallOrder[0],
     ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'session.combat',
+      state: STATE,
+    });
   });
 
   it('forbids a non-master', async () => {

@@ -83,7 +83,7 @@ describe('RollInitiativeService', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('delegates the unique roll to the repository and passes a generator', async () => {
-    const { messages, combatants, combat, bus, service } = build();
+    const { combatants, combat, bus, service } = build();
     vi.mocked(combatants.findByRef).mockResolvedValue(CHARACTER_REF);
     const publish = vi.spyOn(bus, 'publish');
 
@@ -100,15 +100,14 @@ describe('RollInitiativeService', () => {
     expect(call?.[2]).toBe('char-1');
     expect(typeof call?.[3]).toBe('function');
     expect(call?.[3]?.()).toBe(7);
-    expect(messages.appendLog).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      playerId: 'p1',
-      eventType: 'combat_state',
-      payload: state(),
-    });
+    expect(call?.[4]).toBe('p1');
     expect(
-      vi.mocked(messages.appendLog).mock.invocationCallOrder[0],
+      vi.mocked(combat.rollInitiative).mock.invocationCallOrder[0],
     ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'session.combat',
+      state: state(),
+    });
   });
 
   it('forbids a non-owner, non-master character roll', async () => {

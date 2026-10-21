@@ -40,14 +40,11 @@ export class StartCombatService {
       refId: ref.refId,
       name: ref.name,
     }));
-    const state = await this.combat.start(input.sessionId, seeds);
-
-    await this.messages.appendLog({
-      sessionId: input.sessionId,
-      playerId: input.playerId,
-      eventType: 'combat_state',
-      payload: state,
-    });
+    const state = await this.combat.start(
+      input.sessionId,
+      seeds,
+      input.playerId,
+    );
 
     const event: RealtimeEvent = { type: 'session.combat', state };
     this.bus.publish(chatRoom(input.sessionId), event);
