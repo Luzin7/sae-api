@@ -1,6 +1,7 @@
 -- Read-only audit of the `character.affliction` -> `afflictions` migration.
 -- Prints the legacy column state, the rows that still need carrying over and a
--- one-line verdict: ok | needs-backfill | legacy-column-already-dropped.
+-- one-line verdict: ok | needs-backfill | legacy-column-already-dropped. Aborts
+-- the run (non-zero exit) when rows are still pending backfill.
 DO $$
 DECLARE
   has_legacy boolean := EXISTS (
@@ -46,4 +47,8 @@ BEGIN
   RAISE NOTICE 'rows with empty/NULL "afflictions": %', empty_new;
   RAISE NOTICE 'rows still pending backfill: %', pending;
   RAISE NOTICE 'verdict: %', verdict;
+
+  IF pending > 0 THEN
+    RAISE EXCEPTION 'affliction backfill required: % rows have a legacy value and no backfilled afflictions', pending;
+  END IF;
 END $$;
