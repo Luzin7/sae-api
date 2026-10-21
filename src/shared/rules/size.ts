@@ -1,3 +1,26 @@
+export const HEIGHT_EXACT_MIN = 150;
+export const HEIGHT_EXACT_MAX = 250;
+export const WEIGHT_EXACT_MIN = 50;
+export const WEIGHT_EXACT_MAX = 150;
+
+export type SizeExtremeBand = 'min' | 'max';
+
+export function rollHeight(
+  band: SizeExtremeBand,
+  rng: (min: number, max: number) => number,
+): number {
+  if (band === 'min') return HEIGHT_EXACT_MIN - rng(1, 10);
+  return HEIGHT_EXACT_MAX + rng(1, 20);
+}
+
+export function rollWeight(
+  band: SizeExtremeBand,
+  rng: (min: number, max: number) => number,
+): number {
+  if (band === 'min') return WEIGHT_EXACT_MIN - rng(1, 10);
+  return WEIGHT_EXACT_MAX + rng(1, 20);
+}
+
 export interface SizeFactorBand {
   min: number;
   max: number | null;
@@ -25,11 +48,7 @@ export const WEIGHT_FACTORS: readonly SizeFactorBand[] = [
 ];
 
 export type SizeCategoryKey =
-  | 'miudo'
-  | 'pequeno'
-  | 'medio'
-  | 'grande'
-  | 'enorme';
+  'miudo' | 'pequeno' | 'medio' | 'grande' | 'enorme';
 
 export interface SizeCategoryDefinition {
   key: SizeCategoryKey;
@@ -66,7 +85,10 @@ export function weightFactor(kg: number): number | null {
 }
 
 /** Size = arithmetic mean of the height and weight factors. */
-export function sizeFactorMean(heightCm: number, weightKg: number): number | null {
+export function sizeFactorMean(
+  heightCm: number,
+  weightKg: number,
+): number | null {
   const height = heightFactor(heightCm);
   const weight = weightFactor(weightKg);
   if (height === null || weight === null) return null;

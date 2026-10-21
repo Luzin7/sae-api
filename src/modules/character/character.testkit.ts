@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
+import type { GameSessionNotifier } from '@shared/game-session/game-session-notifier.contract.js';
 import type {
   Character,
   CharacterItem,
@@ -43,7 +44,7 @@ export function makeCharacter(overrides: Partial<Character> = {}): Character {
     background: null,
     profession: null,
     motivation: null,
-    affliction: null,
+    afflictions: [],
     socialClass: 'plebeu',
     vaalaques: 0,
     bonds: null,
@@ -130,5 +131,12 @@ export function makeMembership(): GameAccess {
   return {
     findById: vi.fn().mockResolvedValue({ id: 'game-1', masterId: 'master-1' }),
     isMember: vi.fn(),
+  };
+}
+
+export function makeNotifier(): GameSessionNotifier {
+  return {
+    notifyRosterChanged: vi.fn().mockResolvedValue(undefined),
+    notifyHpChanged: vi.fn().mockResolvedValue(undefined),
   };
 }

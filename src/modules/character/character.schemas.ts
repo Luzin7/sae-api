@@ -1,4 +1,13 @@
 import { z } from 'zod';
+import {
+  HEIGHT_EXACT_MAX,
+  HEIGHT_EXACT_MIN,
+  WEIGHT_EXACT_MAX,
+  WEIGHT_EXACT_MIN,
+} from '@shared/rules/size.js';
+
+const HEIGHT_RANGE_MESSAGE = `Altura deve estar entre ${HEIGHT_EXACT_MIN} e ${HEIGHT_EXACT_MAX} cm.`;
+const WEIGHT_RANGE_MESSAGE = `Peso deve estar entre ${WEIGHT_EXACT_MIN} e ${WEIGHT_EXACT_MAX} kg.`;
 
 const AttributeSchema = z.union([
   z.literal(-5),
@@ -29,27 +38,108 @@ const SheetFields = {
   constitution: AttributeSchema.default(-5),
   motricity: AttributeSchema.default(-5),
   perception: AttributeSchema.default(-5),
-  hairColor: z.string().max(50).optional(),
-  heightCm: z.number().int().positive().optional(),
-  weightKg: z.number().positive().optional(),
+  heightCm: z
+    .number()
+    .int()
+    .min(HEIGHT_EXACT_MIN, HEIGHT_RANGE_MESSAGE)
+    .max(HEIGHT_EXACT_MAX, HEIGHT_RANGE_MESSAGE)
+    .optional(),
+  heightRoll: z.enum(['min', 'max']).optional(),
+  weightKg: z
+    .number()
+    .min(WEIGHT_EXACT_MIN, WEIGHT_RANGE_MESSAGE)
+    .max(WEIGHT_EXACT_MAX, WEIGHT_RANGE_MESSAGE)
+    .optional(),
+  weightRoll: z.enum(['min', 'max']).optional(),
   background: z.string().max(2000).optional(),
   profession: z.string().max(100).optional(),
   motivation: z.string().max(1000).optional(),
-  affliction: z.string().max(1000).optional(),
+  afflictions: z.array(z.string().max(1000)).optional(),
   personality: z.string().min(1).max(50),
   posture: z.string().min(1).max(50),
   socialClass: SocialClassSchema,
   bonds: z.string().max(2000).optional(),
 };
 
-export const CreateCharacterBodySchema = z.object({
+const CharacterSheetBodySchema = z.object({
   gameId: z.string().uuid(),
   ...SheetFields,
 });
 
-export const UpdateCharacterBodySchema = CreateCharacterBodySchema.omit({
+interface SizeSources {
+  heightCm?: number;
+  heightRoll?: 'min' | 'max';
+  weightKg?: number;
+  weightRoll?: 'min' | 'max';
+}
+
+interface SizeSourceRule {
+  exact: 'heightCm' | 'weightKg';
+  roll: 'heightRoll' | 'weightRoll';
+  missingMessage: string;
+  conflictMessage: string;
+}
+
+const SIZE_SOURCE_RULES: readonly SizeSourceRule[] = [
+  {
+    exact: 'heightCm',
+    roll: 'heightRoll',
+    missingMessage: 'Informe heightCm ou heightRoll.',
+    conflictMessage: 'Informe apenas heightCm ou heightRoll.',
+  },
+  {
+    exact: 'weightKg',
+    roll: 'weightRoll',
+    missingMessage: 'Informe weightKg ou weightRoll.',
+    conflictMessage: 'Informe apenas weightKg ou weightRoll.',
+  },
+];
+
+function assertSizeSource(
+  input: SizeSources,
+  rule: SizeSourceRule,
+  required: boolean,
+  ctx: z.RefinementCtx,
+): void {
+  const hasExact = input[rule.exact] !== undefined;
+  const hasRoll = input[rule.roll] !== undefined;
+
+  if (hasExact && hasRoll) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [rule.exact],
+      message: rule.conflictMessage,
+    });
+    return;
+  }
+
+  if (required && !hasExact && !hasRoll) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [rule.exact],
+      message: rule.missingMessage,
+    });
+  }
+}
+
+function refineSizeSources(required: boolean) {
+  return (input: SizeSources, ctx: z.RefinementCtx): void => {
+    for (const rule of SIZE_SOURCE_RULES) {
+      assertSizeSource(input, rule, required, ctx);
+    }
+  };
+}
+
+export const CreateCharacterBodySchema = CharacterSheetBodySchema.superRefine(
+  refineSizeSources(true),
+);
+
+const UpdateCharacterSheetBodySchema = CharacterSheetBodySchema.omit({
   gameId: true,
 }).partial();
+
+export const UpdateCharacterBodySchema =
+  UpdateCharacterSheetBodySchema.superRefine(refineSizeSources(false));
 
 export const UpdateVitalsBodySchema = z
   .object({

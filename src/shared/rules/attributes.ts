@@ -21,6 +21,15 @@ export const ATTRIBUTES: readonly AttributeDefinition[] = [
   { key: 'perception', name: 'Percepção', abbr: 'PER' },
 ];
 
+export const ATTRIBUTE_NAMES: readonly AttributeKey[] = [
+  'cognition',
+  'psyche',
+  'instinct',
+  'constitution',
+  'motricity',
+  'perception',
+];
+
 /** Valid attribute values. The scale excludes −1 and 0. */
 export type AttributeValue = -5 | -4 | -3 | -2 | 1 | 2 | 3 | 4 | 5;
 
@@ -34,11 +43,11 @@ export const ATTRIBUTE_COST: Readonly<Record<AttributeValue, number>> = {
   [-4]: 1,
   [-3]: 2,
   [-2]: 3,
-  [1]: 4,
-  [2]: 5,
-  [3]: 6,
-  [4]: 7,
-  [5]: 8,
+  1: 4,
+  2: 5,
+  3: 6,
+  4: 7,
+  5: 8,
 };
 
 export function attributeCost(value: AttributeValue): number {

@@ -18,13 +18,20 @@ import {
   toWireMessages,
 } from './chat.transport.js';
 import type { ConnectService } from './connect/connect.service.js';
+import type { DeclareTestService } from './declare-test/declare-test.service.js';
+import type { EndCombatService } from './end-combat/end-combat.service.js';
 import type { ForceHpService } from './force-hp/force-hp.service.js';
 import type { LeaveService } from './leave/leave.service.js';
 import type { MasterBroadcastService } from './master-broadcast/master-broadcast.service.js';
+import type { MonsterAttackService } from './monster-attack/monster-attack.service.js';
+import type { NextTurnService } from './next-turn/next-turn.service.js';
 import type { RollDiceService } from './roll-dice/roll-dice.service.js';
+import type { RollInitiativeService } from './roll-initiative/roll-initiative.service.js';
+import type { RollMonsterTestService } from './roll-monster-test/roll-monster-test.service.js';
 import type { SendMessageService } from './send-message/send-message.service.js';
-import type { SetInitiativeService } from './set-initiative/set-initiative.service.js';
+import type { StartCombatService } from './start-combat/start-combat.service.js';
 import type { UpdateHpService } from './update-hp/update-hp.service.js';
+import type { UpdateMonsterVitalsService } from './update-monster-vitals/update-monster-vitals.service.js';
 
 export interface ChatServices {
   connect: ConnectService;
@@ -33,8 +40,15 @@ export interface ChatServices {
   updateHp: UpdateHpService;
   forceHp: ForceHpService;
   masterBroadcast: MasterBroadcastService;
-  setInitiative: SetInitiativeService;
   leave: LeaveService;
+  startCombat: StartCombatService;
+  rollInitiative: RollInitiativeService;
+  nextTurn: NextTurnService;
+  endCombat: EndCombatService;
+  declareTest: DeclareTestService;
+  rollMonsterTest: RollMonsterTestService;
+  updateMonsterVitals: UpdateMonsterVitalsService;
+  monsterAttack: MonsterAttackService;
 }
 
 export interface ChatGatewayOptions {
@@ -198,6 +212,7 @@ async function dispatch(
         sessionId: frame.sessionId,
         characterId: frame.characterId,
         skillId: frame.skillId,
+        testId: frame.testId,
       });
       return;
     }
@@ -221,21 +236,91 @@ async function dispatch(
       return;
     }
 
-    if (frame.type === 'master.set-initiative') {
-      await opts.services.setInitiative.execute({
-        playerId: state.playerId,
-        sessionId: frame.sessionId,
-        order: frame.order,
-      });
-      return;
-    }
-
     if (frame.type === 'master.force-hp-update') {
       await opts.services.forceHp.execute({
         playerId: state.playerId,
         sessionId: frame.sessionId,
         characterId: frame.characterId,
         newHp: frame.newHp,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.start-combat') {
+      await opts.services.startCombat.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+      });
+      return;
+    }
+
+    if (frame.type === 'combat.roll-initiative') {
+      await opts.services.rollInitiative.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        kind: frame.kind,
+        refId: frame.refId,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.next-turn') {
+      await opts.services.nextTurn.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.end-combat') {
+      await opts.services.endCombat.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.declare-test') {
+      await opts.services.declareTest.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        skillId: frame.skillId,
+        cd: frame.cd,
+        mode: frame.mode,
+        targetCharacterId: frame.targetCharacterId ?? null,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.roll-monster-test') {
+      await opts.services.rollMonsterTest.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        monsterId: frame.monsterId,
+        attribute: frame.attribute,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.monster-vitals-update') {
+      await opts.services.updateMonsterVitals.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        monsterId: frame.monsterId,
+        currentHp: frame.currentHp,
+        currentEffort: frame.currentEffort,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.monster-attack') {
+      await opts.services.monsterAttack.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        monsterId: frame.monsterId,
+        attribute: frame.attribute,
+        targetCharacterId: frame.targetCharacterId,
+        damage: frame.damage,
       });
     }
   } catch (error) {

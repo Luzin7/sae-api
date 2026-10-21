@@ -5,7 +5,7 @@ import {
   makeCharacterRepository,
   makeItem,
   makeMembership,
-  makeSkill,
+  makeSkillDetail,
 } from './character.testkit.js';
 import { CharacterQueryService } from './character-query.service.js';
 
@@ -71,17 +71,40 @@ describe('CharacterQueryService', () => {
     expect(result[0]?.name).toBe('Knife');
   });
 
-  it('lists skills of an owned character', async () => {
+  it('lists skills of an owned character with catalog name and attribute', async () => {
     const characters = makeCharacterRepository();
     vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    vi.mocked(characters.findSkills).mockResolvedValue([makeSkill()]);
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([
+      makeSkillDetail(),
+    ]);
 
     const result = await new CharacterQueryService(
       characters,
       makeMembership(),
     ).listSkills('char-1', 'player-1');
 
-    expect(characters.findSkills).toHaveBeenCalledWith('char-1');
+    expect(characters.findSkillDetails).toHaveBeenCalledWith('char-1');
+    expect(result[0]?.skillName).toBe('Vitalidade');
+    expect(result[0]?.attribute).toBe('constitution');
+  });
+
+  it('allows the game master to list items of a player character', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'owner' }),
+    );
+    vi.mocked(characters.findItems).mockResolvedValue([makeItem()]);
+    const membership = makeMembership();
+    vi.mocked(membership.findById).mockResolvedValue({
+      id: 'game-1',
+      masterId: 'master-1',
+    });
+
+    const result = await new CharacterQueryService(
+      characters,
+      membership,
+    ).listItems('char-1', 'master-1');
+
     expect(result).toHaveLength(1);
   });
 });

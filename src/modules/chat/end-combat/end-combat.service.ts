@@ -4,29 +4,26 @@ import {
   requireGameMaster,
 } from '../chat.authorization.js';
 import type { InMemoryMessageBus } from '../chat.bus.js';
-import {
-  chatRoom,
-  type InitiativeEntry,
-  type RealtimeEvent,
-} from '../chat.entity.js';
+import { chatRoom, type RealtimeEvent } from '../chat.entity.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
+import type { CombatRepository } from '../combat.repository.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
+import type { CombatStatePayload } from '@modules/session/session.entity.js';
 
-export interface SetInitiativeInput {
+export interface EndCombatInput {
   playerId: string;
   sessionId: string;
-  order: InitiativeEntry[];
 }
 
-/** Master-only initiative order; persisted as `initiative`, fanned out as `session.initiative`. */
-export class SetInitiativeService {
+export class EndCombatService {
   constructor(
     private readonly messages: ChatMessageRepository,
     private readonly access: GameAccess,
+    private readonly combat: CombatRepository,
     private readonly bus: InMemoryMessageBus,
   ) {}
 
-  async execute(input: SetInitiativeInput): Promise<RealtimeEvent> {
+  async execute(input: EndCombatInput): Promise<CombatStatePayload> {
     const session = await requireChatSession(this.messages, input.sessionId);
     const game = await requireChatMember(
       this.access,
@@ -35,19 +32,11 @@ export class SetInitiativeService {
     );
     requireGameMaster(game, input.playerId);
 
-    await this.messages.appendLog({
-      sessionId: input.sessionId,
-      playerId: input.playerId,
-      eventType: 'initiative',
-      payload: { order: input.order },
-    });
+    const state = await this.combat.end(input.sessionId, input.playerId);
 
-    const event: RealtimeEvent = {
-      type: 'session.initiative',
-      order: input.order,
-    };
+    const event: RealtimeEvent = { type: 'session.combat', state };
     this.bus.publish(chatRoom(input.sessionId), event);
 
-    return event;
+    return state;
   }
 }

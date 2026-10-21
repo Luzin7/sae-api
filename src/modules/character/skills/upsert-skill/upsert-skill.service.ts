@@ -2,10 +2,7 @@ import { proficiencyPool } from '@shared/rules/proficiency.js';
 import { requireOwnedCharacter } from '../../character.authorization.js';
 import type {
   AttributeName,
-  Character,
   CharacterSkill,
-  ProficiencyLevel,
-  ProficiencyScores,
   UpsertSkillInput,
 } from '../../character.entity.js';
 import {
@@ -13,22 +10,7 @@ import {
   SkillPoolExceededError,
 } from '../../character.errors.js';
 import type { CharacterRepository } from '../../character.repository.js';
-
-const LEVEL_FIELD: Readonly<Record<AttributeName, keyof ProficiencyScores>> = {
-  cognition: 'cognitionProficiency',
-  psyche: 'psycheProficiency',
-  instinct: 'instinctProficiency',
-  constitution: 'constitutionProficiency',
-  motricity: 'motricityProficiency',
-  perception: 'perceptionProficiency',
-};
-
-function proficiencyLevelFor(
-  character: Character,
-  attribute: AttributeName,
-): ProficiencyLevel {
-  return character[LEVEL_FIELD[attribute]];
-}
+import { proficiencyLevelFor } from '../proficiency-field.js';
 
 export class UpsertSkillService {
   constructor(private readonly characters: CharacterRepository) {}

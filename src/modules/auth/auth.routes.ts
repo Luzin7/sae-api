@@ -64,7 +64,7 @@ export default async function authRoutes(
   );
 
   app.post('/auth/refresh', AUTH_RATE_LIMIT, async (request, reply) => {
-    const presented = request.cookies['refresh_token'] ?? '';
+    const presented = request.cookies.refresh_token ?? '';
     const result = await opts.services.refresh.execute(presented);
 
     setAuthCookie(reply, result.accessToken);
@@ -73,11 +73,7 @@ export default async function authRoutes(
     return reply.send({ ok: true });
   });
 
-  app.get(
-    '/auth/ws-token',
-    { preHandler: authenticate },
-    async (request) => {
-      return { token: opts.services.wsToken.execute(request.playerId) };
-    },
-  );
+  app.get('/auth/ws-token', { preHandler: authenticate }, async (request) => {
+    return { token: opts.services.wsToken.execute(request.playerId) };
+  });
 }

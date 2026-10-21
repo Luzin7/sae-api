@@ -11,7 +11,8 @@ export const MOTIVATIONS: readonly MotivationDefinition[] = [
     key: 'reconhecimento',
     name: 'Reconhecimento',
     description: 'Busca por validação e prestígio.',
-    trigger: 'Quando sob observação de audiência relevante ou reputação em julgamento.',
+    trigger:
+      'Quando sob observação de audiência relevante ou reputação em julgamento.',
   },
   {
     key: 'adrenalina',
@@ -23,7 +24,8 @@ export const MOTIVATIONS: readonly MotivationDefinition[] = [
     key: 'ambicao',
     name: 'Ambição',
     description: 'Desejo de conquistar algo maior.',
-    trigger: 'Quando surge oportunidade concreta de avanço em objetivo central.',
+    trigger:
+      'Quando surge oportunidade concreta de avanço em objetivo central.',
   },
   {
     key: 'dever',
@@ -47,12 +49,14 @@ export const MOTIVATIONS: readonly MotivationDefinition[] = [
     key: 'revolucao',
     name: 'Revolução',
     description: 'Desejo de romper estruturas e transformar o mundo.',
-    trigger: 'Quando confronta estrutura opressiva ou autoridade que pode ser desafiada.',
+    trigger:
+      'Quando confronta estrutura opressiva ou autoridade que pode ser desafiada.',
   },
   {
     key: 'liberdade',
     name: 'Liberdade',
     description: 'Necessidade de autonomia e rejeição a limitações.',
-    trigger: 'Quando há risco de restrição direta da liberdade (captura, coerção).',
+    trigger:
+      'Quando há risco de restrição direta da liberdade (captura, coerção).',
   },
 ];

@@ -1,8 +1,7 @@
-import { requireOwnedCharacter } from '../character.authorization.js';
-import type {
-  Character,
-  UpdateVitalsInput,
-} from '../character.entity.js';
+import type { GameAccess } from '@shared/game-access/game-access.contract.js';
+import type { GameSessionNotifier } from '@shared/game-session/game-session-notifier.contract.js';
+import { requireEditableCharacter } from '../character.authorization.js';
+import type { Character, UpdateVitalsInput } from '../character.entity.js';
 import type { CharacterRepository } from '../character.repository.js';
 
 function clamp(value: number, max: number): number {
@@ -13,15 +12,20 @@ function clamp(value: number, max: number): number {
 }
 
 export class UpdateVitalsService {
-  constructor(private readonly characters: CharacterRepository) {}
+  constructor(
+    private readonly characters: CharacterRepository,
+    private readonly access: GameAccess,
+    private readonly notifier: GameSessionNotifier,
+  ) {}
 
   async execute(
     id: string,
     requesterId: string,
     input: UpdateVitalsInput,
   ): Promise<Character> {
-    const character = await requireOwnedCharacter(
+    const { character } = await requireEditableCharacter(
       this.characters,
+      this.access,
       id,
       requesterId,
     );
@@ -35,6 +39,19 @@ export class UpdateVitalsService {
         ? character.currentEffort
         : clamp(input.currentEffort, character.maxEffort);
 
-    return this.characters.save(id, { currentHp, currentEffort });
+    const updated = await this.characters.save(id, {
+      currentHp,
+      currentEffort,
+    });
+
+    if (input.currentHp !== undefined) {
+      await this.notifier.notifyHpChanged(updated.gameId, {
+        characterId: updated.id,
+        oldHp: character.currentHp,
+        newHp: updated.currentHp,
+      });
+    }
+
+    return updated;
   }
 }

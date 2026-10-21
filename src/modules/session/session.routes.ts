@@ -62,7 +62,6 @@ export default async function sessionRoutes(
         gameId,
         request.playerId,
       );
-      if (!session) return reply.status(204).send();
 
       return reply.status(200).send({ session });
     },
@@ -72,7 +71,9 @@ export default async function sessionRoutes(
     '/:gameId/session/:sessionId/logs',
     { preHandler: authenticate },
     async (request) => {
-      const { gameId, sessionId } = SessionLogParamsSchema.parse(request.params);
+      const { gameId, sessionId } = SessionLogParamsSchema.parse(
+        request.params,
+      );
       const page = ListLogsQuerySchema.parse(request.query);
       const logs = await opts.services.listLogs.execute(
         gameId,

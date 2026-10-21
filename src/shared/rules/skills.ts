@@ -39,6 +39,8 @@ export const SKILLS: readonly SkillDefinition[] = [
   { name: 'Observação', attribute: 'perception' },
 ];
 
-export function skillsByAttribute(attribute: AttributeKey): readonly SkillDefinition[] {
+export function skillsByAttribute(
+  attribute: AttributeKey,
+): readonly SkillDefinition[] {
   return SKILLS.filter((skill) => skill.attribute === attribute);
 }

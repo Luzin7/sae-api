@@ -5,15 +5,13 @@ import type {
 } from './character-access.contract.js';
 import { chatRoom, type RealtimeEvent } from './chat.entity.js';
 import { InvalidHpError } from './chat.errors.js';
-import type { ChatMessageRepository } from './chat.repository.js';
 
 /**
- * Persists an HP change (log and character row) before broadcasting, and
- * returns the wire event. Shared by the self and master-forced flows;
- * authorization stays in the services.
+ * Persists an HP change (log and character row in one transaction) before
+ * broadcasting, and returns the wire event. Shared by the self and
+ * master-forced flows; authorization stays in the services.
  */
 export async function applyHpChange(
-  messages: ChatMessageRepository,
   characters: CharacterAccess,
   bus: InMemoryMessageBus,
   input: {
@@ -27,7 +25,7 @@ export async function applyHpChange(
   if (newHp < 0 || newHp > character.maxHp) throw new InvalidHpError();
 
   const oldHp = character.currentHp;
-  await messages.appendLog({
+  await characters.updateHpWithLog(character.id, newHp, {
     sessionId: input.sessionId,
     playerId: input.playerId,
     eventType: 'hp_change',
@@ -38,7 +36,6 @@ export async function applyHpChange(
       maxHp: character.maxHp,
     },
   });
-  await characters.updateHp(character.id, newHp);
 
   const event: RealtimeEvent = {
     type: 'character.hp-changed',

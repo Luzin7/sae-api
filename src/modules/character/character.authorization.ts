@@ -8,10 +8,6 @@ import {
 } from './character.errors.js';
 import type { CharacterRepository } from './character.repository.js';
 
-/**
- * Single ownership guard. Every feature that acts on a character by id routes
- * through here instead of repeating findById + playerId + throw.
- */
 export async function requireOwnedCharacter(
   repository: CharacterRepository,
   id: string,
@@ -22,6 +18,43 @@ export async function requireOwnedCharacter(
   if (character.playerId !== requesterId) throw new ForbiddenError();
 
   return character;
+}
+
+/**
+ * Read guard: the owner and the game master may read a character sheet.
+ * Mutations keep using the write guards below.
+ */
+export async function requireReadableCharacter(
+  repository: CharacterRepository,
+  access: GameAccess,
+  id: string,
+  requesterId: string,
+): Promise<Character> {
+  const character = await repository.findById(id);
+  if (!character) throw new CharacterNotFoundError();
+  if (character.playerId === requesterId) return character;
+
+  const game = await access.findById(character.gameId);
+  if (game?.masterId === requesterId) return character;
+
+  throw new ForbiddenError();
+}
+
+export async function requireEditableCharacter(
+  repository: CharacterRepository,
+  access: GameAccess,
+  id: string,
+  requesterId: string,
+): Promise<{ character: Character; isMaster: boolean }> {
+  const character = await repository.findById(id);
+  if (!character) throw new CharacterNotFoundError();
+
+  const game = await access.findById(character.gameId);
+  const isMaster = game?.masterId === requesterId;
+  if (requesterId !== character.playerId && !isMaster)
+    throw new ForbiddenError();
+
+  return { character, isMaster };
 }
 
 /**

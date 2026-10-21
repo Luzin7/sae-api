@@ -78,7 +78,9 @@ async function buildTestApp(): Promise<TestApp> {
   return { app, credentials, sessions };
 }
 
-function setCookieHeader(headers: { 'set-cookie'?: string | string[] }): string {
+function setCookieHeader(headers: {
+  'set-cookie'?: string | string[];
+}): string {
   const header = headers['set-cookie'];
   if (!header) return '';
   if (Array.isArray(header)) return header.join(';');

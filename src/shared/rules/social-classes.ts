@@ -1,8 +1,4 @@
-export type SocialClassKey =
-  | 'opulento'
-  | 'abastado'
-  | 'plebeu'
-  | 'miseravel';
+export type SocialClassKey = 'opulento' | 'abastado' | 'plebeu' | 'miseravel';
 
 export interface SocialClassDefinition {
   key: SocialClassKey;
@@ -19,9 +15,7 @@ export const SOCIAL_CLASSES: readonly SocialClassDefinition[] = [
 ];
 
 export type SocialDistanceRelation =
-  | 'same'
-  | 'superior-to-inferior'
-  | 'inferior-to-superior';
+  'same' | 'superior-to-inferior' | 'inferior-to-superior';
 
 export interface SocialDistanceModifier {
   relation: SocialDistanceRelation;

@@ -14,7 +14,8 @@ export class StartSessionService {
     await requireMaster(this.access, gameId, playerId);
 
     const active = await this.sessions.findActiveByGame(gameId);
-    if (active) throw new ConflictError('Já existe uma sessão ativa para este jogo.');
+    if (active)
+      throw new ConflictError('Já existe uma sessão ativa para este jogo.');
 
     return this.sessions.create(gameId);
   }

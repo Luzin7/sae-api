@@ -12,6 +12,7 @@ import websocketPlugin from './plugins/websocket.plugin.js';
 import { db } from '@infra/db/index.js';
 import { registerErrorHandler } from '@infra/http/error-handler.js';
 import authRoutes from './modules/auth/auth.routes.js';
+import bestiaryRoutes from './modules/bestiary/bestiary.routes.js';
 import characterRoutes from './modules/character/character.routes.js';
 import chatGateway from './modules/chat/chat.gateway.js';
 import diceRoutes from './modules/dice/dice.routes.js';
@@ -45,6 +46,10 @@ export async function buildApp() {
   await app.register(characterRoutes, {
     prefix: '/characters',
     services: container.services.character,
+  });
+  await app.register(bestiaryRoutes, {
+    prefix: '/bestiary',
+    services: container.services.bestiary,
   });
   await app.register(diceRoutes, {
     prefix: '/dice',

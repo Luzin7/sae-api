@@ -1,4 +1,9 @@
-import type { Game, GamePlayer, GameSummary } from './game.entity.js';
+import type {
+  Game,
+  GamePlayer,
+  GamePlayerPresence,
+  GameRoster,
+} from './game.entity.js';
 
 export interface GameResponse {
   id: string;
@@ -12,14 +17,18 @@ export interface GameResponse {
   updatedAt: string;
 }
 
-export interface GameSummaryResponse {
+export interface GamePlayerResponse {
   id: string;
   name: string;
 }
 
-export interface GamePlayerResponse {
-  id: string;
-  name: string;
+export interface GamePlayerPresenceResponse extends GamePlayerResponse {
+  characterIds: string[];
+}
+
+export interface GameRosterResponse {
+  master: GamePlayerResponse | null;
+  players: GamePlayerPresenceResponse[];
 }
 
 export const GamePresenter = {
@@ -37,11 +46,22 @@ export const GamePresenter = {
     };
   },
 
-  toSummary(summary: GameSummary): GameSummaryResponse {
-    return { id: summary.id, name: summary.name };
-  },
-
   toPlayer(player: GamePlayer): GamePlayerResponse {
     return { id: player.id, name: player.name };
+  },
+
+  toPlayerPresence(player: GamePlayerPresence): GamePlayerPresenceResponse {
+    return {
+      id: player.id,
+      name: player.name,
+      characterIds: player.characterIds,
+    };
+  },
+
+  toRoster(roster: GameRoster): GameRosterResponse {
+    return {
+      master: roster.master ? GamePresenter.toPlayer(roster.master) : null,
+      players: roster.players.map(GamePresenter.toPlayerPresence),
+    };
   },
 };

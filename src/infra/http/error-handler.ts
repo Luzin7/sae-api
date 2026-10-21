@@ -11,7 +11,9 @@ function formatValidationError(error: ZodError): string {
     )
     .join('; ');
 
-  return details.length > 0 ? `Dados inválidos: ${details}` : 'Dados inválidos.';
+  return details.length > 0
+    ? `Dados inválidos: ${details}`
+    : 'Dados inválidos.';
 }
 
 /**

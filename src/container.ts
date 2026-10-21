@@ -8,8 +8,11 @@ import {
 import { characterAccessRepository } from '@infra/db/repositories/character-access.repository.js';
 import { characterRepository } from '@infra/db/repositories/character.repository.js';
 import { chatMessageRepository } from '@infra/db/repositories/chat-message.repository.js';
+import { combatRepository } from '@infra/db/repositories/combat.repository.js';
+import { combatantSourceRepository } from '@infra/db/repositories/combatant-source.repository.js';
 import { gameAccessRepository } from '@infra/db/repositories/game-access.repository.js';
 import { gameRepository } from '@infra/db/repositories/game.repository.js';
+import { monsterRepository } from '@infra/db/repositories/monster.repository.js';
 import { playerDirectoryRepository } from '@infra/db/repositories/player-directory.repository.js';
 import { playerRepository } from '@infra/db/repositories/player.repository.js';
 import { sessionRepository } from '@infra/db/repositories/session.repository.js';
@@ -19,26 +22,43 @@ import type {
   WsTokenPayload,
 } from '@modules/auth/auth.entity.js';
 import type { AuthServices } from '@modules/auth/auth.routes.js';
+import type { MonsterRepository } from '@modules/bestiary/bestiary.repository.js';
+import type { BestiaryServices } from '@modules/bestiary/bestiary.routes.js';
+import { CreateMonsterService } from '@modules/bestiary/create-monster/create-monster.service.js';
+import { DeleteMonsterService } from '@modules/bestiary/delete-monster/delete-monster.service.js';
+import { MonsterQueryService } from '@modules/bestiary/monster-query.service.js';
+import { UpdateMonsterService } from '@modules/bestiary/update-monster/update-monster.service.js';
 import { CharacterQueryService } from '@modules/character/character-query.service.js';
 import { InMemoryMessageBus } from '@modules/chat/chat.bus.js';
 import type { CharacterAccess } from '@modules/chat/character-access.contract.js';
 import type { ChatServices } from '@modules/chat/chat.gateway.js';
+import type { CombatantSource } from '@modules/chat/combatant-source.contract.js';
+import type { CombatRepository } from '@modules/chat/combat.repository.js';
 import type { ChatMessageRepository } from '@modules/chat/chat.repository.js';
 import { ConnectService } from '@modules/chat/connect/connect.service.js';
+import { DeclareTestService } from '@modules/chat/declare-test/declare-test.service.js';
+import { EndCombatService } from '@modules/chat/end-combat/end-combat.service.js';
 import { ForceHpService } from '@modules/chat/force-hp/force-hp.service.js';
+import { GameSessionNotifierService } from '@modules/chat/game-session-notifier/game-session-notifier.service.js';
 import { LeaveService } from '@modules/chat/leave/leave.service.js';
 import { MasterBroadcastService } from '@modules/chat/master-broadcast/master-broadcast.service.js';
-import type { PlayerDirectory } from '@modules/chat/player-directory.contract.js';
+import { MonsterAttackService } from '@modules/chat/monster-attack/monster-attack.service.js';
+import { NextTurnService } from '@modules/chat/next-turn/next-turn.service.js';
+import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
 import type { SkillCatalog } from '@modules/rules/skill-catalog.contract.js';
 import { RollDiceService } from '@modules/chat/roll-dice/roll-dice.service.js';
+import { RollInitiativeService } from '@modules/chat/roll-initiative/roll-initiative.service.js';
+import { RollMonsterTestService } from '@modules/chat/roll-monster-test/roll-monster-test.service.js';
 import { SendMessageService } from '@modules/chat/send-message/send-message.service.js';
-import { SetInitiativeService } from '@modules/chat/set-initiative/set-initiative.service.js';
+import { StartCombatService } from '@modules/chat/start-combat/start-combat.service.js';
 import { UpdateHpService } from '@modules/chat/update-hp/update-hp.service.js';
+import { UpdateMonsterVitalsService } from '@modules/chat/update-monster-vitals/update-monster-vitals.service.js';
 import type { CharacterRepository } from '@modules/character/character.repository.js';
 import type { CharacterServices } from '@modules/character/character.routes.js';
 import { CreateCharacterService } from '@modules/character/create-character/create-character.service.js';
 import { DeleteCharacterService } from '@modules/character/delete-character/delete-character.service.js';
 import { GetCharacterService } from '@modules/character/get-character/get-character.service.js';
+import { GetSheetService } from '@modules/character/get-sheet/get-sheet.service.js';
 import { AddItemService } from '@modules/character/items/add-item/add-item.service.js';
 import { DeleteItemService } from '@modules/character/items/delete-item/delete-item.service.js';
 import { UpdateItemService } from '@modules/character/items/update-item/update-item.service.js';
@@ -94,6 +114,9 @@ export interface Container {
     characterAccess: CharacterAccess;
     playerDirectory: PlayerDirectory;
     skillCatalog: SkillCatalog;
+    monsters: MonsterRepository;
+    combat: CombatRepository;
+    combatants: CombatantSource;
   };
   services: {
     player: PlayerServices;
@@ -102,6 +125,7 @@ export interface Container {
     game: GameServices;
     dice: DiceServices;
     character: CharacterServices;
+    bestiary: BestiaryServices;
     chat: ChatServices;
   };
   bus: InMemoryMessageBus;
@@ -123,8 +147,17 @@ export function buildContainer(deps: {
   const characterAccess = characterAccessRepository();
   const playerDirectory = playerDirectoryRepository();
   const skillCatalog = skillCatalogRepository();
+  const monsters = monsterRepository();
+  const combat = combatRepository();
+  const combatants = combatantSourceRepository();
 
   const bus = new InMemoryMessageBus();
+  const sessionNotifier = new GameSessionNotifierService(
+    sessions,
+    gameAccess,
+    playerDirectory,
+    bus,
+  );
 
   const signing = {
     sign(
@@ -176,6 +209,9 @@ export function buildContainer(deps: {
       characterAccess,
       playerDirectory,
       skillCatalog,
+      monsters,
+      combat,
+      combatants,
     },
     services: {
       player: {
@@ -216,7 +252,7 @@ export function buildContainer(deps: {
         updateGame: new UpdateGameService(games),
         deleteGame: new DeleteGameService(games),
         leaveGame: new LeaveGameService(games),
-        query: new GameQueryService(games),
+        query: new GameQueryService(games, playerDirectory),
       },
       dice: {
         roll: new RollService(systemRng),
@@ -226,16 +262,36 @@ export function buildContainer(deps: {
           characters,
           gameAccess,
           systemRng,
+          sessionNotifier,
         ),
-        getCharacter: new GetCharacterService(characters),
-        updateCharacter: new UpdateCharacterService(characters, systemRng),
-        deleteCharacter: new DeleteCharacterService(characters),
-        updateVitals: new UpdateVitalsService(characters),
+        getCharacter: new GetCharacterService(characters, gameAccess),
+        getSheet: new GetSheetService(characters, gameAccess),
+        updateCharacter: new UpdateCharacterService(
+          characters,
+          gameAccess,
+          systemRng,
+          sessionNotifier,
+        ),
+        deleteCharacter: new DeleteCharacterService(
+          characters,
+          sessionNotifier,
+        ),
+        updateVitals: new UpdateVitalsService(
+          characters,
+          gameAccess,
+          sessionNotifier,
+        ),
         addItem: new AddItemService(characters),
         updateItem: new UpdateItemService(characters),
         deleteItem: new DeleteItemService(characters),
         upsertSkill: new UpsertSkillService(characters),
         query: new CharacterQueryService(characters, gameAccess),
+      },
+      bestiary: {
+        createMonster: new CreateMonsterService(monsters, gameAccess),
+        updateMonster: new UpdateMonsterService(monsters, gameAccess),
+        deleteMonster: new DeleteMonsterService(monsters, gameAccess),
+        query: new MonsterQueryService(monsters, gameAccess),
       },
       chat: {
         connect: new ConnectService(
@@ -252,6 +308,7 @@ export function buildContainer(deps: {
           playerDirectory,
           bus,
           systemRng,
+          combat,
         ),
         updateHp: new UpdateHpService(
           chatMessages,
@@ -272,8 +329,54 @@ export function buildContainer(deps: {
           bus,
           systemClock,
         ),
-        setInitiative: new SetInitiativeService(chatMessages, gameAccess, bus),
-        leave: new LeaveService(chatMessages, playerDirectory, bus),
+        leave: new LeaveService(chatMessages, gameAccess, playerDirectory, bus),
+        startCombat: new StartCombatService(
+          chatMessages,
+          gameAccess,
+          combatants,
+          combat,
+          bus,
+        ),
+        rollInitiative: new RollInitiativeService(
+          chatMessages,
+          gameAccess,
+          combatants,
+          combat,
+          bus,
+          systemRng,
+        ),
+        nextTurn: new NextTurnService(chatMessages, gameAccess, combat, bus),
+        endCombat: new EndCombatService(chatMessages, gameAccess, combat, bus),
+        declareTest: new DeclareTestService(
+          chatMessages,
+          gameAccess,
+          combatants,
+          bus,
+        ),
+        rollMonsterTest: new RollMonsterTestService(
+          chatMessages,
+          gameAccess,
+          combatants,
+          combat,
+          bus,
+          systemRng,
+        ),
+        updateMonsterVitals: new UpdateMonsterVitalsService(
+          chatMessages,
+          gameAccess,
+          combatants,
+          combat,
+          bus,
+        ),
+        monsterAttack: new MonsterAttackService(
+          chatMessages,
+          gameAccess,
+          characterAccess,
+          combatants,
+          combat,
+          bus,
+          systemRng,
+        ),
       },
     },
     bus,

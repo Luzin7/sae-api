@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import authPlugin from '../../plugins/auth.plugin.js';
 import { registerErrorHandler } from '@infra/http/error-handler.js';
+import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
 import { CreateGameService } from './create-game/create-game.service.js';
 import { DeleteGameService } from './delete-game/delete-game.service.js';
 import type { Game } from './game.entity.js';
@@ -12,7 +13,7 @@ import { JoinGameService } from './join-game/join-game.service.js';
 import { LeaveGameService } from './leave-game/leave-game.service.js';
 import { UpdateGameService } from './update-game/update-game.service.js';
 
-process.env['JWT_SECRET'] = 'test-secret-key-for-tests-only';
+process.env.JWT_SECRET = 'test-secret-key-for-tests-only';
 
 const PLAYER_ID = 'player-1';
 
@@ -47,14 +48,34 @@ function makeGames(): GameRepository {
   };
 }
 
-function makeServices(games: GameRepository): GameServices {
+function makePlayers(
+  names: Record<string, string> = {},
+  characters: Record<string, string[]> = {},
+): PlayerDirectory {
+  return {
+    findById: vi.fn(async (playerId: string) => {
+      const name = names[playerId];
+      if (name === undefined) return null;
+
+      return { id: playerId, name };
+    }),
+    findCharactersByGame: vi.fn(
+      async () => new Map(Object.entries(characters)),
+    ),
+  };
+}
+
+function makeServices(
+  games: GameRepository,
+  players: PlayerDirectory = makePlayers(),
+): GameServices {
   return {
     createGame: new CreateGameService(games, { generate: () => 'CODE123' }),
     joinGame: new JoinGameService(games),
     updateGame: new UpdateGameService(games),
     deleteGame: new DeleteGameService(games),
     leaveGame: new LeaveGameService(games),
-    query: new GameQueryService(games),
+    query: new GameQueryService(games, players),
   };
 }
 
@@ -113,12 +134,14 @@ describe('game routes', () => {
     expect(res.json().game.inviteCode).toBe('CODE123');
   });
 
-  it('lists mastered and joined games as summaries', async () => {
+  it('lists mastered and joined games with the full shape', async () => {
     const games = makeGames();
     vi.mocked(games.findMastered).mockResolvedValue([
-      { id: 'g1', name: 'Mesma' },
+      makeGame({ id: 'g1', name: 'Mesma' }),
     ]);
-    vi.mocked(games.findJoined).mockResolvedValue([{ id: 'g2', name: 'Outra' }]);
+    vi.mocked(games.findJoined).mockResolvedValue([
+      makeGame({ id: 'g2', name: 'Outra', inviteCode: 'OTHER1' }),
+    ]);
     const app = await buildTestApp(makeServices(games));
 
     const res = await app.inject({
@@ -129,8 +152,28 @@ describe('game routes', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().games).toEqual([
-      { id: 'g1', name: 'Mesma' },
-      { id: 'g2', name: 'Outra' },
+      {
+        id: 'g1',
+        masterId: PLAYER_ID,
+        name: 'Mesma',
+        description: null,
+        imageUrl: null,
+        inviteCode: 'CODE123',
+        isActive: false,
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'g2',
+        masterId: PLAYER_ID,
+        name: 'Outra',
+        description: null,
+        imageUrl: null,
+        inviteCode: 'OTHER1',
+        isActive: false,
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      },
     ]);
   });
 
@@ -164,6 +207,39 @@ describe('game routes', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  it('returns the master and players with their character ids', async () => {
+    const games = makeGames();
+    const players = makePlayers(
+      { 'master-1': 'Mestre' },
+      { 'player-1': ['char-old', 'char-new'] },
+    );
+    vi.mocked(games.findById).mockResolvedValue(
+      makeGame({ masterId: 'master-1' }),
+    );
+    vi.mocked(games.isMember).mockResolvedValue(true);
+    vi.mocked(games.findPlayers).mockResolvedValue([
+      { id: 'player-1', name: 'Ana' },
+      { id: 'player-2', name: 'Bia' },
+      { id: 'master-1', name: 'Mestre' },
+    ]);
+    const app = await buildTestApp(makeServices(games, players));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/games/game-1/players',
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      master: { id: 'master-1', name: 'Mestre' },
+      players: [
+        { id: 'player-1', name: 'Ana', characterIds: ['char-old', 'char-new'] },
+        { id: 'player-2', name: 'Bia', characterIds: [] },
+      ],
+    });
   });
 
   it('returns 403 when a non-master updates a game', async () => {

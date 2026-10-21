@@ -2,16 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryMessageBus } from '../chat.bus.js';
 import { ChatForbiddenError } from '../chat.errors.js';
 import {
+  type DirectoryCharacter,
+  directoryCharacter,
   makeChatMessages,
   makeGameAccess,
   makePlayerDirectory,
 } from '../chat.testkit.js';
 import { ConnectService } from './connect.service.js';
 
-function build() {
+function build(
+  characters: DirectoryCharacter[] = [directoryCharacter('p1', 'char-1')],
+) {
   const messages = makeChatMessages();
   const access = makeGameAccess();
-  const players = makePlayerDirectory({ p1: 'Ana' });
+  const players = makePlayerDirectory(
+    { p1: 'Ana', 'master-1': 'Mestre' },
+    characters,
+  );
   const bus = new InMemoryMessageBus();
   const service = new ConnectService(messages, access, players, bus);
 
@@ -46,7 +53,7 @@ describe('ConnectService', () => {
   });
 
   it('persists the join before fanning out presence and state', async () => {
-    const { messages, access, bus, service } = build();
+    const { messages, access, bus, players, service } = build();
     vi.mocked(access.findById).mockResolvedValue({
       id: 'game-1',
       masterId: 'master-1',
@@ -68,21 +75,133 @@ describe('ConnectService', () => {
       eventType: 'player_join',
       payload: { playerId: 'p1', name: 'Ana' },
     });
-    const players = [{ playerId: 'p1', name: 'Ana' }];
+    const player = { playerId: 'p1', name: 'Ana', characterIds: ['char-1'] };
     expect(publish).toHaveBeenCalledWith('session:session-1', {
       type: 'session.player-joined',
-      player: { playerId: 'p1', name: 'Ana' },
+      player,
     });
     expect(publish).toHaveBeenCalledWith('session:session-1', {
       type: 'presence',
-      players,
+      master: null,
+      players: [player],
     });
     expect(publish).toHaveBeenCalledWith('session:session-1', {
       type: 'session.state',
-      players,
+      master: null,
+      players: [player],
     });
+    expect(players.findCharactersByGame).toHaveBeenCalledTimes(1);
     expect(
       vi.mocked(messages.appendLog).mock.invocationCallOrder[0],
     ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it('resolves a player with no character as an empty list', async () => {
+    const { access, bus, service } = build([]);
+    vi.mocked(access.findById).mockResolvedValue({
+      id: 'game-1',
+      masterId: 'master-1',
+    });
+    vi.mocked(access.isMember).mockResolvedValue(true);
+    bus.register('socket-1', 'p1', () => undefined);
+    const publish = vi.spyOn(bus, 'publish');
+
+    await service.execute({
+      playerId: 'p1',
+      socketId: 'socket-1',
+      sessionId: 'session-1',
+    });
+
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'presence',
+      master: null,
+      players: [{ playerId: 'p1', name: 'Ana', characterIds: [] }],
+    });
+  });
+
+  it('joins a player carrying every character in oldest-first order', async () => {
+    const { access, bus, service } = build([
+      directoryCharacter('p1', 'char-new', '2024-03-01T00:00:00.000Z'),
+      directoryCharacter('p1', 'char-old', '2024-01-01T00:00:00.000Z'),
+    ]);
+    vi.mocked(access.findById).mockResolvedValue({
+      id: 'game-1',
+      masterId: 'master-1',
+    });
+    vi.mocked(access.isMember).mockResolvedValue(true);
+    bus.register('socket-1', 'p1', () => undefined);
+    const publish = vi.spyOn(bus, 'publish');
+
+    await service.execute({
+      playerId: 'p1',
+      socketId: 'socket-1',
+      sessionId: 'session-1',
+    });
+
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'session.player-joined',
+      player: {
+        playerId: 'p1',
+        name: 'Ana',
+        characterIds: ['char-old', 'char-new'],
+      },
+    });
+  });
+
+  it('puts a connected master in master and keeps them out of players', async () => {
+    const { access, bus, service } = build();
+    vi.mocked(access.findById).mockResolvedValue({
+      id: 'game-1',
+      masterId: 'master-1',
+    });
+    vi.mocked(access.isMember).mockResolvedValue(true);
+    bus.register('socket-1', 'master-1', () => undefined);
+    const publish = vi.spyOn(bus, 'publish');
+
+    await service.execute({
+      playerId: 'master-1',
+      socketId: 'socket-1',
+      sessionId: 'session-1',
+    });
+
+    const expected = {
+      master: { playerId: 'master-1', name: 'Mestre' },
+      players: [],
+    };
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'presence',
+      ...expected,
+    });
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'session.state',
+      ...expected,
+    });
+    expect(publish).not.toHaveBeenCalledWith(
+      'session:session-1',
+      expect.objectContaining({ type: 'session.player-joined' }),
+    );
+  });
+
+  it('keeps master null when the master is not connected', async () => {
+    const { access, bus, service } = build();
+    vi.mocked(access.findById).mockResolvedValue({
+      id: 'game-1',
+      masterId: 'master-1',
+    });
+    vi.mocked(access.isMember).mockResolvedValue(true);
+    bus.register('socket-1', 'p1', () => undefined);
+    const publish = vi.spyOn(bus, 'publish');
+
+    await service.execute({
+      playerId: 'p1',
+      socketId: 'socket-1',
+      sessionId: 'session-1',
+    });
+
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'session.state',
+      master: null,
+      players: [{ playerId: 'p1', name: 'Ana', characterIds: ['char-1'] }],
+    });
   });
 });

@@ -23,10 +23,7 @@ export function gameAccessRepository(): GameAccess {
         .select({ playerId: playerGame.playerId })
         .from(playerGame)
         .where(
-          and(
-            eq(playerGame.gameId, gameId),
-            eq(playerGame.playerId, playerId),
-          ),
+          and(eq(playerGame.gameId, gameId), eq(playerGame.playerId, playerId)),
         )
         .limit(1);
 

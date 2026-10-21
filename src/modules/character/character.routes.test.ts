@@ -11,12 +11,15 @@ import {
   makeCharacterRepository,
   makeItem,
   makeMembership,
+  makeNotifier,
   makeSkill,
+  makeSkillDetail,
   makeSkillSummary,
 } from './character.testkit.js';
 import { CreateCharacterService } from './create-character/create-character.service.js';
 import { DeleteCharacterService } from './delete-character/delete-character.service.js';
 import { GetCharacterService } from './get-character/get-character.service.js';
+import { GetSheetService } from './get-sheet/get-sheet.service.js';
 import { AddItemService } from './items/add-item/add-item.service.js';
 import { DeleteItemService } from './items/delete-item/delete-item.service.js';
 import { UpdateItemService } from './items/update-item/update-item.service.js';
@@ -37,16 +40,25 @@ function makeServices(
   characters: CharacterRepository,
   membership: GameAccess,
 ): CharacterServices {
+  const notifier = makeNotifier();
+
   return {
     createCharacter: new CreateCharacterService(
       characters,
       membership,
       fixedRng,
+      notifier,
     ),
-    getCharacter: new GetCharacterService(characters),
-    updateCharacter: new UpdateCharacterService(characters, fixedRng),
-    deleteCharacter: new DeleteCharacterService(characters),
-    updateVitals: new UpdateVitalsService(characters),
+    getCharacter: new GetCharacterService(characters, membership),
+    getSheet: new GetSheetService(characters, membership),
+    updateCharacter: new UpdateCharacterService(
+      characters,
+      membership,
+      fixedRng,
+      notifier,
+    ),
+    deleteCharacter: new DeleteCharacterService(characters, notifier),
+    updateVitals: new UpdateVitalsService(characters, membership, notifier),
     addItem: new AddItemService(characters),
     updateItem: new UpdateItemService(characters),
     deleteItem: new DeleteItemService(characters),
@@ -74,6 +86,8 @@ function createPayload() {
     personality: 'Erudito',
     posture: 'Abrutalhado',
     socialClass: 'plebeu',
+    heightCm: 180,
+    weightKg: 80,
   };
 }
 
@@ -273,5 +287,551 @@ describe('character routes', () => {
 
     expect(res.statusCode).toBe(200);
     expect(characters.upsertSkill).toHaveBeenCalledWith('char-1', SKILL_ID, 3);
+  });
+});
+
+describe('character read access', () => {
+  it('lets the owner read the character', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1',
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('lets the game master read the character', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player' }),
+    );
+    const membership = makeMembership();
+    vi.mocked(membership.findById).mockResolvedValue({
+      id: 'game-1',
+      masterId: 'player-1',
+    });
+    const app = await buildTestApp(makeServices(characters, membership));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1',
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('lets the owner read items and skills', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.findItems).mockResolvedValue([makeItem()]);
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([
+      makeSkillDetail(),
+    ]);
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+    const cookie = `token=${makeToken(app)}`;
+
+    const items = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1/items',
+      headers: { cookie },
+    });
+    const skills = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1/skills',
+      headers: { cookie },
+    });
+
+    expect(items.statusCode).toBe(200);
+    expect(items.json().items).toHaveLength(1);
+    expect(skills.statusCode).toBe(200);
+    expect(skills.json().skills[0].skillName).toBe('Vitalidade');
+    expect(skills.json().skills[0].attribute).toBe('constitution');
+  });
+
+  it('lets the game master read items and skills', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player' }),
+    );
+    vi.mocked(characters.findItems).mockResolvedValue([makeItem()]);
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([
+      makeSkillDetail(),
+    ]);
+    const membership = makeMembership();
+    vi.mocked(membership.findById).mockResolvedValue({
+      id: 'game-1',
+      masterId: 'player-1',
+    });
+    const app = await buildTestApp(makeServices(characters, membership));
+    const cookie = `token=${makeToken(app)}`;
+
+    const items = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1/items',
+      headers: { cookie },
+    });
+    const skills = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1/skills',
+      headers: { cookie },
+    });
+
+    expect(items.statusCode).toBe(200);
+    expect(skills.statusCode).toBe(200);
+  });
+
+  it('returns 403 to a player who is neither owner nor master', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player' }),
+    );
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+    const cookie = `token=${makeToken(app)}`;
+
+    const items = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1/items',
+      headers: { cookie },
+    });
+    const skills = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1/skills',
+      headers: { cookie },
+    });
+    const sheet = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1/sheet',
+      headers: { cookie },
+    });
+
+    expect(items.statusCode).toBe(403);
+    expect(skills.statusCode).toBe(403);
+    expect(sheet.statusCode).toBe(403);
+  });
+
+  it('returns 404 for a missing character', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(null);
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+    const cookie = `token=${makeToken(app)}`;
+
+    const character = await app.inject({
+      method: 'GET',
+      url: '/characters/missing',
+      headers: { cookie },
+    });
+    const items = await app.inject({
+      method: 'GET',
+      url: '/characters/missing/items',
+      headers: { cookie },
+    });
+    const skills = await app.inject({
+      method: 'GET',
+      url: '/characters/missing/skills',
+      headers: { cookie },
+    });
+    const sheet = await app.inject({
+      method: 'GET',
+      url: '/characters/missing/sheet',
+      headers: { cookie },
+    });
+
+    expect(character.statusCode).toBe(404);
+    expect(items.statusCode).toBe(404);
+    expect(skills.statusCode).toBe(404);
+    expect(sheet.statusCode).toBe(404);
+  });
+
+  it('returns the whole sheet in one response for the owner', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.findItems).mockResolvedValue([makeItem()]);
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([
+      makeSkillDetail(),
+    ]);
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1/sheet',
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+    const body = res.json();
+
+    expect(res.statusCode).toBe(200);
+    expect(body.character.id).toBe('char-1');
+    expect(body.items).toHaveLength(1);
+    expect(body.skills[0].skillName).toBe('Vitalidade');
+    expect(body.skills[0].attribute).toBe('constitution');
+  });
+
+  it('returns the whole sheet to the game master', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player' }),
+    );
+    vi.mocked(characters.findItems).mockResolvedValue([makeItem()]);
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([
+      makeSkillDetail(),
+    ]);
+    const membership = makeMembership();
+    vi.mocked(membership.findById).mockResolvedValue({
+      id: 'game-1',
+      masterId: 'player-1',
+    });
+    const app = await buildTestApp(makeServices(characters, membership));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/characters/char-1/sheet',
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().character.playerId).toBe('other-player');
+  });
+});
+
+describe('character size validation', () => {
+  async function postCharacter(payload: Record<string, unknown>) {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    const app = await buildTestApp(makeServices(characters, membership));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters',
+      payload,
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    return { res, characters };
+  }
+
+  async function patchCharacter(payload: Record<string, unknown>) {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ heightCm: 160, weightKg: 60, size: 'pequeno' }),
+    );
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/characters/char-1',
+      payload,
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    return { res, characters };
+  }
+
+  it('rejects a create without any height source', async () => {
+    const { res, characters } = await postCharacter({
+      ...createPayload(),
+      heightCm: undefined,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'heightCm: Informe heightCm ou heightRoll.',
+    );
+    expect(characters.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a create without any weight source', async () => {
+    const { res, characters } = await postCharacter({
+      ...createPayload(),
+      weightKg: undefined,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'weightKg: Informe weightKg ou weightRoll.',
+    );
+    expect(characters.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a create with both heightCm and heightRoll', async () => {
+    const { res } = await postCharacter({
+      ...createPayload(),
+      heightRoll: 'min',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'heightCm: Informe apenas heightCm ou heightRoll.',
+    );
+  });
+
+  it('rejects a create with both weightKg and weightRoll', async () => {
+    const { res } = await postCharacter({
+      ...createPayload(),
+      weightRoll: 'max',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'weightKg: Informe apenas weightKg ou weightRoll.',
+    );
+  });
+
+  it('rejects a height below the exact band', async () => {
+    const { res } = await postCharacter({ ...createPayload(), heightCm: 100 });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'heightCm: Altura deve estar entre 150 e 250 cm.',
+    );
+  });
+
+  it('rejects a height above the exact band', async () => {
+    const { res } = await postCharacter({ ...createPayload(), heightCm: 300 });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'heightCm: Altura deve estar entre 150 e 250 cm.',
+    );
+  });
+
+  it('rejects a weight below the exact band', async () => {
+    const { res } = await postCharacter({ ...createPayload(), weightKg: 10 });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'weightKg: Peso deve estar entre 50 e 150 kg.',
+    );
+  });
+
+  it('rejects a weight above the exact band', async () => {
+    const { res } = await postCharacter({ ...createPayload(), weightKg: 200 });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'weightKg: Peso deve estar entre 50 e 150 kg.',
+    );
+  });
+
+  it('persists values inside the roll bands', async () => {
+    const { res, characters } = await postCharacter({
+      ...createPayload(),
+      heightCm: undefined,
+      weightKg: undefined,
+      heightRoll: 'min',
+      weightRoll: 'max',
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.objectContaining({ heightCm: 149, weightKg: 151 }),
+    );
+  });
+
+  it('persists explicit height and weight inside the exact bands', async () => {
+    const { res, characters } = await postCharacter(createPayload());
+
+    expect(res.statusCode).toBe(201);
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.objectContaining({ heightCm: 180, weightKg: 80 }),
+    );
+  });
+
+  it('updates only the nickname without requiring size sources', async () => {
+    const { res, characters } = await patchCharacter({ nickname: 'Renamed' });
+
+    expect(res.statusCode).toBe(200);
+    expect(characters.save).toHaveBeenCalledWith(
+      'char-1',
+      expect.objectContaining({
+        nickname: 'Renamed',
+        heightCm: 160,
+        weightKg: 60,
+      }),
+    );
+  });
+
+  it('rejects an update with both heightCm and heightRoll', async () => {
+    const { res, characters } = await patchCharacter({
+      heightCm: 180,
+      heightRoll: 'min',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'heightCm: Informe apenas heightCm ou heightRoll.',
+    );
+    expect(characters.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects an update with heightCm outside the exact band', async () => {
+    const { res, characters } = await patchCharacter({ heightCm: 300 });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'heightCm: Altura deve estar entre 150 e 250 cm.',
+    );
+    expect(characters.save).not.toHaveBeenCalled();
+  });
+});
+
+describe('character write access', () => {
+  function masterMembership(): GameAccess {
+    const membership = makeMembership();
+    vi.mocked(membership.findById).mockResolvedValue({
+      id: 'game-1',
+      masterId: 'player-1',
+    });
+
+    return membership;
+  }
+
+  async function patchVitals(
+    route: 'hp' | 'pe',
+    payload: Record<string, number>,
+    characters: CharacterRepository,
+    membership: GameAccess,
+  ) {
+    const app = await buildTestApp(makeServices(characters, membership));
+
+    return app.inject({
+      method: 'PATCH',
+      url: `/characters/char-1/${route}`,
+      payload,
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+  }
+
+  it('lets the master change hp on another player character', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player', currentHp: 10, maxHp: 26 }),
+    );
+    vi.mocked(characters.save).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player', currentHp: 12 }),
+    );
+
+    const res = await patchVitals(
+      'hp',
+      { currentHp: 12 },
+      characters,
+      masterMembership(),
+    );
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('lets the master change effort on another player character', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({
+        playerId: 'other-player',
+        currentEffort: 5,
+        maxEffort: 20,
+      }),
+    );
+    vi.mocked(characters.save).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player', currentEffort: 8 }),
+    );
+
+    const res = await patchVitals(
+      'pe',
+      { currentEffort: 8 },
+      characters,
+      masterMembership(),
+    );
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('lets the owner change their own effort', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ currentEffort: 5, maxEffort: 20 }),
+    );
+    vi.mocked(characters.save).mockResolvedValue(
+      makeCharacter({ currentEffort: 8 }),
+    );
+
+    const res = await patchVitals(
+      'pe',
+      { currentEffort: 8 },
+      characters,
+      makeMembership(),
+    );
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('returns 403 to an unrelated player for hp and pe', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player' }),
+    );
+    const membership = makeMembership();
+
+    const hp = await patchVitals(
+      'hp',
+      { currentHp: 10 },
+      characters,
+      membership,
+    );
+    const pe = await patchVitals(
+      'pe',
+      { currentEffort: 10 },
+      characters,
+      membership,
+    );
+
+    expect(hp.statusCode).toBe(403);
+    expect(pe.statusCode).toBe(403);
+  });
+
+  it('lets the master change np on another player character', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player' }),
+    );
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+    vi.mocked(characters.save).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player', np: 2 }),
+    );
+    const app = await buildTestApp(
+      makeServices(characters, masterMembership()),
+    );
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/characters/char-1',
+      payload: { np: 2 },
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('forbids a player from changing np', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player' }),
+    );
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/characters/char-1',
+      payload: { np: 2 },
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(403);
   });
 });

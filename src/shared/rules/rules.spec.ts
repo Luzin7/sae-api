@@ -8,7 +8,12 @@ import {
 import { oficioCdReduction } from './oficios.js';
 import { deriveProficiency } from './archetypes.js';
 import { levelPoints, proficiencyPool } from './proficiency.js';
-import { sizeCategory, sizeFactorMean } from './size.js';
+import {
+  rollHeight,
+  rollWeight,
+  sizeCategory,
+  sizeFactorMean,
+} from './size.js';
 
 describe('attribute cost and budget', () => {
   it('charges the scale index from the −5 floor', () => {
@@ -95,5 +100,30 @@ describe('size mean to category', () => {
 
   it('returns null for a mean outside 0..5', () => {
     expect(sizeCategory(6)).toBeNull();
+  });
+});
+
+describe('size extreme rolls', () => {
+  const lowest = () => 1;
+  const highest = (_min: number, max: number) => max;
+
+  it('rolls height below 150 with 150 − 1d10', () => {
+    expect(rollHeight('min', highest)).toBe(140);
+    expect(rollHeight('min', lowest)).toBe(149);
+  });
+
+  it('rolls height above 250 with 250 + 1d20', () => {
+    expect(rollHeight('max', lowest)).toBe(251);
+    expect(rollHeight('max', highest)).toBe(270);
+  });
+
+  it('rolls weight below 50 with 50 − 1d10', () => {
+    expect(rollWeight('min', highest)).toBe(40);
+    expect(rollWeight('min', lowest)).toBe(49);
+  });
+
+  it('rolls weight above 150 with 150 + 1d20', () => {
+    expect(rollWeight('max', lowest)).toBe(151);
+    expect(rollWeight('max', highest)).toBe(170);
   });
 });
