@@ -1,12 +1,12 @@
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import {
   requireMembership,
-  requireOwnedCharacter,
+  requireReadableCharacter,
 } from './character.authorization.js';
 import {
   type Character,
   type CharacterItem,
-  type CharacterSkill,
+  type CharacterSkillDetail,
   DEFAULT_CHARACTER_PAGE,
   type Page,
 } from './character.entity.js';
@@ -29,10 +29,7 @@ export class CharacterQueryService {
     return this.characters.findByPlayer(playerId, page);
   }
 
-  async listByGame(
-    gameId: string,
-    requesterId: string,
-  ): Promise<Character[]> {
+  async listByGame(gameId: string, requesterId: string): Promise<Character[]> {
     await requireMembership(this.membership, gameId, requesterId);
 
     return this.characters.findByGame(gameId);
@@ -42,7 +39,12 @@ export class CharacterQueryService {
     characterId: string,
     requesterId: string,
   ): Promise<CharacterItem[]> {
-    await requireOwnedCharacter(this.characters, characterId, requesterId);
+    await requireReadableCharacter(
+      this.characters,
+      this.membership,
+      characterId,
+      requesterId,
+    );
 
     return this.characters.findItems(characterId);
   }
@@ -50,9 +52,14 @@ export class CharacterQueryService {
   async listSkills(
     characterId: string,
     requesterId: string,
-  ): Promise<CharacterSkill[]> {
-    await requireOwnedCharacter(this.characters, characterId, requesterId);
+  ): Promise<CharacterSkillDetail[]> {
+    await requireReadableCharacter(
+      this.characters,
+      this.membership,
+      characterId,
+      requesterId,
+    );
 
-    return this.characters.findSkills(characterId);
+    return this.characters.findSkillDetails(characterId);
   }
 }

@@ -10,14 +10,18 @@ export interface Game {
   updatedAt: Date;
 }
 
-export interface GameSummary {
+export interface GamePlayer {
   id: string;
   name: string;
 }
 
-export interface GamePlayer {
-  id: string;
-  name: string;
+export interface GamePlayerPresence extends GamePlayer {
+  characterIds: string[];
+}
+
+export interface GameRoster {
+  master: GamePlayer | null;
+  players: GamePlayerPresence[];
 }
 
 export interface CreateGameInput {

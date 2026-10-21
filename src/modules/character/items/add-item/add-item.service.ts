@@ -1,8 +1,5 @@
 import { requireOwnedCharacter } from '../../character.authorization.js';
-import type {
-  CharacterItem,
-  CreateItemInput,
-} from '../../character.entity.js';
+import type { CharacterItem, CreateItemInput } from '../../character.entity.js';
 import type { CharacterRepository } from '../../character.repository.js';
 
 export class AddItemService {

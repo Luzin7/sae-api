@@ -73,7 +73,7 @@ export function characterRepository(): CharacterRepository {
           background: input.background ?? null,
           profession: input.profession ?? null,
           motivation: input.motivation ?? null,
-          affliction: input.affliction ?? null,
+          afflictions: input.afflictions ?? [],
           socialClass: input.socialClass,
           vaalaques: input.vaalaques,
           bonds: input.bonds ?? null,

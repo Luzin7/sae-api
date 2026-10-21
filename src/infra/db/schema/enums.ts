@@ -46,6 +46,13 @@ export const eventTypeEnum = pgEnum('event_type', [
   'player_leave',
   'master_broadcast',
   'initiative',
+  'combat_state',
+  'test_declared',
+]);
+
+export const combatantKindEnum = pgEnum('combatant_kind', [
+  'character',
+  'monster',
 ]);
 
 export const attributeEnum = pgEnum('attribute', [

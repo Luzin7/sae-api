@@ -31,7 +31,7 @@ export interface CharacterResponse {
   background: string | null;
   profession: string | null;
   motivation: string | null;
-  affliction: string | null;
+  afflictions: string[];
   socialClass: string | null;
   vaalaques: number;
   bonds: string | null;
@@ -74,7 +74,7 @@ export const CharacterPresenter = {
       background: character.background,
       profession: character.profession,
       motivation: character.motivation,
-      affliction: character.affliction,
+      afflictions: character.afflictions,
       socialClass: character.socialClass,
       vaalaques: character.vaalaques,
       bonds: character.bonds,

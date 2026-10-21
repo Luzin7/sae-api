@@ -1,8 +1,9 @@
 import type { InMemoryMessageBus } from '../chat.bus.js';
 import { chatRoom } from '../chat.entity.js';
-import { resolvePlayers } from '../chat.players.js';
+import { resolvePlayerPresence, resolvePresence } from '../chat.players.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
-import type { PlayerDirectory } from '../player-directory.contract.js';
+import type { GameAccess } from '@shared/game-access/game-access.contract.js';
+import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
 
 export interface LeaveInput {
   playerId: string;
@@ -13,11 +14,13 @@ export interface LeaveInput {
 /**
  * Best-effort disconnect cleanup: leave the room, persist `player_leave`, then
  * fan out `session.player-left` and refreshed `presence`. Never throws — the
- * socket may already be gone or the session ended.
+ * socket may already be gone or the session ended. The master never emits
+ * `player-left`; their online state is carried by `presence`/`session.state`.
  */
 export class LeaveService {
   constructor(
     private readonly messages: ChatMessageRepository,
+    private readonly access: GameAccess,
     private readonly players: PlayerDirectory,
     private readonly bus: InMemoryMessageBus,
   ) {}
@@ -26,26 +29,37 @@ export class LeaveService {
     const session = await this.messages.findSession(input.sessionId);
     if (!session) return;
 
+    const game = await this.access.findById(session.gameId);
+    if (!game) return;
+
     const room = chatRoom(input.sessionId);
     this.bus.leave(room, input.socketId);
-    const remaining = await resolvePlayers(
+    const presence = await resolvePresence(
       this.players,
+      session.gameId,
       this.bus.presence(room),
+      game.masterId,
     );
-    const player = await this.players.findById(input.playerId);
-    if (player) {
-      await this.messages.appendLog({
-        sessionId: input.sessionId,
-        playerId: input.playerId,
-        eventType: 'player_leave',
-        payload: { playerId: input.playerId, name: player.name },
-      });
-      this.bus.publish(room, {
-        type: 'session.player-left',
-        player: { playerId: input.playerId, name: player.name },
-      });
+    const player = await resolvePlayerPresence(
+      this.players,
+      session.gameId,
+      input.playerId,
+    );
+    if (!player) {
+      this.bus.publish(room, { type: 'presence', ...presence });
+      return;
     }
 
-    this.bus.publish(room, { type: 'presence', players: remaining });
+    await this.messages.appendLog({
+      sessionId: input.sessionId,
+      playerId: input.playerId,
+      eventType: 'player_leave',
+      payload: { playerId: player.playerId, name: player.name },
+    });
+
+    if (player.playerId !== game.masterId) {
+      this.bus.publish(room, { type: 'session.player-left', player });
+    }
+    this.bus.publish(room, { type: 'presence', ...presence });
   }
 }

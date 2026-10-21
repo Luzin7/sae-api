@@ -4,4 +4,6 @@ export * from './game.js';
 export * from './session.js';
 export * from './skill.js';
 export * from './character.js';
+export * from './monster.js';
+export * from './combat.js';
 export * from './relations.js';

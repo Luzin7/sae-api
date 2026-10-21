@@ -2,7 +2,7 @@ import {
   DomainError,
   type DomainErrorCode,
 } from '@shared/errors/domain-error.js';
-import { NotFoundError } from '@shared/errors/http-errors.js';
+import { ForbiddenError, NotFoundError } from '@shared/errors/http-errors.js';
 
 export class CharacterNotFoundError extends NotFoundError {
   constructor() {
@@ -48,6 +48,34 @@ export class InvalidArchetypeError extends DomainError {
     super(
       `Arquétipo inválido: personalidade "${personality}" / postura "${posture}".`,
     );
+  }
+}
+
+export class InvalidHeightError extends DomainError {
+  readonly code: DomainErrorCode = 'VALIDATION';
+  readonly httpStatus = 400;
+
+  constructor() {
+    super(
+      'Altura inválida: use um valor entre 150 e 250 cm, ou informe heightRoll para os extremos.',
+    );
+  }
+}
+
+export class InvalidWeightError extends DomainError {
+  readonly code: DomainErrorCode = 'VALIDATION';
+  readonly httpStatus = 400;
+
+  constructor() {
+    super(
+      'Peso inválido: use um valor entre 50 e 150 kg, ou informe weightRoll para os extremos.',
+    );
+  }
+}
+
+export class NpMasterOnlyError extends ForbiddenError {
+  constructor() {
+    super('Apenas o mestre pode alterar o NP.');
   }
 }
 

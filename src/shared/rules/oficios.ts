@@ -20,17 +20,65 @@ export const OFICIO_SKILL_CORRECTIONS: Readonly<Record<string, string>> = {
 
 /** 11 ofícios and the skills that receive the CD reduction (local rulebook). */
 export const OFICIOS: readonly OficioDefinition[] = [
-  { name: 'Artista', affectedSkills: ['Atuação', 'Expressividade', 'Impressão', '1 Percepção (escolha)'] },
-  { name: 'Artífice', affectedSkills: ['Lógica', 'Contato', 'Manipulação', 'Precisão'] },
-  { name: 'Atleta', affectedSkills: ['Vitalidade', 'Condicionamento', 'Mobilidade', 'Carisma'] },
-  { name: 'Acadêmico', affectedSkills: ['Erudição', 'Observação', 'Impressão', 'Linguística'] },
-  { name: 'Comerciante', affectedSkills: ['Carisma', 'Empatia', 'Retórica', 'Estratégia'] },
-  { name: 'Criminoso', affectedSkills: ['Reflexo', 'Mobilidade', 'Perspectiva', 'Presença/Carisma'] },
-  { name: 'Figura Pública', affectedSkills: ['Carisma', 'Estratégia ou Compostura', 'Retórica', 'Expressividade'] },
-  { name: 'Investigador', affectedSkills: ['Lógica', 'Retórica', 'Perspectiva', 'Criatividade'] },
-  { name: 'Medicante', affectedSkills: ['Erudição', 'Pressentimento', 'Empatia', 'Precisão'] },
-  { name: 'Militar', affectedSkills: ['Compostura', 'Estratégia', 'Tolerância', 'Primalidade'] },
-  { name: 'Operário', affectedSkills: ['Fortitude', 'Condicionamento', 'Contato', 'Manipulação'] },
+  {
+    name: 'Artista',
+    affectedSkills: [
+      'Atuação',
+      'Expressividade',
+      'Impressão',
+      '1 Percepção (escolha)',
+    ],
+  },
+  {
+    name: 'Artífice',
+    affectedSkills: ['Lógica', 'Contato', 'Manipulação', 'Precisão'],
+  },
+  {
+    name: 'Atleta',
+    affectedSkills: ['Vitalidade', 'Condicionamento', 'Mobilidade', 'Carisma'],
+  },
+  {
+    name: 'Acadêmico',
+    affectedSkills: ['Erudição', 'Observação', 'Impressão', 'Linguística'],
+  },
+  {
+    name: 'Comerciante',
+    affectedSkills: ['Carisma', 'Empatia', 'Retórica', 'Estratégia'],
+  },
+  {
+    name: 'Criminoso',
+    affectedSkills: [
+      'Reflexo',
+      'Mobilidade',
+      'Perspectiva',
+      'Presença/Carisma',
+    ],
+  },
+  {
+    name: 'Figura Pública',
+    affectedSkills: [
+      'Carisma',
+      'Estratégia ou Compostura',
+      'Retórica',
+      'Expressividade',
+    ],
+  },
+  {
+    name: 'Investigador',
+    affectedSkills: ['Lógica', 'Retórica', 'Perspectiva', 'Criatividade'],
+  },
+  {
+    name: 'Medicante',
+    affectedSkills: ['Erudição', 'Pressentimento', 'Empatia', 'Precisão'],
+  },
+  {
+    name: 'Militar',
+    affectedSkills: ['Compostura', 'Estratégia', 'Tolerância', 'Primalidade'],
+  },
+  {
+    name: 'Operário',
+    affectedSkills: ['Fortitude', 'Condicionamento', 'Contato', 'Manipulação'],
+  },
 ];
 
 export interface OficioReductionBand {

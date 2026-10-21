@@ -24,6 +24,9 @@ export interface DiceRollPayload {
   expression: string;
   results: number[];
   total: number;
+  testId?: string;
+  cd?: number;
+  success?: boolean;
 }
 
 export interface HpChangePayload {
@@ -68,6 +71,31 @@ export interface InitiativePayload {
   order: InitiativeEntryPayload[];
 }
 
+export interface CombatantPayload {
+  combatantId: string;
+  kind: 'character' | 'monster';
+  refId: string;
+  name: string;
+  initiativeValue: number | null;
+  hasRolled: boolean;
+}
+
+export interface CombatStatePayload {
+  active: boolean;
+  turnIndex: number;
+  round: number;
+  entries: CombatantPayload[];
+}
+
+export interface TestDeclaredPayload {
+  testId: string;
+  skillId: string;
+  cd: number;
+  mode: 'open' | 'targeted';
+  targetCharacterId: string | null;
+  targetName: string | null;
+}
+
 export interface SessionEventPayloadMap {
   dice_roll: DiceRollPayload;
   hp_change: HpChangePayload;
@@ -77,6 +105,8 @@ export interface SessionEventPayloadMap {
   player_leave: PlayerLeavePayload;
   master_broadcast: MasterBroadcastPayload;
   initiative: InitiativePayload;
+  combat_state: CombatStatePayload;
+  test_declared: TestDeclaredPayload;
 }
 
 export type SessionEventType = keyof SessionEventPayloadMap;
@@ -91,6 +121,9 @@ export const DiceRollPayloadSchema = z.object({
   expression: z.string().min(1),
   results: z.array(z.number().int()),
   total: z.number().int(),
+  testId: z.string().min(1).optional(),
+  cd: z.number().int().optional(),
+  success: z.boolean().optional(),
 });
 
 export const HpChangePayloadSchema = z.object({
@@ -135,6 +168,31 @@ export const InitiativePayloadSchema = z.object({
   order: z.array(InitiativeEntryPayloadSchema),
 });
 
+export const CombatantPayloadSchema = z.object({
+  combatantId: z.string().min(1),
+  kind: z.enum(['character', 'monster']),
+  refId: z.string().min(1),
+  name: z.string().min(1),
+  initiativeValue: z.number().int().nullable(),
+  hasRolled: z.boolean(),
+});
+
+export const CombatStatePayloadSchema = z.object({
+  active: z.boolean(),
+  turnIndex: z.number().int(),
+  round: z.number().int(),
+  entries: z.array(CombatantPayloadSchema),
+});
+
+export const TestDeclaredPayloadSchema = z.object({
+  testId: z.string().min(1),
+  skillId: z.string().min(1),
+  cd: z.number().int(),
+  mode: z.enum(['open', 'targeted']),
+  targetCharacterId: z.string().min(1).nullable(),
+  targetName: z.string().min(1).nullable(),
+});
+
 export const SessionEventPayloadSchemas: Record<
   SessionEventType,
   z.ZodType<SessionEventPayload>
@@ -147,6 +205,8 @@ export const SessionEventPayloadSchemas: Record<
   player_leave: PlayerLeavePayloadSchema,
   master_broadcast: MasterBroadcastPayloadSchema,
   initiative: InitiativePayloadSchema,
+  combat_state: CombatStatePayloadSchema,
+  test_declared: TestDeclaredPayloadSchema,
 };
 
 export function parseSessionEventPayload(

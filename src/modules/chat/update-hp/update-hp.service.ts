@@ -37,7 +37,7 @@ export class UpdateHpService {
     );
     if (character.playerId !== input.playerId) throw new ChatForbiddenError();
 
-    return applyHpChange(this.messages, this.characters, this.bus, {
+    return applyHpChange(this.characters, this.bus, {
       sessionId: input.sessionId,
       playerId: input.playerId,
       character,

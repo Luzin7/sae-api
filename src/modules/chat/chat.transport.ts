@@ -100,6 +100,14 @@ function toOutbound(event: RealtimeEvent): OutboundEvent {
     return { type: 'dice.rolled', ...event.roll };
   }
 
+  if (event.type === 'session.combat') {
+    return { type: 'session.combat', ...event.state };
+  }
+
+  if (event.type === 'session.test-declared') {
+    return { type: 'session.test-declared', ...event.test };
+  }
+
   return event;
 }
 

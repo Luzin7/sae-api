@@ -1,7 +1,4 @@
-import {
-  DomainError,
-  type DomainErrorCode,
-} from './domain-error.js';
+import { DomainError, type DomainErrorCode } from './domain-error.js';
 
 export class NotFoundError extends DomainError {
   readonly code: DomainErrorCode = 'NOT_FOUND';

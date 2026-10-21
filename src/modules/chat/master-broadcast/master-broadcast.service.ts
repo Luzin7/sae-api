@@ -9,7 +9,7 @@ import { EmptyNarrationError } from '../chat.errors.js';
 import { resolvePlayerSummary } from '../chat.players.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
-import type { PlayerDirectory } from '../player-directory.contract.js';
+import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
 
 export interface MasterBroadcastInput {
   playerId: string;

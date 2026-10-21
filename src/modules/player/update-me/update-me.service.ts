@@ -1,8 +1,5 @@
 import type { Player, UpdatePlayerInput } from '../player.entity.js';
-import {
-  PlayerNameTakenError,
-  PlayerNotFoundError,
-} from '../player.errors.js';
+import { PlayerNameTakenError, PlayerNotFoundError } from '../player.errors.js';
 import type { PlayerRepository } from '../player.repository.js';
 
 export class UpdateMeService {

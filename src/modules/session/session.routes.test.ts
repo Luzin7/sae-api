@@ -11,7 +11,7 @@ import type { SessionRepository } from './session.repository.js';
 import sessionRoutes, { type SessionServices } from './session.routes.js';
 import { StartSessionService } from './start-session/start-session.service.js';
 
-process.env['JWT_SECRET'] = 'test-secret-key-for-tests-only';
+process.env.JWT_SECRET = 'test-secret-key-for-tests-only';
 
 const GAME_ID = '11111111-1111-1111-1111-111111111111';
 const OTHER_GAME_ID = '22222222-2222-2222-2222-222222222222';
@@ -75,9 +75,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('session routes', () => {
   it('returns 401 when unauthenticated', async () => {
-    const app = await buildTestApp(
-      makeServices(makeSessions(), makeAccess()),
-    );
+    const app = await buildTestApp(makeServices(makeSessions(), makeAccess()));
 
     const res = await app.inject({
       method: 'POST',
@@ -150,7 +148,7 @@ describe('session routes', () => {
     expect(sessions.listLogs).not.toHaveBeenCalled();
   });
 
-  it('returns 204 when there is no active session', async () => {
+  it('returns 200 with a null session when there is no active session', async () => {
     const sessions = makeSessions();
     const access = makeAccess();
     vi.mocked(access.findById).mockResolvedValue({
@@ -166,6 +164,7 @@ describe('session routes', () => {
       headers: { cookie: `token=${makeAuthToken(app)}` },
     });
 
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ session: null });
   });
 });

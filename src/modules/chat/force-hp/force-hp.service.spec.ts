@@ -20,6 +20,7 @@ function makeSnapshot(
     id: 'char-1',
     gameId: 'game-1',
     playerId: 'p1',
+    name: 'Hero',
     currentHp: 20,
     maxHp: 26,
     currentEffort: 0,
@@ -73,7 +74,7 @@ describe('ForceHpService', () => {
         newHp: 5,
       }),
     ).rejects.toBeInstanceOf(MasterOnlyError);
-    expect(characters.updateHp).not.toHaveBeenCalled();
+    expect(characters.updateHpWithLog).not.toHaveBeenCalled();
     expect(messages.appendLog).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
   });
@@ -93,7 +94,7 @@ describe('ForceHpService', () => {
       newHp: 5,
     });
 
-    expect(messages.appendLog).toHaveBeenCalledWith({
+    expect(characters.updateHpWithLog).toHaveBeenCalledWith('char-1', 5, {
       sessionId: 'session-1',
       playerId: 'master-1',
       eventType: 'hp_change',
@@ -104,7 +105,7 @@ describe('ForceHpService', () => {
         maxHp: 26,
       },
     });
-    expect(characters.updateHp).toHaveBeenCalledWith('char-1', 5);
+    expect(messages.appendLog).not.toHaveBeenCalled();
     expect(publish).toHaveBeenCalledWith('session:session-1', {
       type: 'character.hp-changed',
       characterId: 'char-1',
@@ -112,7 +113,7 @@ describe('ForceHpService', () => {
       newHp: 5,
     });
     expect(
-      vi.mocked(messages.appendLog).mock.invocationCallOrder[0],
+      vi.mocked(characters.updateHpWithLog).mock.invocationCallOrder[0],
     ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
   });
 

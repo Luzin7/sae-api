@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryMessageBus } from '../chat.bus.js';
 import type { CharacterSnapshot } from '../character-access.contract.js';
-import { ChatForbiddenError } from '../chat.errors.js';
+import {
+  ChatCharacterNotFoundError,
+  ChatForbiddenError,
+} from '../chat.errors.js';
 import {
   makeCharacterAccess,
   makeChatMessages,
@@ -16,6 +19,7 @@ function makeSnapshot(
     id: 'char-1',
     gameId: 'game-1',
     playerId: 'p1',
+    name: 'Hero',
     currentHp: 20,
     maxHp: 26,
     currentEffort: 0,
@@ -68,14 +72,43 @@ describe('UpdateHpService', () => {
       newHp: 18,
     });
 
-    expect(messages.appendLog).toHaveBeenCalled();
-    expect(characters.updateHp).toHaveBeenCalledWith('char-1', 18);
+    expect(characters.updateHpWithLog).toHaveBeenCalledWith('char-1', 18, {
+      sessionId: 'session-1',
+      playerId: 'p1',
+      eventType: 'hp_change',
+      payload: {
+        characterId: 'char-1',
+        delta: -2,
+        currentHp: 18,
+        maxHp: 26,
+      },
+    });
+    expect(messages.appendLog).not.toHaveBeenCalled();
     expect(publish).toHaveBeenCalledWith('session:session-1', {
       type: 'character.hp-changed',
       characterId: 'char-1',
       oldHp: 20,
       newHp: 18,
     });
+  });
+
+  it('leaves no log row when the HP write fails', async () => {
+    const { messages, characters, bus, service } = build();
+    const publish = vi.spyOn(bus, 'publish');
+    vi.mocked(characters.updateHpWithLog).mockRejectedValue(
+      new ChatCharacterNotFoundError(),
+    );
+
+    await expect(
+      service.execute({
+        playerId: 'p1',
+        sessionId: 'session-1',
+        characterId: 'char-1',
+        newHp: 18,
+      }),
+    ).rejects.toBeInstanceOf(ChatCharacterNotFoundError);
+    expect(messages.appendLog).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it("forbids changing another player's character", async () => {
@@ -89,7 +122,7 @@ describe('UpdateHpService', () => {
         newHp: 18,
       }),
     ).rejects.toBeInstanceOf(ChatForbiddenError);
-    expect(characters.updateHp).not.toHaveBeenCalled();
+    expect(characters.updateHpWithLog).not.toHaveBeenCalled();
     expect(messages.appendLog).not.toHaveBeenCalled();
   });
 });

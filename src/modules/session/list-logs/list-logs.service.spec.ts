@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ForbiddenError } from '@shared/errors/http-errors.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
-import {
-  type GameSession,
-  type SessionLog,
-} from '../session.entity.js';
+import { type GameSession, type SessionLog } from '../session.entity.js';
 import { SessionNotFoundError } from '../session.errors.js';
 import type { SessionRepository } from '../session.repository.js';
 import { ListLogsService } from './list-logs.service.js';

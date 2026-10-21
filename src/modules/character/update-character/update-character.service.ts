@@ -1,5 +1,10 @@
+import type { GameAccess } from '@shared/game-access/game-access.contract.js';
+import type { GameSessionNotifier } from '@shared/game-session/game-session-notifier.contract.js';
+import { ATTRIBUTE_NAMES } from '@shared/rules/attributes.js';
+import { proficiencyPool } from '@shared/rules/proficiency.js';
+import { resolveHeight, resolveWeight } from '../character.appearance.js';
 import { assertAttributeBudget } from '../character.attributes.js';
-import { requireOwnedCharacter } from '../character.authorization.js';
+import { requireEditableCharacter } from '../character.authorization.js';
 import {
   CONDICIONAMENTO,
   deriveProficiencies,
@@ -9,14 +14,20 @@ import {
   type Rng,
   VITALIDADE,
 } from '../character.derivation.js';
-import type {
-  AttributeScores,
-  Character,
-  ProficiencyScores,
-  UpdateCharacterInput,
+import {
+  type AttributeScores,
+  type Character,
+  type CharacterSkillDetail,
+  type ProficiencyScores,
+  type UpdateCharacterInput,
 } from '../character.entity.js';
+import {
+  NpMasterOnlyError,
+  SkillPoolExceededError,
+} from '../character.errors.js';
 import type { CharacterRepository } from '../character.repository.js';
 import { bExp, maxEffort, maxHp } from '../character.stats.js';
+import { proficiencyLevelFor } from '../skills/proficiency-field.js';
 
 function mergeAttributes(
   character: Character,
@@ -53,18 +64,48 @@ function resolveProficiencies(
   );
 }
 
-function resolveSize(
+function assertSkillPools(
+  proficiencies: ProficiencyScores,
+  np: number,
+  skills: readonly CharacterSkillDetail[],
+): void {
+  for (const attribute of ATTRIBUTE_NAMES) {
+    const pool = proficiencyPool(
+      proficiencyLevelFor(proficiencies, attribute),
+      np,
+    );
+    const spent = skills
+      .filter((skill) => skill.attribute === attribute)
+      .reduce((total, skill) => total + skill.proficiencyBonus, 0);
+    if (spent > pool) throw new SkillPoolExceededError(attribute, pool, spent);
+  }
+}
+
+function resolveAppearance(
   character: Character,
   input: UpdateCharacterInput,
-): string | null {
-  if (input.heightCm === undefined && input.weightKg === undefined) {
-    return character.size;
+  rng: Rng,
+): { heightCm: number | null; weightKg: number | null } {
+  const hasHeight =
+    input.heightCm !== undefined || input.heightRoll !== undefined;
+  const hasWeight =
+    input.weightKg !== undefined || input.weightRoll !== undefined;
+
+  if (!hasHeight && !hasWeight) {
+    return { heightCm: character.heightCm, weightKg: character.weightKg };
   }
 
-  return deriveSize(
-    input.heightCm ?? character.heightCm,
-    input.weightKg ?? character.weightKg,
-  );
+  return {
+    heightCm: hasHeight ? resolveHeight(input, rng) : character.heightCm,
+    weightKg: hasWeight ? resolveWeight(input, rng) : character.weightKg,
+  };
+}
+
+function resolveSize(
+  heightCm: number | null,
+  weightKg: number | null,
+): string | null {
+  return deriveSize(heightCm, weightKg);
 }
 
 function resolveVaalaques(
@@ -85,7 +126,9 @@ function resolveVaalaques(
 export class UpdateCharacterService {
   constructor(
     private readonly characters: CharacterRepository,
+    private readonly access: GameAccess,
     private readonly rng: Rng,
+    private readonly notifier: GameSessionNotifier,
   ) {}
 
   async execute(
@@ -93,11 +136,13 @@ export class UpdateCharacterService {
     requesterId: string,
     input: UpdateCharacterInput,
   ): Promise<Character> {
-    const character = await requireOwnedCharacter(
+    const { character, isMaster } = await requireEditableCharacter(
       this.characters,
+      this.access,
       id,
       requesterId,
     );
+    if (input.np !== undefined && !isMaster) throw new NpMasterOnlyError();
 
     const attributes = mergeAttributes(character, input);
     const np = input.np ?? character.np;
@@ -105,19 +150,24 @@ export class UpdateCharacterService {
 
     const proficiencies = resolveProficiencies(character, input);
     const skills = await this.characters.findSkillDetails(id);
+    assertSkillPools(proficiencies, np, skills);
+
     const hp = maxHp(
       np,
       attributes.constitution,
       proficiencyBonus(skills, VITALIDADE),
     );
     const effort = maxEffort(proficiencyBonus(skills, CONDICIONAMENTO));
+    const appearance = resolveAppearance(character, input, this.rng);
 
-    return this.characters.save(id, {
+    const updated = await this.characters.save(id, {
       ...input,
       np,
       ...attributes,
       ...proficiencies,
-      size: resolveSize(character, input),
+      heightCm: appearance.heightCm ?? undefined,
+      weightKg: appearance.weightKg ?? undefined,
+      size: resolveSize(appearance.heightCm, appearance.weightKg),
       vaalaques: resolveVaalaques(character, input, this.rng),
       maxHp: hp,
       maxEffort: effort,
@@ -125,5 +175,9 @@ export class UpdateCharacterService {
       currentHp: Math.min(character.currentHp, hp),
       currentEffort: Math.min(character.currentEffort, effort),
     });
+
+    await this.notifier.notifyRosterChanged(updated.gameId);
+
+    return updated;
   }
 }

@@ -1,7 +1,4 @@
-import {
-  ConflictError,
-  NotFoundError,
-} from '@shared/errors/http-errors.js';
+import { ConflictError, NotFoundError } from '@shared/errors/http-errors.js';
 
 export class GameNotFoundError extends NotFoundError {
   constructor() {

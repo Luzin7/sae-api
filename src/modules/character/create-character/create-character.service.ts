@@ -1,4 +1,7 @@
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
+import type { GameSessionNotifier } from '@shared/game-session/game-session-notifier.contract.js';
+import { hairColorForRoll } from '@shared/rules/hair-color.js';
+import { resolveHeight, resolveWeight } from '../character.appearance.js';
 import { assertAttributeBudget } from '../character.attributes.js';
 import { requireMembership } from '../character.authorization.js';
 import {
@@ -21,6 +24,7 @@ export class CreateCharacterService {
     private readonly characters: CharacterRepository,
     private readonly membership: GameAccess,
     private readonly rng: Rng,
+    private readonly notifier: GameSessionNotifier,
   ) {}
 
   async execute(
@@ -34,12 +38,18 @@ export class CreateCharacterService {
     // No skills exist at creation, so Vitalidade/Condicionamento contribute 0.
     const hp = maxHp(input.np, input.constitution, STARTING_PROFICIENCY);
     const effort = maxEffort(STARTING_PROFICIENCY);
+    const heightCm = resolveHeight(input, this.rng);
+    const weightKg = resolveWeight(input, this.rng);
+    const hairColor = hairColorForRoll(this.rng(1, 20));
 
-    return this.characters.create({
+    const character = await this.characters.create({
       ...input,
       playerId,
       ...proficiencies,
-      size: deriveSize(input.heightCm, input.weightKg),
+      hairColor,
+      heightCm: heightCm ?? undefined,
+      weightKg: weightKg ?? undefined,
+      size: deriveSize(heightCm, weightKg),
       vaalaques: deriveVaalaques(input.socialClass, this.rng),
       maxHp: hp,
       currentHp: hp,
@@ -47,5 +57,9 @@ export class CreateCharacterService {
       currentEffort: STARTING_CURRENT_EFFORT,
       bExp: bExp(input.np),
     });
+
+    await this.notifier.notifyRosterChanged(character.gameId);
+
+    return character;
   }
 }

@@ -1,13 +1,20 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { AttributeKey } from '@shared/rules/attributes.js';
 import type {
   CharacterAccess,
   CharacterSkillRef,
   CharacterSnapshot,
+  HpDamageResult,
   SkillRef,
 } from '@modules/chat/character-access.contract.js';
+import {
+  ChatCharacterNotFoundError,
+  InvalidHpError,
+} from '@modules/chat/chat.errors.js';
+import type { AppendSessionLogInput } from '@modules/chat/chat.repository.js';
 import { db } from '../index.js';
 import { character, characterSkill, skill } from '../schema.js';
+import { insertSessionLog } from './session-log.js';
 
 type CharacterRow = typeof character.$inferSelect;
 
@@ -25,6 +32,7 @@ function toSnapshot(row: CharacterRow): CharacterSnapshot {
     id: row.id,
     gameId: row.gameId,
     playerId: row.playerId,
+    name: row.nickname,
     currentHp: row.currentHp,
     maxHp: row.maxHp,
     currentEffort: row.currentEffort,
@@ -77,11 +85,51 @@ export function characterAccessRepository(): CharacterAccess {
       return row ?? null;
     },
 
-    async updateHp(characterId: string, newHp: number): Promise<void> {
-      await db
-        .update(character)
-        .set({ currentHp: newHp, updatedAt: new Date() })
-        .where(eq(character.id, characterId));
+    async updateHpWithLog(
+      characterId: string,
+      newHp: number,
+      log: AppendSessionLogInput,
+    ): Promise<CharacterSnapshot> {
+      return db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(character)
+          .set({ currentHp: newHp, updatedAt: new Date() })
+          .where(eq(character.id, characterId))
+          .returning();
+        if (!row) throw new ChatCharacterNotFoundError();
+
+        await insertSessionLog(tx, log);
+
+        return toSnapshot(row);
+      });
+    },
+
+    async damageHp(
+      characterId: string,
+      damage: number,
+    ): Promise<HpDamageResult> {
+      if (!Number.isInteger(damage) || damage <= 0) throw new InvalidHpError();
+
+      return db.transaction(async (tx) => {
+        const [locked] = await tx
+          .select({ currentHp: character.currentHp })
+          .from(character)
+          .where(eq(character.id, characterId))
+          .for('update');
+        if (!locked) throw new ChatCharacterNotFoundError();
+
+        const [row] = await tx
+          .update(character)
+          .set({
+            currentHp: sql`GREATEST(0, ${character.currentHp} - ${damage})`,
+            updatedAt: new Date(),
+          })
+          .where(eq(character.id, characterId))
+          .returning();
+        if (!row) throw new ChatCharacterNotFoundError();
+
+        return { previousHp: locked.currentHp, character: toSnapshot(row) };
+      });
     },
   };
 }
