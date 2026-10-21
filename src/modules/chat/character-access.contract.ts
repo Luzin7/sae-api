@@ -1,4 +1,5 @@
 import type { AttributeKey } from '@shared/rules/attributes.js';
+import type { AppendSessionLogInput } from './chat.repository.js';
 
 /**
  * Consumer-owned cross-domain contract. The realtime slice needs to resolve a
@@ -41,7 +42,15 @@ export interface CharacterAccess {
     characterId: string,
     skillId: string,
   ): Promise<CharacterSkillRef | null>;
-  updateHp(characterId: string, newHp: number): Promise<CharacterSnapshot>;
+  /**
+   * Writes the new HP and the log row describing it in one transaction, so a
+   * change without its log (or the reverse) can never commit.
+   */
+  updateHpWithLog(
+    characterId: string,
+    newHp: number,
+    log: AppendSessionLogInput,
+  ): Promise<CharacterSnapshot>;
   /** Decrements the stored HP in SQL so concurrent hits cannot overwrite each other. */
   damageHp(characterId: string, damage: number): Promise<HpDamageResult>;
 }

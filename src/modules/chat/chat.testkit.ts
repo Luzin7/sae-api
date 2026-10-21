@@ -59,7 +59,7 @@ export function makeCharacterAccess(): CharacterAccess {
     findById: vi.fn(),
     findSkillById: vi.fn(),
     findSkillForCharacter: vi.fn(),
-    updateHp: vi.fn(),
+    updateHpWithLog: vi.fn(),
     damageHp: vi.fn(),
   };
 }

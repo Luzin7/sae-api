@@ -4,14 +4,15 @@ import type {
   CombatantSource,
   MonsterRef,
 } from '@modules/chat/combatant-source.contract.js';
-import { db } from '../index.js';
+import { db, type Database } from '../index.js';
 import { character, monster } from '../schema.js';
 
 async function findCharacter(
+  database: Database,
   gameId: string,
   refId: string,
 ): Promise<CombatantRef | null> {
-  const [row] = await db
+  const [row] = await database
     .select({
       id: character.id,
       nickname: character.nickname,
@@ -31,10 +32,11 @@ async function findCharacter(
 }
 
 async function findMonster(
+  database: Database,
   gameId: string,
   refId: string,
 ): Promise<CombatantRef | null> {
-  const [row] = await db
+  const [row] = await database
     .select({ id: monster.id, name: monster.name })
     .from(monster)
     .where(and(eq(monster.gameId, gameId), eq(monster.id, refId)))
@@ -49,21 +51,25 @@ async function findMonster(
   };
 }
 
-export function combatantSourceRepository(): CombatantSource {
+export function combatantSourceRepository(
+  database: Database = db,
+): CombatantSource {
   return {
     async listByGame(gameId: string): Promise<CombatantRef[]> {
-      const characters = await db
-        .select({
-          id: character.id,
-          nickname: character.nickname,
-          playerId: character.playerId,
-        })
-        .from(character)
-        .where(eq(character.gameId, gameId));
-      const monsters = await db
-        .select({ id: monster.id, name: monster.name })
-        .from(monster)
-        .where(eq(monster.gameId, gameId));
+      const [characters, monsters] = await Promise.all([
+        database
+          .select({
+            id: character.id,
+            nickname: character.nickname,
+            playerId: character.playerId,
+          })
+          .from(character)
+          .where(eq(character.gameId, gameId)),
+        database
+          .select({ id: monster.id, name: monster.name })
+          .from(monster)
+          .where(eq(monster.gameId, gameId)),
+      ]);
 
       const characterRefs: CombatantRef[] = characters.map((row) => ({
         kind: 'character',
@@ -82,16 +88,16 @@ export function combatantSourceRepository(): CombatantSource {
     },
 
     async findByRef(gameId, kind, refId) {
-      if (kind === 'character') return findCharacter(gameId, refId);
+      if (kind === 'character') return findCharacter(database, gameId, refId);
 
-      return findMonster(gameId, refId);
+      return findMonster(database, gameId, refId);
     },
 
     async findMonsterInGame(
       gameId: string,
       monsterId: string,
     ): Promise<MonsterRef | null> {
-      const [row] = await db
+      const [row] = await database
         .select({
           id: monster.id,
           name: monster.name,
@@ -130,7 +136,7 @@ export function combatantSourceRepository(): CombatantSource {
     },
 
     async saveMonsterVitals(monsterId, patch) {
-      await db
+      await database
         .update(monster)
         .set({ currentHp: patch.currentHp, currentEffort: patch.currentEffort })
         .where(eq(monster.id, monsterId));

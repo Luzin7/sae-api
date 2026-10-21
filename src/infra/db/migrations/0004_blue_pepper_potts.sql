@@ -54,4 +54,5 @@ ALTER TABLE "combat_state" ADD CONSTRAINT "combat_state_session_id_session_id_fk
 ALTER TABLE "combatant" ADD CONSTRAINT "combatant_session_id_session_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."session"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "monster_game_idx" ON "monster" USING btree ("game_id");--> statement-breakpoint
 CREATE INDEX "combatant_session_idx" ON "combatant" USING btree ("session_id");--> statement-breakpoint
-ALTER TABLE "character" DROP COLUMN "affliction";
+DO $$ DECLARE pending bigint := 0; BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='character' AND column_name='affliction') AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='character' AND column_name='afflictions') THEN EXECUTE 'SELECT count(*) FROM "character" WHERE "affliction" IS NOT NULL AND "afflictions" IS NULL' INTO pending; END IF; IF pending > 0 THEN RAISE EXCEPTION 'affliction backfill incomplete: % rows would be lost', pending; END IF; END $$;--> statement-breakpoint
+ALTER TABLE "character" DROP COLUMN IF EXISTS "affliction";

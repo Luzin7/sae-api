@@ -41,7 +41,7 @@ export class ForceHpService {
       input.characterId,
     );
 
-    return applyHpChange(this.messages, this.characters, this.bus, {
+    return applyHpChange(this.characters, this.bus, {
       sessionId: input.sessionId,
       playerId: input.playerId,
       character,

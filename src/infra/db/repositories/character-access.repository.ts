@@ -11,8 +11,10 @@ import {
   ChatCharacterNotFoundError,
   InvalidHpError,
 } from '@modules/chat/chat.errors.js';
+import type { AppendSessionLogInput } from '@modules/chat/chat.repository.js';
 import { db } from '../index.js';
 import { character, characterSkill, skill } from '../schema.js';
+import { insertSessionLog } from './session-log.js';
 
 type CharacterRow = typeof character.$inferSelect;
 
@@ -83,18 +85,23 @@ export function characterAccessRepository(): CharacterAccess {
       return row ?? null;
     },
 
-    async updateHp(
+    async updateHpWithLog(
       characterId: string,
       newHp: number,
+      log: AppendSessionLogInput,
     ): Promise<CharacterSnapshot> {
-      const [row] = await db
-        .update(character)
-        .set({ currentHp: newHp, updatedAt: new Date() })
-        .where(eq(character.id, characterId))
-        .returning();
-      if (!row) throw new ChatCharacterNotFoundError();
+      return db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(character)
+          .set({ currentHp: newHp, updatedAt: new Date() })
+          .where(eq(character.id, characterId))
+          .returning();
+        if (!row) throw new ChatCharacterNotFoundError();
 
-      return toSnapshot(row);
+        await insertSessionLog(tx, log);
+
+        return toSnapshot(row);
+      });
     },
 
     async damageHp(
