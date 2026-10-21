@@ -64,7 +64,7 @@ export default async function authRoutes(
   );
 
   app.post('/auth/refresh', AUTH_RATE_LIMIT, async (request, reply) => {
-    const presented = request.cookies['refresh_token'] ?? '';
+    const presented = request.cookies.refresh_token ?? '';
     const result = await opts.services.refresh.execute(presented);
 
     setAuthCookie(reply, result.accessToken);

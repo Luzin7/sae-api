@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 
 export default fp(async (app: FastifyInstance) => {
   await app.register(cors, {
-    origin: process.env['CORS_ORIGIN'] ?? 'http://localhost:5173',
+    origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
     credentials: true,
   });
 });

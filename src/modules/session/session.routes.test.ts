@@ -11,7 +11,7 @@ import type { SessionRepository } from './session.repository.js';
 import sessionRoutes, { type SessionServices } from './session.routes.js';
 import { StartSessionService } from './start-session/start-session.service.js';
 
-process.env['JWT_SECRET'] = 'test-secret-key-for-tests-only';
+process.env.JWT_SECRET = 'test-secret-key-for-tests-only';
 
 const GAME_ID = '11111111-1111-1111-1111-111111111111';
 const OTHER_GAME_ID = '22222222-2222-2222-2222-222222222222';

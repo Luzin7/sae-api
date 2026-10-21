@@ -13,7 +13,7 @@ import { JoinGameService } from './join-game/join-game.service.js';
 import { LeaveGameService } from './leave-game/leave-game.service.js';
 import { UpdateGameService } from './update-game/update-game.service.js';
 
-process.env['JWT_SECRET'] = 'test-secret-key-for-tests-only';
+process.env.JWT_SECRET = 'test-secret-key-for-tests-only';
 
 const PLAYER_ID = 'player-1';
 

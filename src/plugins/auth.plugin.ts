@@ -7,7 +7,7 @@ export default fp(async (app: FastifyInstance) => {
   await app.register(cookie);
 
   await app.register(jwt, {
-    secret: process.env['JWT_SECRET'] ?? '',
+    secret: process.env.JWT_SECRET ?? '',
     cookie: {
       cookieName: 'token',
       signed: false,
