@@ -93,3 +93,12 @@ export class SkillPoolExceededError extends DomainError {
     );
   }
 }
+
+export class SkillBonusCapExceededError extends DomainError {
+  readonly code: DomainErrorCode = 'VALIDATION';
+  readonly httpStatus = 400;
+
+  constructor(skillName: string, cap: number) {
+    super(`Bônus de ${skillName} acima do limite de +${cap}.`);
+  }
+}

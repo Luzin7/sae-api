@@ -4,12 +4,11 @@ export interface OficioDefinition {
 }
 
 /**
- * Local rulebook (`docs/sistema-rpg/antecedentes.md`) is the authoritative
- * source — newer than the web-derived transcription in `docs/refactor`.
+ * Source: official rulebook, https://fnandesrafael.github.io/sangue-e-aco/
+ * (Capítulo 1 - Antecedentes).
  *
- * Two transcribed rows cited skills that do not exist in the 30-skill catalog
- * (`docs/sistema-rpg/pericias.md`). They are corrected explicitly so the fix
- * is not silent:
+ * Two transcribed rows cited skills that do not exist in the 30-skill catalog.
+ * They are corrected explicitly so the fix is not silent:
  *   Evocação (Acadêmico)          → Impressão (INT)
  *   Moral (Militar, Figura Pública) → Compostura (PSI)
  */
@@ -18,7 +17,7 @@ export const OFICIO_SKILL_CORRECTIONS: Readonly<Record<string, string>> = {
   Moral: 'Compostura',
 };
 
-/** 11 ofícios and the skills that receive the CD reduction (local rulebook). */
+/** 12 ofícios and the skills that receive the CD reduction (official rulebook). */
 export const OFICIOS: readonly OficioDefinition[] = [
   {
     name: 'Artista',
@@ -77,7 +76,11 @@ export const OFICIOS: readonly OficioDefinition[] = [
   },
   {
     name: 'Operário',
-    affectedSkills: ['Fortitude', 'Condicionamento', 'Contato', 'Manipulação'],
+    affectedSkills: ['Fortitude', 'Tolerância', 'Pressentimento', 'Empatia'],
+  },
+  {
+    name: 'Pária',
+    affectedSkills: ['Fortitude', 'Vitalidade', 'Presença', 'Pressentimento'],
   },
 ];
 

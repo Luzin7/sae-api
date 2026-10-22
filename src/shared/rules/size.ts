@@ -69,9 +69,11 @@ function findFactor(
   bands: readonly SizeFactorBand[],
   value: number,
 ): number | null {
-  const band = bands.find(
-    (entry) => value >= entry.min && (entry.max === null || value <= entry.max),
-  );
+  const band = bands.find((entry, index) => {
+    const next = bands[index + 1];
+
+    return value >= entry.min && (next === undefined || value < next.min);
+  });
   if (!band) return null;
   return band.factor;
 }

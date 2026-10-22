@@ -1,7 +1,5 @@
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import type { GameSessionNotifier } from '@shared/game-session/game-session-notifier.contract.js';
-import { ATTRIBUTE_NAMES } from '@shared/rules/attributes.js';
-import { proficiencyPool } from '@shared/rules/proficiency.js';
 import { resolveHeight, resolveWeight } from '../character.appearance.js';
 import { assertAttributeBudget } from '../character.attributes.js';
 import { requireEditableCharacter } from '../character.authorization.js';
@@ -17,17 +15,13 @@ import {
 import {
   type AttributeScores,
   type Character,
-  type CharacterSkillDetail,
   type ProficiencyScores,
   type UpdateCharacterInput,
 } from '../character.entity.js';
-import {
-  NpMasterOnlyError,
-  SkillPoolExceededError,
-} from '../character.errors.js';
+import { NpMasterOnlyError } from '../character.errors.js';
 import type { CharacterRepository } from '../character.repository.js';
 import { bExp, maxEffort, maxHp } from '../character.stats.js';
-import { proficiencyLevelFor } from '../skills/proficiency-field.js';
+import { assertSkillPools } from '../skills/skill-allocation.js';
 
 function mergeAttributes(
   character: Character,
@@ -62,23 +56,6 @@ function resolveProficiencies(
     input.personality ?? character.personality ?? '',
     input.posture ?? character.posture ?? '',
   );
-}
-
-function assertSkillPools(
-  proficiencies: ProficiencyScores,
-  np: number,
-  skills: readonly CharacterSkillDetail[],
-): void {
-  for (const attribute of ATTRIBUTE_NAMES) {
-    const pool = proficiencyPool(
-      proficiencyLevelFor(proficiencies, attribute),
-      np,
-    );
-    const spent = skills
-      .filter((skill) => skill.attribute === attribute)
-      .reduce((total, skill) => total + skill.proficiencyBonus, 0);
-    if (spent > pool) throw new SkillPoolExceededError(attribute, pool, spent);
-  }
 }
 
 function resolveAppearance(

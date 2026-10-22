@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { AFFLICTION_KEYS } from '@shared/rules/afflictions.js';
+import { SKILLS } from '@shared/rules/skills.js';
 import {
   HEIGHT_EXACT_MAX,
   HEIGHT_EXACT_MIN,
@@ -8,6 +10,9 @@ import {
 
 const HEIGHT_RANGE_MESSAGE = `Altura deve estar entre ${HEIGHT_EXACT_MIN} e ${HEIGHT_EXACT_MAX} cm.`;
 const WEIGHT_RANGE_MESSAGE = `Peso deve estar entre ${WEIGHT_EXACT_MIN} e ${WEIGHT_EXACT_MAX} kg.`;
+
+const AFFLICTION_MESSAGE = 'Aflição inválida.';
+const DUPLICATE_SKILL_MESSAGE = 'Perícia repetida.';
 
 const AttributeSchema = z.union([
   z.literal(-5),
@@ -54,12 +59,20 @@ const SheetFields = {
   background: z.string().max(2000).optional(),
   profession: z.string().max(100).optional(),
   motivation: z.string().max(1000).optional(),
-  afflictions: z.array(z.string().max(1000)).optional(),
+  afflictions: z
+    .array(z.enum(AFFLICTION_KEYS, { message: AFFLICTION_MESSAGE }))
+    .max(AFFLICTION_KEYS.length)
+    .optional(),
   personality: z.string().min(1).max(50),
   posture: z.string().min(1).max(50),
   socialClass: SocialClassSchema,
   bonds: z.string().max(2000).optional(),
 };
+
+export const UpsertSkillBodySchema = z.object({
+  skillId: z.string().uuid(),
+  proficiencyBonus: z.number().int().min(0),
+});
 
 const CharacterSheetBodySchema = z.object({
   gameId: z.string().uuid(),
@@ -130,9 +143,28 @@ function refineSizeSources(required: boolean) {
   };
 }
 
-export const CreateCharacterBodySchema = CharacterSheetBodySchema.superRefine(
-  refineSizeSources(true),
-);
+function refineUniqueSkills(
+  input: { skills: { skillId: string }[] },
+  ctx: z.RefinementCtx,
+): void {
+  const ids = input.skills.map((skill) => skill.skillId);
+  if (new Set(ids).size === ids.length) return;
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['skills'],
+    message: DUPLICATE_SKILL_MESSAGE,
+  });
+}
+
+export const CreateCharacterBodySchema = CharacterSheetBodySchema.omit({
+  np: true,
+})
+  .extend({
+    skills: z.array(UpsertSkillBodySchema).max(SKILLS.length).default([]),
+  })
+  .superRefine(refineSizeSources(true))
+  .superRefine(refineUniqueSkills);
 
 const UpdateCharacterSheetBodySchema = CharacterSheetBodySchema.omit({
   gameId: true,
@@ -184,11 +216,6 @@ export const CreateItemBodySchema = z.object({
 });
 
 export const UpdateItemBodySchema = CreateItemBodySchema.partial();
-
-export const UpsertSkillBodySchema = z.object({
-  skillId: z.string().uuid(),
-  proficiencyBonus: z.number().int().min(0),
-});
 
 export const CharacterParamsSchema = z.object({
   id: z.string().min(1),
