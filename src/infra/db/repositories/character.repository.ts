@@ -18,6 +18,7 @@ import {
 } from '@modules/character/character.errors.js';
 import type { CharacterRepository } from '@modules/character/character.repository.js';
 import { db } from '../index.js';
+import { isForeignKeyViolation } from '../pg-errors.js';
 import {
   character as characterTable,
   characterItem as characterItemTable,
@@ -32,11 +33,7 @@ import {
   toSkill,
 } from './character.repository.mappers.js';
 
-function isForeignKeyViolation(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-
-  return 'code' in error && error.code === '23503';
-}
+const SKILL_FOREIGN_KEY = 'character_skill_skill_id_skill_id_fk';
 
 export function characterRepository(): CharacterRepository {
   return {
@@ -281,7 +278,8 @@ export function characterRepository(): CharacterRepository {
 
         return toSkill(row);
       } catch (error) {
-        if (isForeignKeyViolation(error)) throw new SkillNotFoundError();
+        if (isForeignKeyViolation(error, SKILL_FOREIGN_KEY))
+          throw new SkillNotFoundError();
         throw error;
       }
     },
