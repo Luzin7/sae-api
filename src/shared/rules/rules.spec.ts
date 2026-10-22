@@ -4,8 +4,11 @@ import {
   attributeBudget,
   attributeCost,
   attributeCostSum,
+  attributeDisplayName,
 } from './attributes.js';
-import { oficioCdReduction } from './oficios.js';
+import { AFFLICTION_KEYS, AFFLICTIONS } from './afflictions.js';
+import { OFICIOS, oficioCdReduction } from './oficios.js';
+import { SKILLS } from './skills.js';
 import { deriveProficiency } from './archetypes.js';
 import { levelPoints, proficiencyPool } from './proficiency.js';
 import {
@@ -13,6 +16,8 @@ import {
   rollWeight,
   sizeCategory,
   sizeFactorMean,
+  heightFactor,
+  weightFactor,
 } from './size.js';
 
 describe('attribute cost and budget', () => {
@@ -21,6 +26,14 @@ describe('attribute cost and budget', () => {
     expect(attributeCost(-2)).toBe(3);
     expect(attributeCost(1)).toBe(4);
     expect(attributeCost(5)).toBe(8);
+  });
+
+  it('names a known attribute in pt-BR', () => {
+    expect(attributeDisplayName('cognition')).toBe('Cognição');
+  });
+
+  it('falls back to the key for an unknown attribute', () => {
+    expect(attributeDisplayName('luck')).toBe('luck');
   });
 
   it('excludes −1 and 0 from the scale', () => {
@@ -125,5 +138,51 @@ describe('size extreme rolls', () => {
   it('rolls weight above 150 with 150 + 1d20', () => {
     expect(rollWeight('max', lowest)).toBe(151);
     expect(rollWeight('max', highest)).toBe(170);
+  });
+});
+
+describe('size factor bands', () => {
+  it('keeps the integer boundaries', () => {
+    expect(weightFactor(70)).toBe(1);
+    expect(weightFactor(71)).toBe(2);
+    expect(weightFactor(150)).toBe(4);
+    expect(weightFactor(151)).toBe(5);
+    expect(heightFactor(149)).toBe(0);
+    expect(heightFactor(150)).toBe(1);
+    expect(heightFactor(250)).toBe(4);
+    expect(heightFactor(251)).toBe(5);
+  });
+});
+
+describe('ofícios', () => {
+  it('includes Pária with its four skills', () => {
+    expect(
+      OFICIOS.find((entry) => entry.name === 'Pária')?.affectedSkills,
+    ).toEqual(['Fortitude', 'Vitalidade', 'Presença', 'Pressentimento']);
+  });
+
+  it('lists Operário with Tolerância, Pressentimento and Empatia', () => {
+    expect(
+      OFICIOS.find((entry) => entry.name === 'Operário')?.affectedSkills,
+    ).toEqual(['Fortitude', 'Tolerância', 'Pressentimento', 'Empatia']);
+  });
+
+  it('only cites skills that exist in the catalog', () => {
+    expect(SKILLS.map((skill) => skill.name)).toEqual(
+      expect.arrayContaining([
+        'Fortitude',
+        'Vitalidade',
+        'Presença',
+        'Pressentimento',
+        'Tolerância',
+        'Empatia',
+      ]),
+    );
+  });
+});
+
+describe('affliction keys', () => {
+  it('match the affliction definitions', () => {
+    expect(AFFLICTIONS.map((entry) => entry.key)).toEqual([...AFFLICTION_KEYS]);
   });
 });

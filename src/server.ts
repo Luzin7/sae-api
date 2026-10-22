@@ -15,7 +15,6 @@ import authRoutes from './modules/auth/auth.routes.js';
 import bestiaryRoutes from './modules/bestiary/bestiary.routes.js';
 import characterRoutes from './modules/character/character.routes.js';
 import chatGateway from './modules/chat/chat.gateway.js';
-import diceRoutes from './modules/dice/dice.routes.js';
 import gameRoutes from './modules/game/game.routes.js';
 import playerRoutes from './modules/player/player.routes.js';
 import rulesRoutes from './modules/rules/rules.routes.js';
@@ -50,10 +49,6 @@ export async function buildApp() {
   await app.register(bestiaryRoutes, {
     prefix: '/bestiary',
     services: container.services.bestiary,
-  });
-  await app.register(diceRoutes, {
-    prefix: '/dice',
-    services: container.services.dice,
   });
   await app.register(sessionRoutes, {
     prefix: '/games',

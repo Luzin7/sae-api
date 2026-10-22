@@ -17,6 +17,7 @@ import {
   sinkFor,
   toWireMessages,
 } from './chat.transport.js';
+import type { CloseTestService } from './close-test/close-test.service.js';
 import type { ConnectService } from './connect/connect.service.js';
 import type { DeclareTestService } from './declare-test/declare-test.service.js';
 import type { EndCombatService } from './end-combat/end-combat.service.js';
@@ -46,6 +47,7 @@ export interface ChatServices {
   nextTurn: NextTurnService;
   endCombat: EndCombatService;
   declareTest: DeclareTestService;
+  closeTest: CloseTestService;
   rollMonsterTest: RollMonsterTestService;
   updateMonsterVitals: UpdateMonsterVitalsService;
   monsterAttack: MonsterAttackService;
@@ -184,16 +186,20 @@ async function dispatch(
     }
 
     if (frame.type === 'session.join') {
-      const { history } = await opts.services.connect.execute({
-        playerId: state.playerId,
-        socketId: state.socketId,
-        sessionId: frame.sessionId,
-      });
+      const { history, openTest, combat } = await opts.services.connect.execute(
+        {
+          playerId: state.playerId,
+          socketId: state.socketId,
+          sessionId: frame.sessionId,
+        },
+      );
       state.rooms.add(frame.sessionId);
       sendEvent(socket, {
         type: 'chat.history',
         messages: toWireMessages(history),
       });
+      sendEvent(socket, { type: 'session.test-snapshot', test: openTest });
+      if (combat) sendEvent(socket, { type: 'session.combat', ...combat });
       return;
     }
 
@@ -285,9 +291,18 @@ async function dispatch(
         playerId: state.playerId,
         sessionId: frame.sessionId,
         skillId: frame.skillId,
-        cd: frame.cd,
+        grade: frame.grade,
         mode: frame.mode,
         targetCharacterId: frame.targetCharacterId ?? null,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.close-test') {
+      await opts.services.closeTest.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        testId: frame.testId,
       });
       return;
     }

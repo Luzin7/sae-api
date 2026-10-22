@@ -1,3 +1,4 @@
+import type { AfflictionKey } from '@shared/rules/afflictions.js';
 import type { ProficiencyLevel } from '@shared/rules/proficiency.js';
 import type { SizeExtremeBand } from '@shared/rules/size.js';
 import type { SocialClassKey } from '@shared/rules/social-classes.js';
@@ -70,17 +71,23 @@ export interface CharacterSheetInput extends AttributeScores {
   background?: string;
   profession?: string;
   motivation?: string;
-  afflictions?: string[];
+  afflictions?: AfflictionKey[];
   personality: string;
   posture: string;
   socialClass: SocialClassKey;
   bonds?: string;
 }
 
+export interface UpsertSkillInput {
+  skillId: string;
+  proficiencyBonus: number;
+}
+
 export interface CreateCharacterInput
   extends CharacterSheetInput, ProficiencyScores {
   playerId: string;
   gameId: string;
+  skills: UpsertSkillInput[];
   hairColor: string | null;
   size: string | null;
   vaalaques: number;
@@ -120,7 +127,7 @@ export interface UpdateCharacterInput {
   background?: string;
   profession?: string;
   motivation?: string;
-  afflictions?: string[];
+  afflictions?: AfflictionKey[];
   socialClass?: SocialClassKey;
   vaalaques?: number;
   bonds?: string;
@@ -189,11 +196,6 @@ export interface UpdateItemInput {
 export interface CharacterSkill {
   id: string;
   characterId: string;
-  skillId: string;
-  proficiencyBonus: number;
-}
-
-export interface UpsertSkillInput {
   skillId: string;
   proficiencyBonus: number;
 }

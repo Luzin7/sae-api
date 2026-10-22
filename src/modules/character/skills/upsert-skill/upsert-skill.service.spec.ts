@@ -7,7 +7,10 @@ import {
   makeSkillDetail,
   makeSkillSummary,
 } from '../../character.testkit.js';
-import { SkillPoolExceededError } from '../../character.errors.js';
+import {
+  SkillBonusCapExceededError,
+  SkillPoolExceededError,
+} from '../../character.errors.js';
 import { UpsertSkillService } from './upsert-skill.service.js';
 
 const SKILL_ID = '11111111-1111-1111-1111-111111111111';
@@ -86,5 +89,41 @@ describe('UpsertSkillService', () => {
         proficiencyBonus: 3,
       }),
     ).rejects.toBeInstanceOf(SkillPoolExceededError);
+  });
+
+  it('rejects +21 for a non-Especialista attribute', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ np: 20, constitutionProficiency: 'versado' }),
+    );
+    vi.mocked(characters.findSkillById).mockResolvedValue(makeSkillSummary());
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+
+    await expect(
+      new UpsertSkillService(characters).execute('char-1', 'player-1', {
+        skillId: SKILL_ID,
+        proficiencyBonus: 21,
+      }),
+    ).rejects.toBeInstanceOf(SkillBonusCapExceededError);
+    expect(characters.upsertSkill).not.toHaveBeenCalled();
+  });
+
+  it('allows +30 for an Especialista attribute', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ np: 20, constitutionProficiency: 'especialista' }),
+    );
+    vi.mocked(characters.findSkillById).mockResolvedValue(makeSkillSummary());
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+    vi.mocked(characters.upsertSkill).mockResolvedValue(
+      makeSkill({ proficiencyBonus: 30 }),
+    );
+
+    await new UpsertSkillService(characters).execute('char-1', 'player-1', {
+      skillId: SKILL_ID,
+      proficiencyBonus: 30,
+    });
+
+    expect(characters.upsertSkill).toHaveBeenCalledWith('char-1', SKILL_ID, 30);
   });
 });

@@ -3,6 +3,7 @@ import {
   type DomainErrorCode,
 } from '@shared/errors/domain-error.js';
 import { ForbiddenError, NotFoundError } from '@shared/errors/http-errors.js';
+import { attributeDisplayName } from '@shared/rules/attributes.js';
 
 export class CharacterNotFoundError extends NotFoundError {
   constructor() {
@@ -36,7 +37,8 @@ export class InvalidAttributeError extends DomainError {
   readonly httpStatus = 400;
 
   constructor(attribute: string, value: number) {
-    super(`Valor de atributo inválido para ${attribute}: ${value}.`);
+    const attributeName = attributeDisplayName(attribute);
+    super(`Valor de atributo inválido para ${attributeName}: ${value}.`);
   }
 }
 
@@ -57,7 +59,7 @@ export class InvalidHeightError extends DomainError {
 
   constructor() {
     super(
-      'Altura inválida: use um valor entre 150 e 250 cm, ou informe heightRoll para os extremos.',
+      'Altura inválida: use um valor entre 150 e 250 cm, ou role para os extremos.',
     );
   }
 }
@@ -68,7 +70,7 @@ export class InvalidWeightError extends DomainError {
 
   constructor() {
     super(
-      'Peso inválido: use um valor entre 50 e 150 kg, ou informe weightRoll para os extremos.',
+      'Peso inválido: use um valor entre 50 e 150 kg, ou role para os extremos.',
     );
   }
 }
@@ -84,8 +86,18 @@ export class SkillPoolExceededError extends DomainError {
   readonly httpStatus = 400;
 
   constructor(attribute: string, pool: number, requested: number) {
+    const attributeName = attributeDisplayName(attribute);
     super(
-      `Orçamento de perícias de ${attribute} excedido: ${requested} de ${pool} pontos.`,
+      `Orçamento de perícias de ${attributeName} excedido: ${requested} de ${pool} pontos.`,
     );
+  }
+}
+
+export class SkillBonusCapExceededError extends DomainError {
+  readonly code: DomainErrorCode = 'VALIDATION';
+  readonly httpStatus = 400;
+
+  constructor(skillName: string, cap: number) {
+    super(`Bônus de ${skillName} acima do limite de +${cap}.`);
   }
 }

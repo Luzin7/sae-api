@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import type {
   Character,
   CharacterItem,
@@ -18,6 +18,7 @@ import {
 } from '@modules/character/character.errors.js';
 import type { CharacterRepository } from '@modules/character/character.repository.js';
 import { db } from '../index.js';
+import { isForeignKeyViolation } from '../pg-errors.js';
 import {
   character as characterTable,
   characterItem as characterItemTable,
@@ -32,58 +33,67 @@ import {
   toSkill,
 } from './character.repository.mappers.js';
 
-function isForeignKeyViolation(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-
-  return 'code' in error && error.code === '23503';
-}
+const SKILL_FOREIGN_KEY = 'character_skill_skill_id_skill_id_fk';
+const CHARACTER_FOREIGN_KEY = 'character_skill_character_id_character_id_fk';
 
 export function characterRepository(): CharacterRepository {
   return {
     async create(input: CreateCharacterInput): Promise<Character> {
-      const [row] = await db
-        .insert(characterTable)
-        .values({
-          playerId: input.playerId,
-          gameId: input.gameId,
-          nickname: input.nickname,
-          epithet: input.epithet ?? null,
-          np: input.np,
-          cognition: input.cognition,
-          psyche: input.psyche,
-          instinct: input.instinct,
-          constitution: input.constitution,
-          motricity: input.motricity,
-          perception: input.perception,
-          cognitionProficiency: input.cognitionProficiency,
-          psycheProficiency: input.psycheProficiency,
-          instinctProficiency: input.instinctProficiency,
-          constitutionProficiency: input.constitutionProficiency,
-          motricityProficiency: input.motricityProficiency,
-          perceptionProficiency: input.perceptionProficiency,
-          maxHp: input.maxHp,
-          maxEffort: input.maxEffort,
-          bExp: input.bExp,
-          currentHp: input.currentHp,
-          currentEffort: input.currentEffort,
-          hairColor: input.hairColor ?? null,
-          heightCm: input.heightCm ?? null,
-          weightKg: input.weightKg ?? null,
-          size: input.size ?? null,
-          background: input.background ?? null,
-          profession: input.profession ?? null,
-          motivation: input.motivation ?? null,
-          afflictions: input.afflictions ?? [],
-          socialClass: input.socialClass,
-          vaalaques: input.vaalaques,
-          bonds: input.bonds ?? null,
-          personality: input.personality,
-          posture: input.posture,
-        })
-        .returning();
-      if (!row) throw new CharacterNotFoundError();
+      return db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(characterTable)
+          .values({
+            playerId: input.playerId,
+            gameId: input.gameId,
+            nickname: input.nickname,
+            epithet: input.epithet ?? null,
+            np: input.np,
+            cognition: input.cognition,
+            psyche: input.psyche,
+            instinct: input.instinct,
+            constitution: input.constitution,
+            motricity: input.motricity,
+            perception: input.perception,
+            cognitionProficiency: input.cognitionProficiency,
+            psycheProficiency: input.psycheProficiency,
+            instinctProficiency: input.instinctProficiency,
+            constitutionProficiency: input.constitutionProficiency,
+            motricityProficiency: input.motricityProficiency,
+            perceptionProficiency: input.perceptionProficiency,
+            maxHp: input.maxHp,
+            maxEffort: input.maxEffort,
+            bExp: input.bExp,
+            currentHp: input.currentHp,
+            currentEffort: input.currentEffort,
+            hairColor: input.hairColor ?? null,
+            heightCm: input.heightCm ?? null,
+            weightKg: input.weightKg ?? null,
+            size: input.size ?? null,
+            background: input.background ?? null,
+            profession: input.profession ?? null,
+            motivation: input.motivation ?? null,
+            afflictions: input.afflictions ?? [],
+            socialClass: input.socialClass,
+            vaalaques: input.vaalaques,
+            bonds: input.bonds ?? null,
+            personality: input.personality,
+            posture: input.posture,
+          })
+          .returning();
+        if (!row) throw new CharacterNotFoundError();
 
-      return toCharacter(row);
+        if (input.skills.length > 0) {
+          await tx.insert(characterSkillTable).values(
+            input.skills.map((skill) => ({
+              characterId: row.id,
+              skillId: skill.skillId,
+              proficiencyBonus: skill.proficiencyBonus,
+            })),
+          );
+        }
+
+        return toCharacter(row);
+      });
     },
 
     async findById(id: string): Promise<Character | null> {
@@ -237,6 +247,17 @@ export function characterRepository(): CharacterRepository {
       return row ?? null;
     },
 
+    async findSkillsByIds(ids: readonly string[]): Promise<SkillSummary[]> {
+      return db
+        .select({
+          id: skillTable.id,
+          name: skillTable.name,
+          attribute: skillTable.attribute,
+        })
+        .from(skillTable)
+        .where(inArray(skillTable.id, [...ids]));
+    },
+
     async upsertSkill(
       characterId: string,
       skillId: string,
@@ -258,7 +279,10 @@ export function characterRepository(): CharacterRepository {
 
         return toSkill(row);
       } catch (error) {
-        if (isForeignKeyViolation(error)) throw new SkillNotFoundError();
+        if (isForeignKeyViolation(error, CHARACTER_FOREIGN_KEY))
+          throw new CharacterNotFoundError();
+        if (isForeignKeyViolation(error, SKILL_FOREIGN_KEY))
+          throw new SkillNotFoundError();
         throw error;
       }
     },

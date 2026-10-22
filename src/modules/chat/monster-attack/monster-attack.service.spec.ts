@@ -141,7 +141,7 @@ describe('MonsterAttackService', () => {
       attribute: 'cognition',
       targetCharacterId: 'char-1',
       targetName: 'Ana',
-      rolls: [12, 12, 12],
+      rolls: [12, 12],
       result: 12,
       kind: 'best',
       damage: 5,
@@ -162,7 +162,7 @@ describe('MonsterAttackService', () => {
       eventType: 'dice_roll',
       payload: {
         expression: 'Goblin atacou Ana (cognition)',
-        results: [12, 12, 12],
+        results: [12, 12],
         total: 12,
       },
     });

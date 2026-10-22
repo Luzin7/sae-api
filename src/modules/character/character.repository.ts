@@ -26,6 +26,7 @@ export interface CharacterRepository {
   findSkills(characterId: string): Promise<CharacterSkill[]>;
   findSkillDetails(characterId: string): Promise<CharacterSkillDetail[]>;
   findSkillById(skillId: string): Promise<SkillSummary | null>;
+  findSkillsByIds(ids: readonly string[]): Promise<SkillSummary[]>;
   upsertSkill(
     characterId: string,
     skillId: string,

@@ -6,12 +6,16 @@ import {
   InvalidArchetypeError,
   InvalidAttributeError,
   InvalidHeightError,
+  SkillBonusCapExceededError,
+  SkillNotFoundError,
+  SkillPoolExceededError,
 } from '../character.errors.js';
 import {
   makeCharacter,
   makeCharacterRepository,
   makeMembership,
   makeNotifier,
+  makeSkillSummary,
 } from '../character.testkit.js';
 import { CreateCharacterService } from './create-character.service.js';
 import type { CreateCharacterCommand } from './create-character.service.js';
@@ -26,7 +30,6 @@ function baseCommand(
   return {
     gameId: 'game-1',
     nickname: 'Hero',
-    np: 1,
     cognition: -5,
     psyche: -5,
     instinct: -5,
@@ -36,6 +39,7 @@ function baseCommand(
     personality: 'Erudito',
     posture: 'Abrutalhado',
     socialClass: 'plebeu',
+    skills: [],
     ...overrides,
   };
 }
@@ -182,16 +186,17 @@ describe('CreateCharacterService', () => {
       membership,
       fixedRng(1),
       makeNotifier(),
-    ).execute('player-1', baseCommand({ np: 5, constitution: 2 }));
+    ).execute('player-1', baseCommand({ constitution: 2 }));
 
     expect(characters.create).toHaveBeenCalledWith(
       expect.objectContaining({
         playerId: 'player-1',
-        maxHp: 20 + 5 * 10,
-        currentHp: 20 + 5 * 10,
+        np: 1,
+        maxHp: 20 + 10,
+        currentHp: 20 + 10,
         maxEffort: 20,
         currentEffort: 0,
-        bExp: 2,
+        bExp: 0,
       }),
     );
   });
@@ -270,5 +275,118 @@ describe('CreateCharacterService', () => {
         makeNotifier(),
       ).execute('player-1', baseCommand({ heightCm: 140 })),
     ).rejects.toBeInstanceOf(InvalidHeightError);
+  });
+
+  describe('with starting skills', () => {
+    const VITALIDADE_ID = '11111111-1111-1111-1111-111111111111';
+    const CONDICIONAMENTO_ID = '22222222-2222-2222-2222-222222222222';
+    const vitalidade = makeSkillSummary({ id: VITALIDADE_ID });
+    const condicionamento = makeSkillSummary({
+      id: CONDICIONAMENTO_ID,
+      name: 'Condicionamento',
+    });
+
+    function setup() {
+      const characters = makeCharacterRepository();
+      const membership = makeMembership();
+      vi.mocked(membership.isMember).mockResolvedValue(true);
+      vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+      vi.mocked(characters.findSkillsByIds).mockResolvedValue([
+        vitalidade,
+        condicionamento,
+      ]);
+      const service = new CreateCharacterService(
+        characters,
+        membership,
+        fixedRng(1),
+        makeNotifier(),
+      );
+
+      return { characters, service };
+    }
+
+    it('derives max PS and PE from the Vitalidade and Condicionamento bonuses', async () => {
+      const { characters, service } = setup();
+
+      await service.execute(
+        'player-1',
+        baseCommand({
+          skills: [
+            { skillId: VITALIDADE_ID, proficiencyBonus: 4 },
+            { skillId: CONDICIONAMENTO_ID, proficiencyBonus: 3 },
+          ],
+        }),
+      );
+
+      expect(characters.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          maxHp: 20 + 6 + 4,
+          currentHp: 20 + 6 + 4,
+          maxEffort: 23,
+        }),
+      );
+    });
+
+    it('passes the requested skills to the repository', async () => {
+      const { characters, service } = setup();
+      const skills = [{ skillId: VITALIDADE_ID, proficiencyBonus: 2 }];
+      vi.mocked(characters.findSkillsByIds).mockResolvedValue([vitalidade]);
+
+      await service.execute('player-1', baseCommand({ skills }));
+
+      expect(characters.create).toHaveBeenCalledWith(
+        expect.objectContaining({ skills }),
+      );
+    });
+
+    it('rejects a bonus above the cap before creating', async () => {
+      const { characters, service } = setup();
+      vi.mocked(characters.findSkillsByIds).mockResolvedValue([vitalidade]);
+
+      await expect(
+        service.execute(
+          'player-1',
+          baseCommand({
+            skills: [{ skillId: VITALIDADE_ID, proficiencyBonus: 31 }],
+          }),
+        ),
+      ).rejects.toBeInstanceOf(SkillBonusCapExceededError);
+      expect(characters.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects points above the attribute pool before creating', async () => {
+      const { characters, service } = setup();
+
+      await expect(
+        service.execute(
+          'player-1',
+          baseCommand({
+            skills: [
+              { skillId: VITALIDADE_ID, proficiencyBonus: 10 },
+              { skillId: CONDICIONAMENTO_ID, proficiencyBonus: 10 },
+            ],
+          }),
+        ),
+      ).rejects.toBeInstanceOf(SkillPoolExceededError);
+      expect(characters.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown skill before creating', async () => {
+      const { characters, service } = setup();
+      vi.mocked(characters.findSkillsByIds).mockResolvedValue([vitalidade]);
+
+      await expect(
+        service.execute(
+          'player-1',
+          baseCommand({
+            skills: [
+              { skillId: VITALIDADE_ID, proficiencyBonus: 1 },
+              { skillId: CONDICIONAMENTO_ID, proficiencyBonus: 1 },
+            ],
+          }),
+        ),
+      ).rejects.toBeInstanceOf(SkillNotFoundError);
+      expect(characters.create).not.toHaveBeenCalled();
+    });
   });
 });

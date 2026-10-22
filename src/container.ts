@@ -35,6 +35,7 @@ import type { ChatServices } from '@modules/chat/chat.gateway.js';
 import type { CombatantSource } from '@modules/chat/combatant-source.contract.js';
 import type { CombatRepository } from '@modules/chat/combat.repository.js';
 import type { ChatMessageRepository } from '@modules/chat/chat.repository.js';
+import { CloseTestService } from '@modules/chat/close-test/close-test.service.js';
 import { ConnectService } from '@modules/chat/connect/connect.service.js';
 import { DeclareTestService } from '@modules/chat/declare-test/declare-test.service.js';
 import { EndCombatService } from '@modules/chat/end-combat/end-combat.service.js';
@@ -67,8 +68,6 @@ import { UpdateCharacterService } from '@modules/character/update-character/upda
 import { UpdateVitalsService } from '@modules/character/update-vitals/update-vitals.service.js';
 import { CreateGameService } from '@modules/game/create-game/create-game.service.js';
 import { DeleteGameService } from '@modules/game/delete-game/delete-game.service.js';
-import type { DiceServices } from '@modules/dice/dice.routes.js';
-import { RollService } from '@modules/dice/roll/roll.service.js';
 import { GameQueryService } from '@modules/game/game-query.service.js';
 import type { GameRepository } from '@modules/game/game.repository.js';
 import type { GameServices } from '@modules/game/game.routes.js';
@@ -123,7 +122,6 @@ export interface Container {
     auth: AuthServices;
     session: SessionServices;
     game: GameServices;
-    dice: DiceServices;
     character: CharacterServices;
     bestiary: BestiaryServices;
     chat: ChatServices;
@@ -254,9 +252,6 @@ export function buildContainer(deps: {
         leaveGame: new LeaveGameService(games),
         query: new GameQueryService(games, playerDirectory),
       },
-      dice: {
-        roll: new RollService(systemRng),
-      },
       character: {
         createCharacter: new CreateCharacterService(
           characters,
@@ -299,6 +294,7 @@ export function buildContainer(deps: {
           gameAccess,
           playerDirectory,
           bus,
+          combat,
         ),
         sendMessage: new SendMessageService(chatMessages, gameAccess, bus),
         rollDice: new RollDiceService(
@@ -353,6 +349,7 @@ export function buildContainer(deps: {
           combatants,
           bus,
         ),
+        closeTest: new CloseTestService(chatMessages, gameAccess, bus),
         rollMonsterTest: new RollMonsterTestService(
           chatMessages,
           gameAccess,

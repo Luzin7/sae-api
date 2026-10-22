@@ -128,7 +128,7 @@ Legacy rows may still have `character.heightCm`, `character.weightKg` and `chara
 - height: `heightCm` XOR `heightRoll` (`'min' | 'max'`)
 - weight: `weightKg` XOR `weightRoll`
 
-Explicit ranges: `heightCm` 150–250, `weightKg` 50–150. Roll-resolved values may fall outside those ranges by design and are valid: height 140–149 / 251–270, weight 40–49 / 151–170.
+Explicit ranges: `heightCm` 150–250, `weightKg` 50–150 (`weightKg` must be whole kg). Roll-resolved values may fall outside those ranges by design and are valid: height 140–149 / 251–270, weight 40–49 / 151–170.
 
 `PATCH /characters/:id` stays partial: updating only `nickname` is valid. If a height or weight source is sent, still send only one per field.
 
@@ -137,17 +137,18 @@ Explicit ranges: `heightCm` 150–250, `weightKg` 50–150. Roll-resolved values
 HTTP 400 envelope:
 
 ```json
-{ "error": { "code": "VALIDATION", "message": "Dados inválidos: heightCm: Informe heightCm ou heightRoll.; weightKg: Informe weightKg ou weightRoll." } }
+{ "error": { "code": "VALIDATION", "message": "Dados inválidos: heightCm: Informe a altura ou escolha rolar.; weightKg: Informe o peso ou escolha rolar." } }
 ```
 
 | Case | Field path | Message |
 | --- | --- | --- |
-| Missing height | `heightCm` | Informe heightCm ou heightRoll. |
-| Missing weight | `weightKg` | Informe weightKg ou weightRoll. |
-| Both height sources | `heightCm` | Informe apenas heightCm ou heightRoll. |
-| Both weight sources | `weightKg` | Informe apenas weightKg ou weightRoll. |
+| Missing height | `heightCm` | Informe a altura ou escolha rolar. |
+| Missing weight | `weightKg` | Informe o peso ou escolha rolar. |
+| Both height sources | `heightCm` | Informe a altura ou a rolagem, não as duas. |
+| Both weight sources | `weightKg` | Informe o peso ou a rolagem, não as duas. |
 | Height out of range | `heightCm` | Altura deve estar entre 150 e 250 cm. |
 | Weight out of range | `weightKg` | Peso deve estar entre 50 e 150 kg. |
+| Weight not whole kg | `weightKg` | Peso deve ser um número inteiro. |
 
 The message is `Dados inválidos: <field>: <message>; <field>: <message>...`, so split it by `;` and take the prefix before the first `:` of each segment.
 
@@ -160,20 +161,22 @@ UI rule: never submit the form without one source per field; offer manual value 
 | Actor | Allowed when |
 | --- | --- |
 | Master | Always: any character, test or not, any turn. |
-| Player | Test roll: `testId` sent, the declared test is `open` **or** `targetCharacterId` equals their character, the test's `skillId` matches the roll's skill, and they have not already rolled that `testId`. |
+| Player | Test roll: `testId` sent, the declared test is `open` **or** `targetCharacterId` equals their character, the test is not closed, and that character has not already rolled that `testId`. |
 | Player | Turn roll: no `testId`, combat is active, and the current combatant is their character (`entries[turnIndex].kind === 'character'` and `entries[turnIndex].refId === characterId`). |
 
-`dice.roll` frame fields: `sessionId`, `characterId`, `skillId` (all required) and `testId` (optional; send it for test rolls, omit it for turn rolls).
+`dice.roll` frame fields: `sessionId`, `characterId`, `skillId` (all required) and `testId` (optional; send it for test rolls, omit it for turn rolls). The rolled `skillId` may differ from the test's skill; the roll is still judged against the test's `cd`.
+
+Dice count is `|attribute|` d20 (an attribute of 0 rolls one die): positive keeps the best, negative keeps the worst.
 
 ### 5.2 Detecting test, turn and initiative
 
 `session.test-declared` payload, shown to every socket in the session:
 
 ```json
-{ "testId": "uuid", "skillId": "uuid", "cd": 15, "mode": "open", "targetCharacterId": "uuid", "targetName": "Ana" }
+{ "testId": "uuid", "skillId": "uuid", "grade": 3, "cd": 15, "mode": "open", "targetCharacterId": "uuid", "targetName": "Ana" }
 ```
 
-`mode` is `'open' | 'targeted'`; `targetCharacterId` and `targetName` are nullable.
+`grade` is the difficulty grade (1..10) and `cd` is derived by the server from it; `grade` is absent on tests declared before this change. `mode` is `'open' | 'targeted'`; `targetCharacterId` and `targetName` are nullable.
 
 Combat state arrives in `session.combat` (`active`, `turnIndex`, `round`, `entries[]`). `entries[turnIndex]` identifies the current combatant.
 
@@ -191,6 +194,37 @@ When combat is active, a player rolls initiative for their own character with th
 - The master cannot advance the turn until every combatant has rolled initiative (`400 VALIDATION`, `A ordem de iniciativa só pode avançar quando todos rolaram.`).
 - `hasRolled` on a combat entry means initiative was rolled, not that the turn action was used. Keep the turn action visible when `hasRolled` is true.
 
+`master.declare-test` frame (master only): `{ "type": "master.declare-test", "sessionId", "skillId", "grade", "mode", "targetCharacterId" }`. There is no `cd` field.
+
+`dice.rolled` carries `characterId` (always), plus `declaredSkillId` and `grade` when a test applied.
+
+#### Closing a test and state on join
+
+`master.close-test` frame (master only): `{ "type": "master.close-test", "sessionId": "uuid", "testId": "uuid" }`. The server persists a `test_closed` event and broadcasts `session.test-closed` to the whole room:
+
+```json
+{ "type": "session.test-closed", "testId": "uuid" }
+```
+
+Closing an already closed test is a silent no-op (no event). Two simultaneous close requests may both pass the check and write two `test_closed` rows, broadcasting `session.test-closed` twice; the web ignores the repeat. An unknown `testId` returns `404 NOT_FOUND` (`Teste não encontrado.`). Once closed, nobody can roll that test, the master included.
+
+On `session.join` the joining socket receives, in order: `chat.history`, `session.test-snapshot`, and `session.combat` (only when a combat exists). Both snapshots go only to the joining socket.
+
+```json
+{
+  "type": "session.test-snapshot",
+  "test": {
+    "testId": "uuid", "skillId": "uuid", "grade": 3, "cd": 15, "mode": "open",
+    "targetCharacterId": null, "targetName": null,
+    "rolledCharacterIds": ["uuid"]
+  }
+}
+```
+
+- `test` is `null` when the latest declared test is closed or no test was declared.
+- `rolledCharacterIds` lists the characters that already rolled that test; disable the roll button for those.
+- `session.combat` keeps the same shape described above.
+
 ### 5.3 Errors
 
 WS frame: `{ "type": "error", "error": { "code", "message" } }`.
@@ -200,8 +234,9 @@ WS frame: `{ "type": "error", "error": { "code", "message" } }`.
 | 403 `FORBIDDEN` | Este teste não é para seu personagem. | Test targeted at someone else. |
 | 403 `FORBIDDEN` | Nenhum teste ou turno ativo para rolar. | No test and combat inactive. |
 | 403 `FORBIDDEN` | Não é seu turno. | Combat active, another combatant's turn. |
-| 400 `VALIDATION` | Perícia diferente da declarada no teste. | Roll skill differs from the declared test. |
-| 409 `CONFLICT` | Você já rolou este teste. | Duplicate roll for the same `testId`. |
+| 400 `VALIDATION` | Grau de dificuldade inválido. | `master.declare-test` with a `grade` outside 1..10. |
+| 409 `CONFLICT` | Você já rolou este teste. | Duplicate roll for the same `testId` by the same character (checked per character, not per player). |
+| 409 `CONFLICT` | Este teste já foi encerrado. | Roll on a closed test; applies to the master too. |
 
 ### 5.4 UI rules
 
@@ -211,7 +246,6 @@ WS frame: `{ "type": "error", "error": { "code", "message" } }`.
 - Show the initiative roll control when combat is active and the player's character has not rolled initiative yet; hide it when that entry's `hasRolled` is already true.
 - Master always sees roll controls.
 - Disable the test roll after a successful roll.
-- `POST /dice/roll` is a stateless calculator with no session effect — do not use it for table rolls.
 
 ## 6. Frontend checklist
 

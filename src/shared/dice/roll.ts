@@ -13,7 +13,7 @@ export function rollDie(sides: number, rng: Rng): number {
 }
 
 export function rollAttribute(attrValue: number, rng: Rng): AttributeRoll {
-  const qty = Math.abs(attrValue) + 1;
+  const qty = attrValue === 0 ? 1 : Math.abs(attrValue);
   const rolls = Array.from({ length: qty }, () => rollDie(20, rng));
 
   if (attrValue > 0) return { rolls, result: Math.max(...rolls), kind: 'best' };

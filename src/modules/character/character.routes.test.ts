@@ -516,10 +516,18 @@ describe('character size validation', () => {
     return { res, characters };
   }
 
-  async function patchCharacter(payload: Record<string, unknown>) {
+  async function patchCharacter(
+    payload: Record<string, unknown>,
+    stored: Parameters<typeof makeCharacter>[0] = {},
+  ) {
     const characters = makeCharacterRepository();
     vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ heightCm: 160, weightKg: 60, size: 'pequeno' }),
+      makeCharacter({
+        heightCm: 160,
+        weightKg: 60,
+        size: 'pequeno',
+        ...stored,
+      }),
     );
     vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
     vi.mocked(characters.save).mockResolvedValue(makeCharacter());
@@ -543,7 +551,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'heightCm: Informe heightCm ou heightRoll.',
+      'heightCm: Informe a altura ou escolha rolar.',
     );
     expect(characters.create).not.toHaveBeenCalled();
   });
@@ -556,7 +564,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'weightKg: Informe weightKg ou weightRoll.',
+      'weightKg: Informe o peso ou escolha rolar.',
     );
     expect(characters.create).not.toHaveBeenCalled();
   });
@@ -569,7 +577,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'heightCm: Informe apenas heightCm ou heightRoll.',
+      'heightCm: Informe a altura ou a rolagem, não as duas.',
     );
   });
 
@@ -581,7 +589,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'weightKg: Informe apenas weightKg ou weightRoll.',
+      'weightKg: Informe o peso ou a rolagem, não as duas.',
     );
   });
 
@@ -619,6 +627,24 @@ describe('character size validation', () => {
     expect(res.json().error.message).toContain(
       'weightKg: Peso deve estar entre 50 e 150 kg.',
     );
+  });
+
+  it('rejects a decimal weight', async () => {
+    const { res } = await postCharacter({ ...createPayload(), weightKg: 70.5 });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'weightKg: Peso deve ser um número inteiro.',
+    );
+  });
+
+  it('updates a character with a legacy decimal weight when weight is not sent', async () => {
+    const { res } = await patchCharacter(
+      { nickname: 'Renamed' },
+      { weightKg: 60.5 },
+    );
+
+    expect(res.statusCode).toBe(200);
   });
 
   it('persists values inside the roll bands', async () => {
@@ -667,7 +693,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'heightCm: Informe apenas heightCm ou heightRoll.',
+      'heightCm: Informe a altura ou a rolagem, não as duas.',
     );
     expect(characters.save).not.toHaveBeenCalled();
   });
@@ -680,6 +706,158 @@ describe('character size validation', () => {
       'heightCm: Altura deve estar entre 150 e 250 cm.',
     );
     expect(characters.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects an update with repeated afflictions', async () => {
+    const { res, characters } = await patchCharacter({
+      afflictions: ['fobia', 'fobia'],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('Aflição repetida.');
+    expect(characters.save).not.toHaveBeenCalled();
+  });
+});
+
+describe('character sheet creation contract', () => {
+  async function postCharacter(payload: Record<string, unknown>) {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.findSkillsByIds).mockResolvedValue([
+      makeSkillSummary({ id: SKILL_ID }),
+    ]);
+    const app = await buildTestApp(makeServices(characters, membership));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters',
+      payload,
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    return { res, characters };
+  }
+
+  async function patchCharacter(payload: Record<string, unknown>) {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ afflictions: ['medo de altura'] }),
+    );
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    return app.inject({
+      method: 'PATCH',
+      url: '/characters/char-1',
+      payload,
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+  }
+
+  it('accepts afflictions as keys', async () => {
+    const { res } = await postCharacter({
+      ...createPayload(),
+      afflictions: ['fobia'],
+    });
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('rejects free-text afflictions', async () => {
+    const { res } = await postCharacter({
+      ...createPayload(),
+      afflictions: ['medo de altura'],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('Aflição inválida.');
+  });
+
+  it('rejects repeated afflictions', async () => {
+    const { res } = await postCharacter({
+      ...createPayload(),
+      afflictions: ['fobia', 'fobia'],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('Aflição repetida.');
+  });
+
+  it('ignores np and creates the character at NP 1', async () => {
+    const { res, characters } = await postCharacter({
+      ...createPayload(),
+      np: 20,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.objectContaining({ np: 1 }),
+    );
+  });
+
+  it('creates the character with its skills', async () => {
+    const { res, characters } = await postCharacter({
+      ...createPayload(),
+      skills: [{ skillId: SKILL_ID, proficiencyBonus: 2 }],
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skills: [{ skillId: SKILL_ID, proficiencyBonus: 2 }],
+      }),
+    );
+  });
+
+  it('rejects a repeated skill', async () => {
+    const { res, characters } = await postCharacter({
+      ...createPayload(),
+      skills: [
+        { skillId: SKILL_ID, proficiencyBonus: 1 },
+        { skillId: SKILL_ID, proficiencyBonus: 1 },
+      ],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('Perícia repetida.');
+    expect(characters.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects free-text afflictions on update', async () => {
+    const res = await patchCharacter({ afflictions: ['medo de altura'] });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('updates a legacy character without revalidating its afflictions', async () => {
+    const res = await patchCharacter({ nickname: 'Renamed' });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('rejects a skill bonus above the cap', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ np: 20, constitutionProficiency: 'versado' }),
+    );
+    vi.mocked(characters.findSkillById).mockResolvedValue(makeSkillSummary());
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters/char-1/skills',
+      payload: { skillId: SKILL_ID, proficiencyBonus: 21 },
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toBe(
+      'Bônus de Vitalidade acima do limite de +20.',
+    );
   });
 });
 

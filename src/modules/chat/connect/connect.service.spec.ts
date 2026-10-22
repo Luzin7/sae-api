@@ -5,6 +5,7 @@ import {
   type DirectoryCharacter,
   directoryCharacter,
   makeChatMessages,
+  makeCombat,
   makeGameAccess,
   makePlayerDirectory,
 } from '../chat.testkit.js';
@@ -20,15 +21,20 @@ function build(
     characters,
   );
   const bus = new InMemoryMessageBus();
-  const service = new ConnectService(messages, access, players, bus);
+  const combat = makeCombat();
+  const service = new ConnectService(messages, access, players, bus, combat);
 
   vi.mocked(messages.findSession).mockResolvedValue({
     id: 'session-1',
     gameId: 'game-1',
   });
   vi.mocked(messages.listRecentChat).mockResolvedValue([]);
+  vi.mocked(messages.findLatestTest).mockResolvedValue(null);
+  vi.mocked(messages.isTestClosed).mockResolvedValue(false);
+  vi.mocked(messages.listTestRollers).mockResolvedValue([]);
+  vi.mocked(combat.findState).mockResolvedValue(null);
 
-  return { messages, access, players, bus, service };
+  return { messages, access, players, bus, combat, service };
 }
 
 describe('ConnectService', () => {
@@ -202,6 +208,68 @@ describe('ConnectService', () => {
       type: 'session.state',
       master: null,
       players: [{ playerId: 'p1', name: 'Ana', characterIds: ['char-1'] }],
+    });
+  });
+
+  describe('state on join', () => {
+    const joinInput = {
+      playerId: 'p1',
+      socketId: 'socket-1',
+      sessionId: 'session-1',
+    };
+    const declared = {
+      testId: 'test-1',
+      skillId: 'skill-1',
+      cd: 15,
+      mode: 'open' as const,
+      targetCharacterId: null,
+      targetName: null,
+    };
+
+    function buildMember() {
+      const built = build();
+      vi.mocked(built.access.findById).mockResolvedValue({
+        id: 'game-1',
+        masterId: 'master-1',
+      });
+      vi.mocked(built.access.isMember).mockResolvedValue(true);
+      built.bus.register('socket-1', 'p1', () => undefined);
+
+      return built;
+    }
+
+    it('returns the open test with its rollers', async () => {
+      const { messages, service } = buildMember();
+      vi.mocked(messages.findLatestTest).mockResolvedValue(declared);
+      vi.mocked(messages.listTestRollers).mockResolvedValue(['char-1']);
+
+      const result = await service.execute(joinInput);
+
+      expect(result.openTest).toEqual({
+        ...declared,
+        rolledCharacterIds: ['char-1'],
+      });
+    });
+
+    it('returns no test when the latest one is closed', async () => {
+      const { messages, service } = buildMember();
+      vi.mocked(messages.findLatestTest).mockResolvedValue(declared);
+      vi.mocked(messages.isTestClosed).mockResolvedValue(true);
+
+      const result = await service.execute(joinInput);
+
+      expect(result.openTest).toBeNull();
+      expect(messages.listTestRollers).not.toHaveBeenCalled();
+    });
+
+    it('passes the combat state through', async () => {
+      const { combat, service } = buildMember();
+      const state = { active: true, turnIndex: 0, round: 1, entries: [] };
+      vi.mocked(combat.findState).mockResolvedValue(state);
+
+      const result = await service.execute(joinInput);
+
+      expect(result.combat).toEqual(state);
     });
   });
 });

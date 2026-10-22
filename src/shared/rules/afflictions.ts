@@ -1,5 +1,18 @@
+export const AFFLICTION_KEYS = [
+  'fobia',
+  'vicio',
+  'juramento',
+  'trauma',
+  'deficiencia',
+  'apego',
+  'segredo',
+  'estigma',
+] as const;
+
+export type AfflictionKey = (typeof AFFLICTION_KEYS)[number];
+
 export interface AfflictionDefinition {
-  key: string;
+  key: AfflictionKey;
   name: string;
   description: string;
   requirement: string;
