@@ -13,6 +13,10 @@ export interface DiceRollLogPayload {
   testId?: string;
   cd?: number;
   success?: boolean;
+  characterId?: string;
+  skillId?: string;
+  declaredSkillId?: string;
+  grade?: number;
 }
 
 export interface HpChangeLogPayload {
@@ -70,6 +74,7 @@ export interface CombatStateLogPayload {
 export interface TestDeclaredLogPayload {
   testId: string;
   skillId: string;
+  grade?: number;
   cd: number;
   mode: 'open' | 'targeted';
   targetCharacterId: string | null;

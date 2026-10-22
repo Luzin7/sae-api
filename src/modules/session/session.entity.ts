@@ -27,6 +27,10 @@ export interface DiceRollPayload {
   testId?: string;
   cd?: number;
   success?: boolean;
+  characterId?: string;
+  skillId?: string;
+  declaredSkillId?: string;
+  grade?: number;
 }
 
 export interface HpChangePayload {
@@ -90,6 +94,7 @@ export interface CombatStatePayload {
 export interface TestDeclaredPayload {
   testId: string;
   skillId: string;
+  grade?: number;
   cd: number;
   mode: 'open' | 'targeted';
   targetCharacterId: string | null;
@@ -124,6 +129,10 @@ export const DiceRollPayloadSchema = z.object({
   testId: z.string().min(1).optional(),
   cd: z.number().int().optional(),
   success: z.boolean().optional(),
+  characterId: z.string().min(1).optional(),
+  skillId: z.string().min(1).optional(),
+  declaredSkillId: z.string().min(1).optional(),
+  grade: z.number().int().optional(),
 });
 
 export const HpChangePayloadSchema = z.object({
@@ -187,6 +196,7 @@ export const CombatStatePayloadSchema = z.object({
 export const TestDeclaredPayloadSchema = z.object({
   testId: z.string().min(1),
   skillId: z.string().min(1),
+  grade: z.number().int().optional(),
   cd: z.number().int(),
   mode: z.enum(['open', 'targeted']),
   targetCharacterId: z.string().min(1).nullable(),

@@ -285,7 +285,7 @@ async function dispatch(
         playerId: state.playerId,
         sessionId: frame.sessionId,
         skillId: frame.skillId,
-        cd: frame.cd,
+        grade: frame.grade,
         mode: frame.mode,
         targetCharacterId: frame.targetCharacterId ?? null,
       });

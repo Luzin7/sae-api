@@ -156,9 +156,10 @@ describe('RollDiceService', () => {
     const expected: DiceRolledEvent = {
       playerId: 'p1',
       playerName: 'Ana',
+      characterId: 'char-1',
       skillId: 'skill-1',
       attribute: 'constitution',
-      rolls: [10, 10, 10, 10],
+      rolls: [10, 10, 10],
       result: 10,
       kind: 'best',
       skillBonus: 4,
@@ -192,7 +193,9 @@ describe('RollDiceService', () => {
       eventType: 'dice_roll',
       payload: {
         expression: 'constitution',
-        results: [10, 10, 10, 10],
+        characterId: 'char-1',
+        skillId: 'skill-1',
+        results: [10, 10, 10],
         total: 16,
       },
     });
@@ -311,11 +314,14 @@ describe('RollDiceService', () => {
       eventType: 'dice_roll',
       payload: {
         expression: 'constitution',
-        results: [10, 10, 10, 10],
+        characterId: 'char-1',
+        skillId: 'skill-1',
+        results: [10, 10, 10],
         total: 16,
         testId: 'test-1',
         cd: 15,
         success: true,
+        declaredSkillId: 'skill-1',
       },
     });
     expect(publish).toHaveBeenCalledWith('session:session-1', {
@@ -324,11 +330,12 @@ describe('RollDiceService', () => {
     });
   });
 
-  it('rejects a declared test whose skill differs from the roll', async () => {
+  it('accepts another skill, records declaredSkillId and judges against the test cd', async () => {
     const { messages, characters, service } = build();
     vi.mocked(messages.findTestById).mockResolvedValue({
       testId: 'test-1',
       skillId: 'skill-1',
+      grade: 3,
       cd: 15,
       mode: 'open',
       targetCharacterId: null,
@@ -338,19 +345,31 @@ describe('RollDiceService', () => {
       id: 'skill-2',
       attribute: 'constitution',
     });
+    vi.mocked(characters.findSkillForCharacter).mockResolvedValue(null);
 
-    await expect(
-      service.execute({
-        playerId: 'p1',
-        sessionId: 'session-1',
-        characterId: 'char-1',
-        skillId: 'skill-2',
-        testId: 'test-1',
-      }),
-    ).rejects.toMatchObject({
-      code: 'VALIDATION',
-      message: expect.any(String),
+    const result = await service.execute({
+      playerId: 'p1',
+      sessionId: 'session-1',
+      characterId: 'char-1',
+      skillId: 'skill-2',
+      testId: 'test-1',
     });
+
+    expect(result.skillId).toBe('skill-2');
+    expect(result.declaredSkillId).toBe('skill-1');
+    expect(result.grade).toBe(3);
+    expect(result.cd).toBe(15);
+    expect(result.success).toBe(false);
+    expect(messages.appendLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          characterId: 'char-1',
+          skillId: 'skill-2',
+          declaredSkillId: 'skill-1',
+          grade: 3,
+        }),
+      }),
+    );
   });
 
   it('resolves a targeted test when the rolled skill and target match', async () => {

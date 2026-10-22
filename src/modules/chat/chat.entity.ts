@@ -40,6 +40,7 @@ export interface InitiativeEntry {
 export interface DiceRolledEvent {
   playerId: string;
   playerName: string;
+  characterId: string;
   skillId: string;
   attribute: string;
   rolls: number[];
@@ -51,6 +52,8 @@ export interface DiceRolledEvent {
   testId?: string;
   cd?: number;
   success?: boolean;
+  declaredSkillId?: string;
+  grade?: number;
 }
 
 /**

@@ -95,12 +95,12 @@ export class ChatNotYourTurnError extends ForbiddenError {
   }
 }
 
-export class ChatSkillMismatchError extends DomainError {
+export class InvalidDifficultyGradeError extends DomainError {
   readonly code: DomainErrorCode = 'VALIDATION';
   readonly httpStatus = 400;
 
   constructor() {
-    super('Perícia diferente da declarada no teste.');
+    super('Grau de dificuldade inválido.');
   }
 }
 

@@ -160,20 +160,22 @@ UI rule: never submit the form without one source per field; offer manual value 
 | Actor | Allowed when |
 | --- | --- |
 | Master | Always: any character, test or not, any turn. |
-| Player | Test roll: `testId` sent, the declared test is `open` **or** `targetCharacterId` equals their character, the test's `skillId` matches the roll's skill, and they have not already rolled that `testId`. |
+| Player | Test roll: `testId` sent, the declared test is `open` **or** `targetCharacterId` equals their character, and they have not already rolled that `testId`. |
 | Player | Turn roll: no `testId`, combat is active, and the current combatant is their character (`entries[turnIndex].kind === 'character'` and `entries[turnIndex].refId === characterId`). |
 
-`dice.roll` frame fields: `sessionId`, `characterId`, `skillId` (all required) and `testId` (optional; send it for test rolls, omit it for turn rolls).
+`dice.roll` frame fields: `sessionId`, `characterId`, `skillId` (all required) and `testId` (optional; send it for test rolls, omit it for turn rolls). The rolled `skillId` may differ from the test's skill; the roll is still judged against the test's `cd`.
+
+Dice count is `|attribute|` d20 (an attribute of 0 rolls one die): positive keeps the best, negative keeps the worst.
 
 ### 5.2 Detecting test, turn and initiative
 
 `session.test-declared` payload, shown to every socket in the session:
 
 ```json
-{ "testId": "uuid", "skillId": "uuid", "cd": 15, "mode": "open", "targetCharacterId": "uuid", "targetName": "Ana" }
+{ "testId": "uuid", "skillId": "uuid", "grade": 3, "cd": 15, "mode": "open", "targetCharacterId": "uuid", "targetName": "Ana" }
 ```
 
-`mode` is `'open' | 'targeted'`; `targetCharacterId` and `targetName` are nullable.
+`grade` is the difficulty grade (1..10) and `cd` is derived by the server from it; `grade` is absent on tests declared before this change. `mode` is `'open' | 'targeted'`; `targetCharacterId` and `targetName` are nullable.
 
 Combat state arrives in `session.combat` (`active`, `turnIndex`, `round`, `entries[]`). `entries[turnIndex]` identifies the current combatant.
 
@@ -191,6 +193,10 @@ When combat is active, a player rolls initiative for their own character with th
 - The master cannot advance the turn until every combatant has rolled initiative (`400 VALIDATION`, `A ordem de iniciativa só pode avançar quando todos rolaram.`).
 - `hasRolled` on a combat entry means initiative was rolled, not that the turn action was used. Keep the turn action visible when `hasRolled` is true.
 
+`master.declare-test` frame (master only): `{ "type": "master.declare-test", "sessionId", "skillId", "grade", "mode", "targetCharacterId" }`. There is no `cd` field.
+
+`dice.rolled` carries `characterId` (always), plus `declaredSkillId` and `grade` when a test applied.
+
 ### 5.3 Errors
 
 WS frame: `{ "type": "error", "error": { "code", "message" } }`.
@@ -200,7 +206,7 @@ WS frame: `{ "type": "error", "error": { "code", "message" } }`.
 | 403 `FORBIDDEN` | Este teste não é para seu personagem. | Test targeted at someone else. |
 | 403 `FORBIDDEN` | Nenhum teste ou turno ativo para rolar. | No test and combat inactive. |
 | 403 `FORBIDDEN` | Não é seu turno. | Combat active, another combatant's turn. |
-| 400 `VALIDATION` | Perícia diferente da declarada no teste. | Roll skill differs from the declared test. |
+| 400 `VALIDATION` | Grau de dificuldade inválido. | `master.declare-test` with a `grade` outside 1..10. |
 | 409 `CONFLICT` | Você já rolou este teste. | Duplicate roll for the same `testId`. |
 
 ### 5.4 UI rules

@@ -15,7 +15,6 @@ import {
   ChatForbiddenError,
   ChatNoActiveRollError,
   ChatNotYourTurnError,
-  ChatSkillMismatchError,
   ChatSkillNotFoundError,
   ChatTestNotFoundError,
   ChatTestNotTargetedError,
@@ -92,6 +91,7 @@ export class RollDiceService {
     const rolled: DiceRolledEvent = {
       playerId: input.playerId,
       playerName: player.name,
+      characterId: input.characterId,
       skillId: input.skillId,
       attribute: skill.attribute,
       rolls: roll.rolls,
@@ -104,6 +104,8 @@ export class RollDiceService {
 
     const payload: DiceRollLogPayload = {
       expression: skill.attribute,
+      characterId: input.characterId,
+      skillId: input.skillId,
       results: roll.rolls,
       total,
     };
@@ -112,6 +114,12 @@ export class RollDiceService {
       rolled.testId = test.testId;
       rolled.cd = test.cd;
       rolled.success = success;
+      rolled.declaredSkillId = test.skillId;
+      payload.declaredSkillId = test.skillId;
+      if (test.grade !== undefined) {
+        rolled.grade = test.grade;
+        payload.grade = test.grade;
+      }
       payload.testId = test.testId;
       payload.cd = test.cd;
       payload.success = success;
@@ -145,7 +153,6 @@ export class RollDiceService {
     ) {
       throw new ChatTestNotTargetedError();
     }
-    if (test.skillId !== input.skillId) throw new ChatSkillMismatchError();
     const alreadyRolled = await this.messages.hasRolledTest(
       input.sessionId,
       input.playerId,
@@ -168,7 +175,6 @@ export class RollDiceService {
     input: RollDiceInput,
   ): test is TestDeclaredPayload {
     if (!test) return false;
-    if (test.skillId !== input.skillId) return false;
     if (test.mode === 'open') return true;
 
     return test.targetCharacterId === input.characterId;
