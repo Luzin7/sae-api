@@ -4,6 +4,7 @@ import {
   attributeBudget,
   attributeCost,
   attributeCostSum,
+  attributeDisplayName,
 } from './attributes.js';
 import { AFFLICTION_KEYS, AFFLICTIONS } from './afflictions.js';
 import { OFICIOS, oficioCdReduction } from './oficios.js';
@@ -25,6 +26,14 @@ describe('attribute cost and budget', () => {
     expect(attributeCost(-2)).toBe(3);
     expect(attributeCost(1)).toBe(4);
     expect(attributeCost(5)).toBe(8);
+  });
+
+  it('names a known attribute in pt-BR', () => {
+    expect(attributeDisplayName('cognition')).toBe('Cognição');
+  });
+
+  it('falls back to the key for an unknown attribute', () => {
+    expect(attributeDisplayName('luck')).toBe('luck');
   });
 
   it('excludes −1 and 0 from the scale', () => {

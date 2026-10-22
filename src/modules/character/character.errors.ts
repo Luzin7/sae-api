@@ -3,7 +3,7 @@ import {
   type DomainErrorCode,
 } from '@shared/errors/domain-error.js';
 import { ForbiddenError, NotFoundError } from '@shared/errors/http-errors.js';
-import { ATTRIBUTES } from '@shared/rules/attributes.js';
+import { attributeDisplayName } from '@shared/rules/attributes.js';
 
 export class CharacterNotFoundError extends NotFoundError {
   constructor() {
@@ -37,9 +37,7 @@ export class InvalidAttributeError extends DomainError {
   readonly httpStatus = 400;
 
   constructor(attribute: string, value: number) {
-    const attributeName =
-      ATTRIBUTES.find((definition) => definition.key === attribute)?.name ??
-      attribute;
+    const attributeName = attributeDisplayName(attribute);
     super(`Valor de atributo inválido para ${attributeName}: ${value}.`);
   }
 }
@@ -88,9 +86,7 @@ export class SkillPoolExceededError extends DomainError {
   readonly httpStatus = 400;
 
   constructor(attribute: string, pool: number, requested: number) {
-    const attributeName =
-      ATTRIBUTES.find((definition) => definition.key === attribute)?.name ??
-      attribute;
+    const attributeName = attributeDisplayName(attribute);
     super(
       `Orçamento de perícias de ${attributeName} excedido: ${requested} de ${pool} pontos.`,
     );

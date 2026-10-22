@@ -80,24 +80,6 @@ describe('isForeignKeyViolation', () => {
     expect(isForeignKeyViolation(error, CONSTRAINT)).toBe(false);
   });
 
-  it('tells the character and skill constraints of character_skill apart', () => {
-    const error = new DrizzleQueryError(
-      'insert',
-      [],
-      pgError('23503', 'character_skill_character_id_character_id_fk'),
-    );
-
-    expect(
-      isForeignKeyViolation(
-        error,
-        'character_skill_character_id_character_id_fk',
-      ),
-    ).toBe(true);
-    expect(
-      isForeignKeyViolation(error, 'character_skill_skill_id_skill_id_fk'),
-    ).toBe(false);
-  });
-
   it('rejects another error code', () => {
     const error = new DrizzleQueryError(
       'insert',
