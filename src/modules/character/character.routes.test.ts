@@ -543,7 +543,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'heightCm: Informe heightCm ou heightRoll.',
+      'heightCm: Informe a altura ou escolha rolar.',
     );
     expect(characters.create).not.toHaveBeenCalled();
   });
@@ -556,7 +556,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'weightKg: Informe weightKg ou weightRoll.',
+      'weightKg: Informe o peso ou escolha rolar.',
     );
     expect(characters.create).not.toHaveBeenCalled();
   });
@@ -569,7 +569,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'heightCm: Informe apenas heightCm ou heightRoll.',
+      'heightCm: Informe a altura ou a rolagem, não as duas.',
     );
   });
 
@@ -581,7 +581,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'weightKg: Informe apenas weightKg ou weightRoll.',
+      'weightKg: Informe o peso ou a rolagem, não as duas.',
     );
   });
 
@@ -667,7 +667,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'heightCm: Informe apenas heightCm ou heightRoll.',
+      'heightCm: Informe a altura ou a rolagem, não as duas.',
     );
     expect(characters.save).not.toHaveBeenCalled();
   });
