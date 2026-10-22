@@ -34,6 +34,7 @@ import {
 } from './character.repository.mappers.js';
 
 const SKILL_FOREIGN_KEY = 'character_skill_skill_id_skill_id_fk';
+const CHARACTER_FOREIGN_KEY = 'character_skill_character_id_character_id_fk';
 
 export function characterRepository(): CharacterRepository {
   return {
@@ -278,6 +279,8 @@ export function characterRepository(): CharacterRepository {
 
         return toSkill(row);
       } catch (error) {
+        if (isForeignKeyViolation(error, CHARACTER_FOREIGN_KEY))
+          throw new CharacterNotFoundError();
         if (isForeignKeyViolation(error, SKILL_FOREIGN_KEY))
           throw new SkillNotFoundError();
         throw error;
