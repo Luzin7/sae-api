@@ -23,14 +23,20 @@ describe('rollAttribute', () => {
     expect(result.kind).toBe('single');
   });
 
-  it.each([-5, -4, -3, -2, -1, 1, 2, 3, 4, 5])(
-    'rolls |attrValue| dice for %i',
-    (attrValue) => {
-      expect(rollAttribute(attrValue, fixedRng).rolls).toHaveLength(
-        Math.abs(attrValue),
-      );
-    },
-  );
+  it.each([
+    [-5, 5],
+    [-4, 4],
+    [-3, 3],
+    [-2, 2],
+    [-1, 1],
+    [1, 1],
+    [2, 2],
+    [3, 3],
+    [4, 4],
+    [5, 5],
+  ])('rolls the dice count for attribute %i', (attrValue, quantity) => {
+    expect(rollAttribute(attrValue, fixedRng).rolls).toHaveLength(quantity);
+  });
 
   it('picks the best roll for a positive attribute', () => {
     const result = rollAttribute(2, fixedRng);

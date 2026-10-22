@@ -56,7 +56,6 @@ export interface DiceRolledEvent {
   grade?: number;
 }
 
-/** The newest declared test that is still open, with who already rolled it. */
 export interface OpenTestSnapshot extends TestDeclaredPayload {
   rolledCharacterIds: string[];
 }

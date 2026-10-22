@@ -516,10 +516,18 @@ describe('character size validation', () => {
     return { res, characters };
   }
 
-  async function patchCharacter(payload: Record<string, unknown>) {
+  async function patchCharacter(
+    payload: Record<string, unknown>,
+    stored: Parameters<typeof makeCharacter>[0] = {},
+  ) {
     const characters = makeCharacterRepository();
     vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ heightCm: 160, weightKg: 60, size: 'pequeno' }),
+      makeCharacter({
+        heightCm: 160,
+        weightKg: 60,
+        size: 'pequeno',
+        ...stored,
+      }),
     );
     vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
     vi.mocked(characters.save).mockResolvedValue(makeCharacter());
@@ -619,6 +627,24 @@ describe('character size validation', () => {
     expect(res.json().error.message).toContain(
       'weightKg: Peso deve estar entre 50 e 150 kg.',
     );
+  });
+
+  it('rejects a decimal weight', async () => {
+    const { res } = await postCharacter({ ...createPayload(), weightKg: 70.5 });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain(
+      'weightKg: Peso deve ser um número inteiro.',
+    );
+  });
+
+  it('updates a character with a legacy decimal weight when weight is not sent', async () => {
+    const { res } = await patchCharacter(
+      { nickname: 'Renamed' },
+      { weightKg: 60.5 },
+    );
+
+    expect(res.statusCode).toBe(200);
   });
 
   it('persists values inside the roll bands', async () => {
@@ -738,6 +764,16 @@ describe('character sheet creation contract', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain('Aflição inválida.');
+  });
+
+  it('rejects repeated afflictions', async () => {
+    const { res } = await postCharacter({
+      ...createPayload(),
+      afflictions: ['fobia', 'fobia'],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('Aflição repetida.');
   });
 
   it('ignores np and creates the character at NP 1', async () => {

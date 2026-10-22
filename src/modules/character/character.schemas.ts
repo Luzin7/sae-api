@@ -13,6 +13,8 @@ const WEIGHT_RANGE_MESSAGE = `Peso deve estar entre ${WEIGHT_EXACT_MIN} e ${WEIG
 
 const AFFLICTION_MESSAGE = 'Aflição inválida.';
 const DUPLICATE_SKILL_MESSAGE = 'Perícia repetida.';
+const DUPLICATE_AFFLICTION_MESSAGE = 'Aflição repetida.';
+const WEIGHT_INTEGER_MESSAGE = 'Peso deve ser um número inteiro.';
 
 const AttributeSchema = z.union([
   z.literal(-5),
@@ -52,6 +54,7 @@ const SheetFields = {
   heightRoll: z.enum(['min', 'max']).optional(),
   weightKg: z
     .number()
+    .int(WEIGHT_INTEGER_MESSAGE)
     .min(WEIGHT_EXACT_MIN, WEIGHT_RANGE_MESSAGE)
     .max(WEIGHT_EXACT_MAX, WEIGHT_RANGE_MESSAGE)
     .optional(),
@@ -157,6 +160,20 @@ function refineUniqueSkills(
   });
 }
 
+function refineUniqueAfflictions(
+  input: { afflictions?: string[] },
+  ctx: z.RefinementCtx,
+): void {
+  const afflictions = input.afflictions ?? [];
+  if (new Set(afflictions).size === afflictions.length) return;
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['afflictions'],
+    message: DUPLICATE_AFFLICTION_MESSAGE,
+  });
+}
+
 export const CreateCharacterBodySchema = CharacterSheetBodySchema.omit({
   np: true,
 })
@@ -164,14 +181,17 @@ export const CreateCharacterBodySchema = CharacterSheetBodySchema.omit({
     skills: z.array(UpsertSkillBodySchema).max(SKILLS.length).default([]),
   })
   .superRefine(refineSizeSources(true))
-  .superRefine(refineUniqueSkills);
+  .superRefine(refineUniqueSkills)
+  .superRefine(refineUniqueAfflictions);
 
 const UpdateCharacterSheetBodySchema = CharacterSheetBodySchema.omit({
   gameId: true,
 }).partial();
 
 export const UpdateCharacterBodySchema =
-  UpdateCharacterSheetBodySchema.superRefine(refineSizeSources(false));
+  UpdateCharacterSheetBodySchema.superRefine(
+    refineSizeSources(false),
+  ).superRefine(refineUniqueAfflictions);
 
 export const UpdateVitalsBodySchema = z
   .object({

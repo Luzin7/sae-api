@@ -291,9 +291,10 @@ describe('CreateCharacterService', () => {
       const membership = makeMembership();
       vi.mocked(membership.isMember).mockResolvedValue(true);
       vi.mocked(characters.create).mockResolvedValue(makeCharacter());
-      vi.mocked(characters.findSkillsByIds).mockImplementation(async (ids) =>
-        [vitalidade, condicionamento].filter((skill) => ids.includes(skill.id)),
-      );
+      vi.mocked(characters.findSkillsByIds).mockResolvedValue([
+        vitalidade,
+        condicionamento,
+      ]);
       const service = new CreateCharacterService(
         characters,
         membership,
@@ -329,6 +330,7 @@ describe('CreateCharacterService', () => {
     it('passes the requested skills to the repository', async () => {
       const { characters, service } = setup();
       const skills = [{ skillId: VITALIDADE_ID, proficiencyBonus: 2 }];
+      vi.mocked(characters.findSkillsByIds).mockResolvedValue([vitalidade]);
 
       await service.execute('player-1', baseCommand({ skills }));
 
@@ -339,6 +341,7 @@ describe('CreateCharacterService', () => {
 
     it('rejects a bonus above the cap before creating', async () => {
       const { characters, service } = setup();
+      vi.mocked(characters.findSkillsByIds).mockResolvedValue([vitalidade]);
 
       await expect(
         service.execute(

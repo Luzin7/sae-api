@@ -15,6 +15,14 @@ describe('assertSkillPools', () => {
     ).toThrow(SkillPoolExceededError);
   });
 
+  it('names the attribute in pt-BR in the pool error', () => {
+    expect(() =>
+      assertSkillPools(makeCharacter(), 1, [
+        makeSkillDetail({ proficiencyBonus: 3 }),
+      ]),
+    ).toThrow('Orçamento de perícias de');
+  });
+
   it('accepts spending within the pool', () => {
     expect(() =>
       assertSkillPools(makeCharacter(), 1, [

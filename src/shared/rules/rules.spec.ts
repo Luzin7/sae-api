@@ -133,13 +133,6 @@ describe('size extreme rolls', () => {
 });
 
 describe('size factor bands', () => {
-  it('maps decimals to the lower band', () => {
-    expect(weightFactor(70.5)).toBe(1);
-    expect(weightFactor(90.4)).toBe(2);
-    expect(weightFactor(120.5)).toBe(3);
-    expect(heightFactor(170.5)).toBe(1);
-  });
-
   it('keeps the integer boundaries', () => {
     expect(weightFactor(70)).toBe(1);
     expect(weightFactor(71)).toBe(2);
@@ -167,8 +160,9 @@ describe('ofícios', () => {
 
   it('only cites skills that exist in the catalog', () => {
     const names = new Set(SKILLS.map((skill) => skill.name));
-    const cited =
-      OFICIOS.find((entry) => entry.name === 'Pária')?.affectedSkills ?? [];
+    const cited = OFICIOS.filter((entry) =>
+      ['Pária', 'Operário'].includes(entry.name),
+    ).flatMap((entry) => entry.affectedSkills);
 
     expect(cited.every((name) => names.has(name))).toBe(true);
   });

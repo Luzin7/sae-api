@@ -205,7 +205,7 @@ When combat is active, a player rolls initiative for their own character with th
 { "type": "session.test-closed", "testId": "uuid" }
 ```
 
-Closing an already closed test is a silent no-op (no event). An unknown `testId` returns `404 NOT_FOUND` (`Teste não encontrado.`). Once closed, nobody can roll that test, the master included.
+Closing an already closed test is a silent no-op (no event). Two simultaneous close requests may both pass the check and write two `test_closed` rows, broadcasting `session.test-closed` twice; the web ignores the repeat. An unknown `testId` returns `404 NOT_FOUND` (`Teste não encontrado.`). Once closed, nobody can roll that test, the master included.
 
 On `session.join` the joining socket receives, in order: `chat.history`, `session.test-snapshot`, and `session.combat` (only when a combat exists). Both snapshots go only to the joining socket.
 
