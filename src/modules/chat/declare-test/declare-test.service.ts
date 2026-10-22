@@ -6,9 +6,13 @@ import {
 } from '../chat.authorization.js';
 import type { InMemoryMessageBus } from '../chat.bus.js';
 import { chatRoom, type RealtimeEvent } from '../chat.entity.js';
-import { TestTargetNotFoundError } from '../chat.errors.js';
+import {
+  InvalidDifficultyGradeError,
+  TestTargetNotFoundError,
+} from '../chat.errors.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
 import type { CombatantSource } from '../combatant-source.contract.js';
+import { difficultyByGrade } from '@shared/rules/difficulty.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import type { TestDeclaredPayload } from '@modules/session/session.entity.js';
 
@@ -16,7 +20,7 @@ export interface DeclareTestInput {
   playerId: string;
   sessionId: string;
   skillId: string;
-  cd: number;
+  grade: number;
   mode: 'open' | 'targeted';
   targetCharacterId: string | null;
 }
@@ -37,6 +41,8 @@ export class DeclareTestService {
       input.playerId,
     );
     requireGameMaster(game, input.playerId);
+    const cd = difficultyByGrade(input.grade);
+    if (cd === null) throw new InvalidDifficultyGradeError();
 
     const targeted = input.mode === 'targeted';
     const targetName = targeted
@@ -45,7 +51,8 @@ export class DeclareTestService {
     const test: TestDeclaredPayload = {
       testId: randomUUID(),
       skillId: input.skillId,
-      cd: input.cd,
+      grade: input.grade,
+      cd,
       mode: input.mode,
       targetCharacterId: targeted ? input.targetCharacterId : null,
       targetName,

@@ -27,6 +27,10 @@ export interface DiceRollPayload {
   testId?: string;
   cd?: number;
   success?: boolean;
+  characterId?: string;
+  skillId?: string;
+  declaredSkillId?: string;
+  grade?: number;
 }
 
 export interface HpChangePayload {
@@ -90,10 +94,15 @@ export interface CombatStatePayload {
 export interface TestDeclaredPayload {
   testId: string;
   skillId: string;
+  grade?: number;
   cd: number;
   mode: 'open' | 'targeted';
   targetCharacterId: string | null;
   targetName: string | null;
+}
+
+export interface TestClosedPayload {
+  testId: string;
 }
 
 export interface SessionEventPayloadMap {
@@ -107,6 +116,7 @@ export interface SessionEventPayloadMap {
   initiative: InitiativePayload;
   combat_state: CombatStatePayload;
   test_declared: TestDeclaredPayload;
+  test_closed: TestClosedPayload;
 }
 
 export type SessionEventType = keyof SessionEventPayloadMap;
@@ -124,6 +134,10 @@ export const DiceRollPayloadSchema = z.object({
   testId: z.string().min(1).optional(),
   cd: z.number().int().optional(),
   success: z.boolean().optional(),
+  characterId: z.string().min(1).optional(),
+  skillId: z.string().min(1).optional(),
+  declaredSkillId: z.string().min(1).optional(),
+  grade: z.number().int().optional(),
 });
 
 export const HpChangePayloadSchema = z.object({
@@ -187,10 +201,15 @@ export const CombatStatePayloadSchema = z.object({
 export const TestDeclaredPayloadSchema = z.object({
   testId: z.string().min(1),
   skillId: z.string().min(1),
+  grade: z.number().int().optional(),
   cd: z.number().int(),
   mode: z.enum(['open', 'targeted']),
   targetCharacterId: z.string().min(1).nullable(),
   targetName: z.string().min(1).nullable(),
+});
+
+export const TestClosedPayloadSchema = z.object({
+  testId: z.string().min(1),
 });
 
 export const SessionEventPayloadSchemas: Record<
@@ -207,6 +226,7 @@ export const SessionEventPayloadSchemas: Record<
   initiative: InitiativePayloadSchema,
   combat_state: CombatStatePayloadSchema,
   test_declared: TestDeclaredPayloadSchema,
+  test_closed: TestClosedPayloadSchema,
 };
 
 export function parseSessionEventPayload(

@@ -50,6 +50,11 @@ export const sessionLog = pgTable(
   (t) => [
     index('session_log_session_idx').on(t.sessionId),
     index('session_log_player_idx').on(t.playerId),
+    uniqueIndex('session_log_test_roll_unique')
+      .on(sql`(${t.payload}->>'testId')`, sql`(${t.payload}->>'characterId')`)
+      .where(
+        sql`${t.eventType} = 'dice_roll' AND (${t.payload}->>'testId') IS NOT NULL AND (${t.payload}->>'characterId') IS NOT NULL`,
+      ),
   ],
 );
 

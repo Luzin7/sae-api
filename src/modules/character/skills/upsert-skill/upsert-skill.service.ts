@@ -11,6 +11,7 @@ import {
 } from '../../character.errors.js';
 import type { CharacterRepository } from '../../character.repository.js';
 import { proficiencyLevelFor } from '../proficiency-field.js';
+import { assertSkillBonusCaps } from '../skill-allocation.js';
 
 export class UpsertSkillService {
   constructor(private readonly characters: CharacterRepository) {}
@@ -27,6 +28,14 @@ export class UpsertSkillService {
     );
     const skill = await this.characters.findSkillById(input.skillId);
     if (!skill) throw new SkillNotFoundError();
+    assertSkillBonusCaps(character, [
+      {
+        skillId: skill.id,
+        skillName: skill.name,
+        attribute: skill.attribute,
+        proficiencyBonus: input.proficiencyBonus,
+      },
+    ]);
 
     const pool = proficiencyPool(
       proficiencyLevelFor(character, skill.attribute),

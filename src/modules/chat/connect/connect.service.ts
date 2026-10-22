@@ -3,11 +3,17 @@ import {
   requireChatSession,
 } from '../chat.authorization.js';
 import type { InMemoryMessageBus } from '../chat.bus.js';
-import { type ChatMessage, chatRoom } from '../chat.entity.js';
+import {
+  type ChatMessage,
+  chatRoom,
+  type OpenTestSnapshot,
+} from '../chat.entity.js';
 import { resolvePlayerSummary, resolvePresence } from '../chat.players.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
 import { CHAT_HISTORY_LIMIT } from '../chat.schemas.js';
+import type { CombatRepository } from '../combat.repository.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
+import type { CombatStatePayload } from '@modules/session/session.entity.js';
 import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
 
 export interface ConnectInput {
@@ -18,6 +24,8 @@ export interface ConnectInput {
 
 export interface ConnectResult {
   history: ChatMessage[];
+  openTest: OpenTestSnapshot | null;
+  combat: CombatStatePayload | null;
 }
 
 export class ConnectService {
@@ -26,6 +34,7 @@ export class ConnectService {
     private readonly access: GameAccess,
     private readonly players: PlayerDirectory,
     private readonly bus: InMemoryMessageBus,
+    private readonly combat: CombatRepository,
   ) {}
 
   async execute(input: ConnectInput): Promise<ConnectResult> {
@@ -67,6 +76,26 @@ export class ConnectService {
       CHAT_HISTORY_LIMIT,
     );
 
-    return { history };
+    const openTest = await this.resolveOpenTest(input.sessionId);
+    const combat = await this.combat.findState(input.sessionId);
+
+    return { history, openTest, combat };
+  }
+
+  private async resolveOpenTest(
+    sessionId: string,
+  ): Promise<OpenTestSnapshot | null> {
+    const test = await this.messages.findLatestTest(sessionId);
+    if (!test) return null;
+
+    const closed = await this.messages.isTestClosed(sessionId, test.testId);
+    if (closed) return null;
+
+    const rolledCharacterIds = await this.messages.listTestRollers(
+      sessionId,
+      test.testId,
+    );
+
+    return { ...test, rolledCharacterIds };
   }
 }

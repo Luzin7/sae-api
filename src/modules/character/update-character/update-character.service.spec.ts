@@ -358,4 +358,25 @@ describe('UpdateCharacterService', () => {
       ).execute('char-1', 'master-1', { np: 3 }),
     ).rejects.toBeInstanceOf(SkillPoolExceededError);
   });
+
+  it('keeps legacy free-text afflictions when the patch omits them', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ afflictions: ['medo de altura'] }),
+    );
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+
+    await new UpdateCharacterService(
+      characters,
+      makeMembership(),
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('char-1', 'player-1', { nickname: 'Renamed' });
+
+    expect(characters.save).toHaveBeenCalledWith(
+      'char-1',
+      expect.not.objectContaining({ afflictions: expect.anything() }),
+    );
+  });
 });

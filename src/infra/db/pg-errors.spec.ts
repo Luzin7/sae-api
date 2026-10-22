@@ -1,0 +1,49 @@
+import { DrizzleQueryError } from 'drizzle-orm/errors';
+import { describe, expect, it } from 'vitest';
+import { isUniqueViolation } from './pg-errors.js';
+
+const CONSTRAINT = 'session_log_test_roll_unique';
+
+function pgError(code: string, constraint: string): Error {
+  return Object.assign(new Error('pg'), {
+    code,
+    constraint_name: constraint,
+  });
+}
+
+describe('isUniqueViolation', () => {
+  it('unwraps the cause of a DrizzleQueryError', () => {
+    const error = new DrizzleQueryError(
+      'insert',
+      [],
+      pgError('23505', CONSTRAINT),
+    );
+
+    expect(isUniqueViolation(error, CONSTRAINT)).toBe(true);
+  });
+
+  it('rejects another constraint', () => {
+    const error = new DrizzleQueryError(
+      'insert',
+      [],
+      pgError('23505', 'other'),
+    );
+
+    expect(isUniqueViolation(error, CONSTRAINT)).toBe(false);
+  });
+
+  it('rejects another error code', () => {
+    const error = new DrizzleQueryError(
+      'insert',
+      [],
+      pgError('23503', CONSTRAINT),
+    );
+
+    expect(isUniqueViolation(error, CONSTRAINT)).toBe(false);
+  });
+
+  it('rejects an error without cause and non-errors', () => {
+    expect(isUniqueViolation(new Error('x'), CONSTRAINT)).toBe(false);
+    expect(isUniqueViolation(null, CONSTRAINT)).toBe(false);
+  });
+});

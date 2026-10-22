@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { AFFLICTION_KEYS } from '@shared/rules/afflictions.js';
+import { SKILLS } from '@shared/rules/skills.js';
 import {
   HEIGHT_EXACT_MAX,
   HEIGHT_EXACT_MIN,
@@ -8,6 +10,11 @@ import {
 
 const HEIGHT_RANGE_MESSAGE = `Altura deve estar entre ${HEIGHT_EXACT_MIN} e ${HEIGHT_EXACT_MAX} cm.`;
 const WEIGHT_RANGE_MESSAGE = `Peso deve estar entre ${WEIGHT_EXACT_MIN} e ${WEIGHT_EXACT_MAX} kg.`;
+
+const AFFLICTION_MESSAGE = 'Aflição inválida.';
+const DUPLICATE_SKILL_MESSAGE = 'Perícia repetida.';
+const DUPLICATE_AFFLICTION_MESSAGE = 'Aflição repetida.';
+const WEIGHT_INTEGER_MESSAGE = 'Peso deve ser um número inteiro.';
 
 const AttributeSchema = z.union([
   z.literal(-5),
@@ -47,6 +54,7 @@ const SheetFields = {
   heightRoll: z.enum(['min', 'max']).optional(),
   weightKg: z
     .number()
+    .int(WEIGHT_INTEGER_MESSAGE)
     .min(WEIGHT_EXACT_MIN, WEIGHT_RANGE_MESSAGE)
     .max(WEIGHT_EXACT_MAX, WEIGHT_RANGE_MESSAGE)
     .optional(),
@@ -54,12 +62,20 @@ const SheetFields = {
   background: z.string().max(2000).optional(),
   profession: z.string().max(100).optional(),
   motivation: z.string().max(1000).optional(),
-  afflictions: z.array(z.string().max(1000)).optional(),
+  afflictions: z
+    .array(z.enum(AFFLICTION_KEYS, { message: AFFLICTION_MESSAGE }))
+    .max(AFFLICTION_KEYS.length)
+    .optional(),
   personality: z.string().min(1).max(50),
   posture: z.string().min(1).max(50),
   socialClass: SocialClassSchema,
   bonds: z.string().max(2000).optional(),
 };
+
+export const UpsertSkillBodySchema = z.object({
+  skillId: z.string().uuid(),
+  proficiencyBonus: z.number().int().min(0),
+});
 
 const CharacterSheetBodySchema = z.object({
   gameId: z.string().uuid(),
@@ -84,14 +100,14 @@ const SIZE_SOURCE_RULES: readonly SizeSourceRule[] = [
   {
     exact: 'heightCm',
     roll: 'heightRoll',
-    missingMessage: 'Informe heightCm ou heightRoll.',
-    conflictMessage: 'Informe apenas heightCm ou heightRoll.',
+    missingMessage: 'Informe a altura ou escolha rolar.',
+    conflictMessage: 'Informe a altura ou a rolagem, não as duas.',
   },
   {
     exact: 'weightKg',
     roll: 'weightRoll',
-    missingMessage: 'Informe weightKg ou weightRoll.',
-    conflictMessage: 'Informe apenas weightKg ou weightRoll.',
+    missingMessage: 'Informe o peso ou escolha rolar.',
+    conflictMessage: 'Informe o peso ou a rolagem, não as duas.',
   },
 ];
 
@@ -130,16 +146,52 @@ function refineSizeSources(required: boolean) {
   };
 }
 
-export const CreateCharacterBodySchema = CharacterSheetBodySchema.superRefine(
-  refineSizeSources(true),
-);
+function refineUniqueSkills(
+  input: { skills: { skillId: string }[] },
+  ctx: z.RefinementCtx,
+): void {
+  const ids = input.skills.map((skill) => skill.skillId);
+  if (new Set(ids).size === ids.length) return;
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['skills'],
+    message: DUPLICATE_SKILL_MESSAGE,
+  });
+}
+
+function refineUniqueAfflictions(
+  input: { afflictions?: string[] },
+  ctx: z.RefinementCtx,
+): void {
+  const afflictions = input.afflictions ?? [];
+  if (new Set(afflictions).size === afflictions.length) return;
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['afflictions'],
+    message: DUPLICATE_AFFLICTION_MESSAGE,
+  });
+}
+
+export const CreateCharacterBodySchema = CharacterSheetBodySchema.omit({
+  np: true,
+})
+  .extend({
+    skills: z.array(UpsertSkillBodySchema).max(SKILLS.length).default([]),
+  })
+  .superRefine(refineSizeSources(true))
+  .superRefine(refineUniqueSkills)
+  .superRefine(refineUniqueAfflictions);
 
 const UpdateCharacterSheetBodySchema = CharacterSheetBodySchema.omit({
   gameId: true,
 }).partial();
 
 export const UpdateCharacterBodySchema =
-  UpdateCharacterSheetBodySchema.superRefine(refineSizeSources(false));
+  UpdateCharacterSheetBodySchema.superRefine(
+    refineSizeSources(false),
+  ).superRefine(refineUniqueAfflictions);
 
 export const UpdateVitalsBodySchema = z
   .object({
@@ -184,11 +236,6 @@ export const CreateItemBodySchema = z.object({
 });
 
 export const UpdateItemBodySchema = CreateItemBodySchema.partial();
-
-export const UpsertSkillBodySchema = z.object({
-  skillId: z.string().uuid(),
-  proficiencyBonus: z.number().int().min(0),
-});
 
 export const CharacterParamsSchema = z.object({
   id: z.string().min(1),

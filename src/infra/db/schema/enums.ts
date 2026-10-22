@@ -48,6 +48,7 @@ export const eventTypeEnum = pgEnum('event_type', [
   'initiative',
   'combat_state',
   'test_declared',
+  'test_closed',
 ]);
 
 export const combatantKindEnum = pgEnum('combatant_kind', [

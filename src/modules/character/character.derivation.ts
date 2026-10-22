@@ -4,11 +4,9 @@ import {
   type SocialClassKey,
 } from '@shared/rules/social-classes.js';
 import { sizeCategory, sizeFactorMean } from '@shared/rules/size.js';
-import type {
-  CharacterSkillDetail,
-  ProficiencyScores,
-} from './character.entity.js';
+import type { ProficiencyScores } from './character.entity.js';
 import { InvalidArchetypeError } from './character.errors.js';
+import type { SkillAllocationDetail } from './skills/skill-allocation.js';
 
 export type Rng = (min: number, max: number) => number;
 
@@ -53,7 +51,7 @@ export function deriveVaalaques(socialClass: SocialClassKey, rng: Rng): number {
 }
 
 export function proficiencyBonus(
-  skills: readonly CharacterSkillDetail[],
+  skills: readonly SkillAllocationDetail[],
   skillName: string,
 ): number {
   const skill = skills.find((entry) => entry.skillName === skillName);

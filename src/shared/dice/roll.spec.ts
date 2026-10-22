@@ -23,9 +23,19 @@ describe('rollAttribute', () => {
     expect(result.kind).toBe('single');
   });
 
-  it('returns qty = |attrValue| + 1 rolls', () => {
-    expect(rollAttribute(3, fixedRng).rolls).toHaveLength(4);
-    expect(rollAttribute(-2, fixedRng).rolls).toHaveLength(3);
+  it.each([
+    [-5, 5],
+    [-4, 4],
+    [-3, 3],
+    [-2, 2],
+    [-1, 1],
+    [1, 1],
+    [2, 2],
+    [3, 3],
+    [4, 4],
+    [5, 5],
+  ])('rolls the dice count for attribute %i', (attrValue, quantity) => {
+    expect(rollAttribute(attrValue, fixedRng).rolls).toHaveLength(quantity);
   });
 
   it('picks the best roll for a positive attribute', () => {
@@ -48,7 +58,7 @@ describe('rollAttribute', () => {
     };
 
     const { rolls } = rollAttribute(4, rng);
-    expect(rolls).toHaveLength(5);
+    expect(rolls).toHaveLength(4);
     for (const [min, max] of calls) {
       expect(min).toBe(1);
       expect(max).toBe(20);

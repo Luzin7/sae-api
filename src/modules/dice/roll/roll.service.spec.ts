@@ -28,7 +28,7 @@ describe('RollService.execute', () => {
     expect(result.attribute).toBe('PSI');
   });
 
-  it('rolls qty = |attrValue| + 1 dice and picks the best for a positive attribute', () => {
+  it('rolls qty = |attrValue| dice and picks the best for a positive attribute', () => {
     const result = service.execute({
       attribute: 'CON',
       attrValue: 2,
@@ -36,7 +36,7 @@ describe('RollService.execute', () => {
       bExp: 0,
     });
 
-    expect(result.rolls).toHaveLength(3);
+    expect(result.rolls).toHaveLength(2);
     expect(result.kind).toBe('best');
   });
 

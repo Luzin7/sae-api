@@ -404,7 +404,7 @@ describe('DeclareTestService and RollDiceService', () => {
       playerId: MASTER_ID,
       sessionId: SESSION_ID,
       skillId: SKILL_ID,
-      cd: 12,
+      grade: 2,
       mode: 'targeted',
       targetCharacterId: CHARACTER_ID,
     });
@@ -418,7 +418,7 @@ describe('DeclareTestService and RollDiceService', () => {
     });
 
     expect(roll.testId).toBe(test.testId);
-    expect(roll.cd).toBe(12);
+    expect(roll.cd).toBe(10);
     expect(roll.success).toBe(true);
   });
 
@@ -428,7 +428,7 @@ describe('DeclareTestService and RollDiceService', () => {
       playerId: MASTER_ID,
       sessionId: SESSION_ID,
       skillId: SKILL_ID,
-      cd: 20,
+      grade: 4,
       mode: 'targeted',
       targetCharacterId: CHARACTER_ID,
     });
@@ -504,7 +504,7 @@ describe('persisted log payloads', () => {
       playerId: MASTER_ID,
       sessionId: SESSION_ID,
       skillId: SKILL_ID,
-      cd: 12,
+      grade: 2,
       mode: 'targeted',
       targetCharacterId: CHARACTER_ID,
     });
@@ -515,7 +515,8 @@ describe('persisted log payloads', () => {
         payload: expect.objectContaining({
           testId: test.testId,
           skillId: SKILL_ID,
-          cd: 12,
+          grade: 2,
+          cd: 10,
           mode: 'targeted',
           targetCharacterId: CHARACTER_ID,
           targetName: 'Ana',
@@ -530,7 +531,7 @@ describe('persisted log payloads', () => {
       playerId: MASTER_ID,
       sessionId: SESSION_ID,
       skillId: SKILL_ID,
-      cd: 12,
+      grade: 2,
       mode: 'targeted',
       targetCharacterId: CHARACTER_ID,
     });
@@ -549,7 +550,7 @@ describe('persisted log payloads', () => {
         payload: expect.objectContaining({
           total: 15,
           testId: test.testId,
-          cd: 12,
+          cd: 10,
           success: true,
         }),
       }),

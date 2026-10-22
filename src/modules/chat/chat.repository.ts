@@ -13,6 +13,10 @@ export interface DiceRollLogPayload {
   testId?: string;
   cd?: number;
   success?: boolean;
+  characterId?: string;
+  skillId?: string;
+  declaredSkillId?: string;
+  grade?: number;
 }
 
 export interface HpChangeLogPayload {
@@ -70,10 +74,15 @@ export interface CombatStateLogPayload {
 export interface TestDeclaredLogPayload {
   testId: string;
   skillId: string;
+  grade?: number;
   cd: number;
   mode: 'open' | 'targeted';
   targetCharacterId: string | null;
   targetName: string | null;
+}
+
+export interface TestClosedLogPayload {
+  testId: string;
 }
 
 /**
@@ -92,6 +101,7 @@ export interface SessionLogPayloadMap {
   initiative: InitiativeLogPayload;
   combat_state: CombatStateLogPayload;
   test_declared: TestDeclaredLogPayload;
+  test_closed: TestClosedLogPayload;
 }
 
 export type SessionLogEventType = keyof SessionLogPayloadMap;
@@ -125,9 +135,12 @@ export interface ChatMessageRepository {
     sessionId: string,
     testId: string,
   ): Promise<TestDeclaredPayload | null>;
+  findLatestTest(sessionId: string): Promise<TestDeclaredPayload | null>;
+  isTestClosed(sessionId: string, testId: string): Promise<boolean>;
   hasRolledTest(
     sessionId: string,
-    playerId: string,
     testId: string,
+    characterId: string,
   ): Promise<boolean>;
+  listTestRollers(sessionId: string, testId: string): Promise<string[]>;
 }

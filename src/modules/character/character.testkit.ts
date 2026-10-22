@@ -123,6 +123,7 @@ export function makeCharacterRepository(): CharacterRepository {
     findSkills: vi.fn(),
     findSkillDetails: vi.fn(),
     findSkillById: vi.fn(),
+    findSkillsByIds: vi.fn(),
     upsertSkill: vi.fn(),
   };
 }

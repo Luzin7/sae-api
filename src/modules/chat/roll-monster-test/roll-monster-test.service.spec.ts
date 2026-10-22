@@ -95,7 +95,7 @@ describe('RollMonsterTestService', () => {
       monsterId: 'monster-1',
       name: 'Goblin',
       attribute: 'cognition',
-      rolls: [12, 12, 12],
+      rolls: [12, 12],
       result: 12,
       kind: 'best',
     });
@@ -105,7 +105,7 @@ describe('RollMonsterTestService', () => {
       eventType: 'dice_roll',
       payload: {
         expression: 'Goblin — cognition',
-        results: [12, 12, 12],
+        results: [12, 12],
         total: 12,
       },
     });
