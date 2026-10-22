@@ -22,6 +22,16 @@ describe('isUniqueViolation', () => {
     expect(isUniqueViolation(error, CONSTRAINT)).toBe(true);
   });
 
+  it('matches the game invite code constraint', () => {
+    const error = new DrizzleQueryError(
+      'insert',
+      [],
+      pgError('23505', 'game_invite_code_unique'),
+    );
+
+    expect(isUniqueViolation(error, 'game_invite_code_unique')).toBe(true);
+  });
+
   it('rejects another constraint', () => {
     const error = new DrizzleQueryError(
       'insert',
