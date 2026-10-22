@@ -21,6 +21,10 @@ export const ATTRIBUTES: readonly AttributeDefinition[] = [
   { key: 'perception', name: 'Percepção', abbr: 'PER' },
 ];
 
+export function attributeDisplayName(key: string): string {
+  return ATTRIBUTES.find((definition) => definition.key === key)?.name ?? key;
+}
+
 export const ATTRIBUTE_NAMES: readonly AttributeKey[] = [
   'cognition',
   'psyche',

@@ -11,7 +11,10 @@ import {
 } from '@modules/game/game.errors.js';
 import type { GameRepository } from '@modules/game/game.repository.js';
 import { db } from '../index.js';
+import { isUniqueViolation } from '../pg-errors.js';
 import { game, player, playerGame } from '../schema.js';
+
+const INVITE_CODE_CONSTRAINT = 'game_invite_code_unique';
 
 type GameRow = typeof game.$inferSelect;
 type GameInsert = typeof game.$inferInsert;
@@ -33,12 +36,6 @@ function toGame(row: GameRow): Game {
 
 function toPlayer(row: SummaryRow): GamePlayer {
   return { id: row.id, name: row.name };
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-
-  return 'code' in error && error.code === '23505';
 }
 
 function toChanges(input: UpdateGameInput): Partial<GameInsert> {
@@ -70,7 +67,8 @@ export function gameRepository(): GameRepository {
 
         return toGame(row);
       } catch (error) {
-        if (isUniqueViolation(error)) throw new InviteCodeConflictError();
+        if (isUniqueViolation(error, INVITE_CODE_CONSTRAINT))
+          throw new InviteCodeConflictError();
         throw error;
       }
     },

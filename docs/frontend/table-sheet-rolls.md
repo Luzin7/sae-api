@@ -246,7 +246,6 @@ WS frame: `{ "type": "error", "error": { "code", "message" } }`.
 - Show the initiative roll control when combat is active and the player's character has not rolled initiative yet; hide it when that entry's `hasRolled` is already true.
 - Master always sees roll controls.
 - Disable the test roll after a successful roll.
-- `POST /dice/roll` is a stateless calculator with no session effect — do not use it for table rolls.
 
 ## 6. Frontend checklist
 

@@ -68,8 +68,6 @@ import { UpdateCharacterService } from '@modules/character/update-character/upda
 import { UpdateVitalsService } from '@modules/character/update-vitals/update-vitals.service.js';
 import { CreateGameService } from '@modules/game/create-game/create-game.service.js';
 import { DeleteGameService } from '@modules/game/delete-game/delete-game.service.js';
-import type { DiceServices } from '@modules/dice/dice.routes.js';
-import { RollService } from '@modules/dice/roll/roll.service.js';
 import { GameQueryService } from '@modules/game/game-query.service.js';
 import type { GameRepository } from '@modules/game/game.repository.js';
 import type { GameServices } from '@modules/game/game.routes.js';
@@ -124,7 +122,6 @@ export interface Container {
     auth: AuthServices;
     session: SessionServices;
     game: GameServices;
-    dice: DiceServices;
     character: CharacterServices;
     bestiary: BestiaryServices;
     chat: ChatServices;
@@ -254,9 +251,6 @@ export function buildContainer(deps: {
         deleteGame: new DeleteGameService(games),
         leaveGame: new LeaveGameService(games),
         query: new GameQueryService(games, playerDirectory),
-      },
-      dice: {
-        roll: new RollService(systemRng),
       },
       character: {
         createCharacter: new CreateCharacterService(
