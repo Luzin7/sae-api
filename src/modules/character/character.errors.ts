@@ -37,7 +37,10 @@ export class InvalidAttributeError extends DomainError {
   readonly httpStatus = 400;
 
   constructor(attribute: string, value: number) {
-    super(`Valor de atributo inválido para ${attribute}: ${value}.`);
+    const attributeName =
+      ATTRIBUTES.find((definition) => definition.key === attribute)?.name ??
+      attribute;
+    super(`Valor de atributo inválido para ${attributeName}: ${value}.`);
   }
 }
 

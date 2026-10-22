@@ -48,6 +48,20 @@ describe('attributePointsSpent', () => {
   });
 });
 
+describe('InvalidAttributeError', () => {
+  it('names the attribute in pt-BR', () => {
+    expect(new InvalidAttributeError('cognition', 0).message).toBe(
+      'Valor de atributo inválido para Cognição: 0.',
+    );
+  });
+
+  it('falls back to the raw key for an unknown attribute', () => {
+    expect(new InvalidAttributeError('luck', 0).message).toBe(
+      'Valor de atributo inválido para luck: 0.',
+    );
+  });
+});
+
 describe('assertAttributeBudget', () => {
   it('accepts a spread within the np budget', () => {
     expect(() =>
