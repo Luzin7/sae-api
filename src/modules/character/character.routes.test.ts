@@ -707,6 +707,16 @@ describe('character size validation', () => {
     );
     expect(characters.save).not.toHaveBeenCalled();
   });
+
+  it('rejects an update with repeated afflictions', async () => {
+    const { res, characters } = await patchCharacter({
+      afflictions: ['fobia', 'fobia'],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.message).toContain('Aflição repetida.');
+    expect(characters.save).not.toHaveBeenCalled();
+  });
 });
 
 describe('character sheet creation contract', () => {

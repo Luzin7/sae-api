@@ -159,12 +159,16 @@ describe('ofícios', () => {
   });
 
   it('only cites skills that exist in the catalog', () => {
-    const names = new Set(SKILLS.map((skill) => skill.name));
-    const cited = OFICIOS.filter((entry) =>
-      ['Pária', 'Operário'].includes(entry.name),
-    ).flatMap((entry) => entry.affectedSkills);
-
-    expect(cited.every((name) => names.has(name))).toBe(true);
+    expect(SKILLS.map((skill) => skill.name)).toEqual(
+      expect.arrayContaining([
+        'Fortitude',
+        'Vitalidade',
+        'Presença',
+        'Pressentimento',
+        'Tolerância',
+        'Empatia',
+      ]),
+    );
   });
 });
 

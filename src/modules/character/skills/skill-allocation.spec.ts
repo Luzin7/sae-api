@@ -20,7 +20,7 @@ describe('assertSkillPools', () => {
       assertSkillPools(makeCharacter(), 1, [
         makeSkillDetail({ proficiencyBonus: 3 }),
       ]),
-    ).toThrow('Orçamento de perícias de');
+    ).toThrow('Orçamento de perícias de Constituição excedido: 3 de 2 pontos.');
   });
 
   it('accepts spending within the pool', () => {

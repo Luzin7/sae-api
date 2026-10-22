@@ -128,7 +128,7 @@ Legacy rows may still have `character.heightCm`, `character.weightKg` and `chara
 - height: `heightCm` XOR `heightRoll` (`'min' | 'max'`)
 - weight: `weightKg` XOR `weightRoll`
 
-Explicit ranges: `heightCm` 150–250, `weightKg` 50–150. Roll-resolved values may fall outside those ranges by design and are valid: height 140–149 / 251–270, weight 40–49 / 151–170.
+Explicit ranges: `heightCm` 150–250, `weightKg` 50–150 (`weightKg` must be whole kg). Roll-resolved values may fall outside those ranges by design and are valid: height 140–149 / 251–270, weight 40–49 / 151–170.
 
 `PATCH /characters/:id` stays partial: updating only `nickname` is valid. If a height or weight source is sent, still send only one per field.
 
@@ -137,17 +137,18 @@ Explicit ranges: `heightCm` 150–250, `weightKg` 50–150. Roll-resolved values
 HTTP 400 envelope:
 
 ```json
-{ "error": { "code": "VALIDATION", "message": "Dados inválidos: heightCm: Informe heightCm ou heightRoll.; weightKg: Informe weightKg ou weightRoll." } }
+{ "error": { "code": "VALIDATION", "message": "Dados inválidos: heightCm: Informe a altura ou escolha rolar.; weightKg: Informe o peso ou escolha rolar." } }
 ```
 
 | Case | Field path | Message |
 | --- | --- | --- |
-| Missing height | `heightCm` | Informe heightCm ou heightRoll. |
-| Missing weight | `weightKg` | Informe weightKg ou weightRoll. |
-| Both height sources | `heightCm` | Informe apenas heightCm ou heightRoll. |
-| Both weight sources | `weightKg` | Informe apenas weightKg ou weightRoll. |
+| Missing height | `heightCm` | Informe a altura ou escolha rolar. |
+| Missing weight | `weightKg` | Informe o peso ou escolha rolar. |
+| Both height sources | `heightCm` | Informe a altura ou a rolagem, não as duas. |
+| Both weight sources | `weightKg` | Informe o peso ou a rolagem, não as duas. |
 | Height out of range | `heightCm` | Altura deve estar entre 150 e 250 cm. |
 | Weight out of range | `weightKg` | Peso deve estar entre 50 e 150 kg. |
+| Weight not whole kg | `weightKg` | Peso deve ser um número inteiro. |
 
 The message is `Dados inválidos: <field>: <message>; <field>: <message>...`, so split it by `;` and take the prefix before the first `:` of each segment.
 
