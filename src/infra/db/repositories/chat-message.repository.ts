@@ -4,7 +4,10 @@ import {
   type TestDeclaredPayload,
   TestDeclaredPayloadSchema,
 } from '@modules/session/session.entity.js';
-import { ChatSessionNotFoundError } from '@modules/chat/chat.errors.js';
+import {
+  ChatAlreadyRolledError,
+  ChatSessionNotFoundError,
+} from '@modules/chat/chat.errors.js';
 import type {
   AppendChatMessageInput,
   AppendSessionLogInput,
@@ -12,6 +15,7 @@ import type {
   ChatSessionRef,
 } from '@modules/chat/chat.repository.js';
 import { db } from '../index.js';
+import { isUniqueViolation } from '../pg-errors.js';
 import { session, sessionLog } from '../schema.js';
 import { insertSessionLog } from './session-log.js';
 
@@ -23,6 +27,8 @@ function parseBody(payload: unknown): string {
 
   return typeof text === 'string' ? text : '';
 }
+
+const TEST_ROLL_UNIQUE = 'session_log_test_roll_unique';
 
 function toChatMessage(row: SessionLogRow): ChatMessage {
   return {
@@ -62,7 +68,14 @@ export function chatMessageRepository(): ChatMessageRepository {
     },
 
     async appendLog(input: AppendSessionLogInput): Promise<void> {
-      await insertSessionLog(db, input);
+      try {
+        await insertSessionLog(db, input);
+      } catch (error) {
+        if (isUniqueViolation(error, TEST_ROLL_UNIQUE)) {
+          throw new ChatAlreadyRolledError();
+        }
+        throw error;
+      }
     },
 
     async listRecentChat(
@@ -107,10 +120,48 @@ export function chatMessageRepository(): ChatMessageRepository {
       return parsed.data;
     },
 
+    async findLatestTest(
+      sessionId: string,
+    ): Promise<TestDeclaredPayload | null> {
+      const [row] = await db
+        .select({ payload: sessionLog.payload })
+        .from(sessionLog)
+        .where(
+          and(
+            eq(sessionLog.sessionId, sessionId),
+            eq(sessionLog.eventType, 'test_declared'),
+          ),
+        )
+        .orderBy(desc(sessionLog.createdAt))
+        .limit(1);
+      if (!row) return null;
+
+      const parsed = TestDeclaredPayloadSchema.safeParse(row.payload);
+      if (!parsed.success) return null;
+
+      return parsed.data;
+    },
+
+    async isTestClosed(sessionId: string, testId: string): Promise<boolean> {
+      const [row] = await db
+        .select({ id: sessionLog.id })
+        .from(sessionLog)
+        .where(
+          and(
+            eq(sessionLog.sessionId, sessionId),
+            eq(sessionLog.eventType, 'test_closed'),
+            sql`${sessionLog.payload}->>'testId' = ${testId}`,
+          ),
+        )
+        .limit(1);
+
+      return row !== undefined;
+    },
+
     async hasRolledTest(
       sessionId: string,
-      playerId: string,
       testId: string,
+      characterId: string,
     ): Promise<boolean> {
       const [row] = await db
         .select({ id: sessionLog.id })
@@ -118,14 +169,35 @@ export function chatMessageRepository(): ChatMessageRepository {
         .where(
           and(
             eq(sessionLog.sessionId, sessionId),
-            eq(sessionLog.playerId, playerId),
             eq(sessionLog.eventType, 'dice_roll'),
             sql`${sessionLog.payload}->>'testId' = ${testId}`,
+            sql`${sessionLog.payload}->>'characterId' = ${characterId}`,
           ),
         )
         .limit(1);
 
       return row !== undefined;
+    },
+
+    async listTestRollers(
+      sessionId: string,
+      testId: string,
+    ): Promise<string[]> {
+      const rows = await db
+        .selectDistinct({
+          characterId: sql<string>`${sessionLog.payload}->>'characterId'`,
+        })
+        .from(sessionLog)
+        .where(
+          and(
+            eq(sessionLog.sessionId, sessionId),
+            eq(sessionLog.eventType, 'dice_roll'),
+            sql`${sessionLog.payload}->>'testId' = ${testId}`,
+            sql`${sessionLog.payload}->>'characterId' IS NOT NULL`,
+          ),
+        );
+
+      return rows.map((row) => row.characterId);
     },
   };
 }

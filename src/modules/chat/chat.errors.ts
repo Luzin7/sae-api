@@ -104,6 +104,12 @@ export class InvalidDifficultyGradeError extends DomainError {
   }
 }
 
+export class ChatTestClosedError extends ConflictError {
+  constructor() {
+    super('Este teste já foi encerrado.');
+  }
+}
+
 export class ChatAlreadyRolledError extends ConflictError {
   constructor() {
     super('Você já rolou este teste.');

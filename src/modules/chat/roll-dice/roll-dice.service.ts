@@ -16,6 +16,7 @@ import {
   ChatNoActiveRollError,
   ChatNotYourTurnError,
   ChatSkillNotFoundError,
+  ChatTestClosedError,
   ChatTestNotFoundError,
   ChatTestNotTargetedError,
 } from '../chat.errors.js';
@@ -155,8 +156,8 @@ export class RollDiceService {
     }
     const alreadyRolled = await this.messages.hasRolledTest(
       input.sessionId,
-      input.playerId,
       test.testId,
+      input.characterId,
     );
     if (alreadyRolled) throw new ChatAlreadyRolledError();
   }
@@ -189,6 +190,12 @@ export class RollDiceService {
       input.testId,
     );
     if (!test) throw new ChatTestNotFoundError();
+
+    const closed = await this.messages.isTestClosed(
+      input.sessionId,
+      test.testId,
+    );
+    if (closed) throw new ChatTestClosedError();
 
     return test;
   }

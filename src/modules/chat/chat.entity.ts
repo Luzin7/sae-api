@@ -56,6 +56,11 @@ export interface DiceRolledEvent {
   grade?: number;
 }
 
+/** The newest declared test that is still open, with who already rolled it. */
+export interface OpenTestSnapshot extends TestDeclaredPayload {
+  rolledCharacterIds: string[];
+}
+
 /**
  * Bus events. A domain-level side effect the services publish; the gateway maps
  * it to a wire frame. Events are room-scoped, so they carry no socket concerns
@@ -89,6 +94,7 @@ export type RealtimeEvent =
     }
   | { type: 'session.combat'; state: CombatStatePayload }
   | { type: 'session.test-declared'; test: TestDeclaredPayload }
+  | { type: 'session.test-closed'; testId: string }
   | {
       type: 'session.monster-rolled';
       monsterId: string;

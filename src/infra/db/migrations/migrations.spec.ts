@@ -30,3 +30,22 @@ describe('0004_blue_pepper_potts', () => {
     expect(sql).toContain('"affliction" IS NOT NULL AND "afflictions" IS NULL');
   });
 });
+
+describe('0005_testes_sessao', () => {
+  const sql = migration('./0005_testes_sessao.sql');
+
+  it('references test_closed only in the ALTER TYPE', () => {
+    const occurrences = sql.match(/test_closed/g) ?? [];
+
+    expect(occurrences).toHaveLength(1);
+    expect(sql).toContain(
+      `ALTER TYPE "public"."event_type" ADD VALUE IF NOT EXISTS 'test_closed'`,
+    );
+  });
+
+  it('requires both keys to be present in the unique index predicate', () => {
+    expect(sql).toContain("(payload->>'testId') IS NOT NULL");
+    expect(sql).toContain("(payload->>'characterId') IS NOT NULL");
+    expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS');
+  });
+});

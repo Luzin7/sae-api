@@ -30,7 +30,10 @@ export function makeChatMessages(): ChatMessageRepository {
     appendLog: vi.fn(),
     listRecentChat: vi.fn(),
     findTestById: vi.fn(),
+    findLatestTest: vi.fn(),
+    isTestClosed: vi.fn(),
     hasRolledTest: vi.fn(),
+    listTestRollers: vi.fn(),
   };
 }
 

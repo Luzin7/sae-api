@@ -35,6 +35,7 @@ import type { ChatServices } from '@modules/chat/chat.gateway.js';
 import type { CombatantSource } from '@modules/chat/combatant-source.contract.js';
 import type { CombatRepository } from '@modules/chat/combat.repository.js';
 import type { ChatMessageRepository } from '@modules/chat/chat.repository.js';
+import { CloseTestService } from '@modules/chat/close-test/close-test.service.js';
 import { ConnectService } from '@modules/chat/connect/connect.service.js';
 import { DeclareTestService } from '@modules/chat/declare-test/declare-test.service.js';
 import { EndCombatService } from '@modules/chat/end-combat/end-combat.service.js';
@@ -299,6 +300,7 @@ export function buildContainer(deps: {
           gameAccess,
           playerDirectory,
           bus,
+          combat,
         ),
         sendMessage: new SendMessageService(chatMessages, gameAccess, bus),
         rollDice: new RollDiceService(
@@ -353,6 +355,7 @@ export function buildContainer(deps: {
           combatants,
           bus,
         ),
+        closeTest: new CloseTestService(chatMessages, gameAccess, bus),
         rollMonsterTest: new RollMonsterTestService(
           chatMessages,
           gameAccess,

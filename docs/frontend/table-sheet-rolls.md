@@ -160,7 +160,7 @@ UI rule: never submit the form without one source per field; offer manual value 
 | Actor | Allowed when |
 | --- | --- |
 | Master | Always: any character, test or not, any turn. |
-| Player | Test roll: `testId` sent, the declared test is `open` **or** `targetCharacterId` equals their character, and they have not already rolled that `testId`. |
+| Player | Test roll: `testId` sent, the declared test is `open` **or** `targetCharacterId` equals their character, the test is not closed, and that character has not already rolled that `testId`. |
 | Player | Turn roll: no `testId`, combat is active, and the current combatant is their character (`entries[turnIndex].kind === 'character'` and `entries[turnIndex].refId === characterId`). |
 
 `dice.roll` frame fields: `sessionId`, `characterId`, `skillId` (all required) and `testId` (optional; send it for test rolls, omit it for turn rolls). The rolled `skillId` may differ from the test's skill; the roll is still judged against the test's `cd`.
@@ -197,6 +197,33 @@ When combat is active, a player rolls initiative for their own character with th
 
 `dice.rolled` carries `characterId` (always), plus `declaredSkillId` and `grade` when a test applied.
 
+#### Closing a test and state on join
+
+`master.close-test` frame (master only): `{ "type": "master.close-test", "sessionId": "uuid", "testId": "uuid" }`. The server persists a `test_closed` event and broadcasts `session.test-closed` to the whole room:
+
+```json
+{ "type": "session.test-closed", "testId": "uuid" }
+```
+
+Closing an already closed test is a silent no-op (no event). An unknown `testId` returns `404 NOT_FOUND` (`Teste não encontrado.`). Once closed, nobody can roll that test, the master included.
+
+On `session.join` the joining socket receives, in order: `chat.history`, `session.test-snapshot`, and `session.combat` (only when a combat exists). Both snapshots go only to the joining socket.
+
+```json
+{
+  "type": "session.test-snapshot",
+  "test": {
+    "testId": "uuid", "skillId": "uuid", "grade": 3, "cd": 15, "mode": "open",
+    "targetCharacterId": null, "targetName": null,
+    "rolledCharacterIds": ["uuid"]
+  }
+}
+```
+
+- `test` is `null` when the latest declared test is closed or no test was declared.
+- `rolledCharacterIds` lists the characters that already rolled that test; disable the roll button for those.
+- `session.combat` keeps the same shape described above.
+
 ### 5.3 Errors
 
 WS frame: `{ "type": "error", "error": { "code", "message" } }`.
@@ -207,7 +234,8 @@ WS frame: `{ "type": "error", "error": { "code", "message" } }`.
 | 403 `FORBIDDEN` | Nenhum teste ou turno ativo para rolar. | No test and combat inactive. |
 | 403 `FORBIDDEN` | Não é seu turno. | Combat active, another combatant's turn. |
 | 400 `VALIDATION` | Grau de dificuldade inválido. | `master.declare-test` with a `grade` outside 1..10. |
-| 409 `CONFLICT` | Você já rolou este teste. | Duplicate roll for the same `testId`. |
+| 409 `CONFLICT` | Você já rolou este teste. | Duplicate roll for the same `testId` by the same character (checked per character, not per player). |
+| 409 `CONFLICT` | Este teste já foi encerrado. | Roll on a closed test; applies to the master too. |
 
 ### 5.4 UI rules
 

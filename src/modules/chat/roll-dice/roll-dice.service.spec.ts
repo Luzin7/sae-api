@@ -7,9 +7,11 @@ import type {
 } from '../character-access.contract.js';
 import type { DiceRolledEvent } from '../chat.entity.js';
 import {
+  ChatAlreadyRolledError,
   ChatCharacterNotFoundError,
   ChatForbiddenError,
   ChatSkillNotFoundError,
+  ChatTestClosedError,
   ChatTestNotFoundError,
 } from '../chat.errors.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
@@ -58,27 +60,12 @@ const ASSOCIATION: CharacterSkillRef = {
   proficiencyBonus: 4,
 };
 
-type RollMessages = ChatMessageRepository & {
-  hasRolledTest(
-    sessionId: string,
-    playerId: string,
-    testId: string,
-  ): Promise<boolean>;
-};
+function makeRollMessages(): ChatMessageRepository {
+  const messages = makeChatMessages();
+  vi.mocked(messages.hasRolledTest).mockResolvedValue(false);
+  vi.mocked(messages.isTestClosed).mockResolvedValue(false);
 
-function makeRollMessages(): RollMessages {
-  return {
-    ...makeChatMessages(),
-    hasRolledTest: vi
-      .fn<
-        (
-          sessionId: string,
-          playerId: string,
-          testId: string,
-        ) => Promise<boolean>
-      >()
-      .mockResolvedValue(false),
-  };
+  return messages;
 }
 
 function makeEntry(
@@ -560,5 +547,78 @@ describe('RollDiceService', () => {
     });
 
     expect(result.testId).toBe('test-1');
+  });
+
+  describe('closed and duplicate tests', () => {
+    const openTest = {
+      testId: 'test-1',
+      skillId: 'skill-1',
+      cd: 15,
+      mode: 'open' as const,
+      targetCharacterId: null,
+      targetName: null,
+    };
+    const rollInput = {
+      playerId: 'p1',
+      sessionId: 'session-1',
+      characterId: 'char-1',
+      skillId: 'skill-1',
+      testId: 'test-1',
+    };
+
+    it('rejects a roll on a closed test with 409', async () => {
+      const { messages, service } = build();
+      vi.mocked(messages.findTestById).mockResolvedValue(openTest);
+      vi.mocked(messages.isTestClosed).mockResolvedValue(true);
+
+      await expect(service.execute(rollInput)).rejects.toBeInstanceOf(
+        ChatTestClosedError,
+      );
+      expect(messages.appendLog).not.toHaveBeenCalled();
+    });
+
+    it('rejects a closed test for the master too', async () => {
+      const { messages, access, characters, service } = build();
+      vi.mocked(access.findById).mockResolvedValue({
+        id: 'game-1',
+        masterId: 'p1',
+      });
+      vi.mocked(characters.findById).mockResolvedValue(
+        makeSnapshot({ playerId: 'someone-else' }),
+      );
+      vi.mocked(messages.findTestById).mockResolvedValue(openTest);
+      vi.mocked(messages.isTestClosed).mockResolvedValue(true);
+
+      await expect(service.execute(rollInput)).rejects.toBeInstanceOf(
+        ChatTestClosedError,
+      );
+    });
+
+    it('checks the already-rolled guard per character', async () => {
+      const { messages, service } = build();
+      vi.mocked(messages.findTestById).mockResolvedValue(openTest);
+
+      await service.execute(rollInput);
+
+      expect(messages.hasRolledTest).toHaveBeenCalledWith(
+        'session-1',
+        'test-1',
+        'char-1',
+      );
+    });
+
+    it('publishes nothing when the insert is rejected as a duplicate', async () => {
+      const { messages, bus, service } = build();
+      vi.mocked(messages.findTestById).mockResolvedValue(openTest);
+      vi.mocked(messages.appendLog).mockRejectedValue(
+        new ChatAlreadyRolledError(),
+      );
+      const publish = vi.spyOn(bus, 'publish');
+
+      await expect(service.execute(rollInput)).rejects.toBeInstanceOf(
+        ChatAlreadyRolledError,
+      );
+      expect(publish).not.toHaveBeenCalled();
+    });
   });
 });

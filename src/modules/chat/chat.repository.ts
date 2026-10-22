@@ -81,6 +81,10 @@ export interface TestDeclaredLogPayload {
   targetName: string | null;
 }
 
+export interface TestClosedLogPayload {
+  testId: string;
+}
+
 /**
  * Typed payloads per log event. The key set mirrors the `event_type` pgEnum and
  * the session slice's payload map, so `GET .../logs` can parse every row this
@@ -97,6 +101,7 @@ export interface SessionLogPayloadMap {
   initiative: InitiativeLogPayload;
   combat_state: CombatStateLogPayload;
   test_declared: TestDeclaredLogPayload;
+  test_closed: TestClosedLogPayload;
 }
 
 export type SessionLogEventType = keyof SessionLogPayloadMap;
@@ -130,9 +135,12 @@ export interface ChatMessageRepository {
     sessionId: string,
     testId: string,
   ): Promise<TestDeclaredPayload | null>;
+  findLatestTest(sessionId: string): Promise<TestDeclaredPayload | null>;
+  isTestClosed(sessionId: string, testId: string): Promise<boolean>;
   hasRolledTest(
     sessionId: string,
-    playerId: string,
     testId: string,
+    characterId: string,
   ): Promise<boolean>;
+  listTestRollers(sessionId: string, testId: string): Promise<string[]>;
 }

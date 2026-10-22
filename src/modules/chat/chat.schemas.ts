@@ -25,6 +25,16 @@ const PlayerPresenceWireSchema = z.object({
   characterIds: z.array(z.string()),
 });
 
+const TestDeclaredWireSchema = z.object({
+  testId: z.string(),
+  skillId: z.string(),
+  grade: z.number().int().optional(),
+  cd: z.number().int(),
+  mode: z.enum(['open', 'targeted']),
+  targetCharacterId: z.string().nullable(),
+  targetName: z.string().nullable(),
+});
+
 const CombatantWireSchema = z.object({
   combatantId: z.string(),
   kind: z.enum(['character', 'monster']),
@@ -101,6 +111,11 @@ export const InboundFrameSchema = z.discriminatedUnion('type', [
     grade: z.number().int().positive(),
     mode: z.enum(['open', 'targeted']),
     targetCharacterId: UuidSchema.nullable().optional(),
+  }),
+  z.object({
+    type: z.literal('master.close-test'),
+    sessionId: UuidSchema,
+    testId: UuidSchema,
   }),
   z.object({
     type: z.literal('master.monster-vitals-update'),
@@ -204,15 +219,13 @@ export const OutboundEventSchema = z.union([
     round: z.number().int(),
     entries: z.array(CombatantWireSchema),
   }),
+  TestDeclaredWireSchema.extend({ type: z.literal('session.test-declared') }),
+  z.object({ type: z.literal('session.test-closed'), testId: z.string() }),
   z.object({
-    type: z.literal('session.test-declared'),
-    testId: z.string(),
-    skillId: z.string(),
-    grade: z.number().int().optional(),
-    cd: z.number().int(),
-    mode: z.enum(['open', 'targeted']),
-    targetCharacterId: z.string().nullable(),
-    targetName: z.string().nullable(),
+    type: z.literal('session.test-snapshot'),
+    test: TestDeclaredWireSchema.extend({
+      rolledCharacterIds: z.array(z.string()),
+    }).nullable(),
   }),
   z.object({
     type: z.literal('session.monster-rolled'),

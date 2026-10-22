@@ -101,6 +101,10 @@ export interface TestDeclaredPayload {
   targetName: string | null;
 }
 
+export interface TestClosedPayload {
+  testId: string;
+}
+
 export interface SessionEventPayloadMap {
   dice_roll: DiceRollPayload;
   hp_change: HpChangePayload;
@@ -112,6 +116,7 @@ export interface SessionEventPayloadMap {
   initiative: InitiativePayload;
   combat_state: CombatStatePayload;
   test_declared: TestDeclaredPayload;
+  test_closed: TestClosedPayload;
 }
 
 export type SessionEventType = keyof SessionEventPayloadMap;
@@ -203,6 +208,10 @@ export const TestDeclaredPayloadSchema = z.object({
   targetName: z.string().min(1).nullable(),
 });
 
+export const TestClosedPayloadSchema = z.object({
+  testId: z.string().min(1),
+});
+
 export const SessionEventPayloadSchemas: Record<
   SessionEventType,
   z.ZodType<SessionEventPayload>
@@ -217,6 +226,7 @@ export const SessionEventPayloadSchemas: Record<
   initiative: InitiativePayloadSchema,
   combat_state: CombatStatePayloadSchema,
   test_declared: TestDeclaredPayloadSchema,
+  test_closed: TestClosedPayloadSchema,
 };
 
 export function parseSessionEventPayload(
