@@ -332,6 +332,7 @@ export function buildContainer(deps: {
           combatants,
           combat,
           bus,
+          systemRng,
         ),
         rollInitiative: new RollInitiativeService(
           chatMessages,
