@@ -277,6 +277,42 @@ describe('CreateCharacterService', () => {
     ).rejects.toBeInstanceOf(InvalidHeightError);
   });
 
+  it('normalizes bonds before persisting them', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+
+    await new CreateCharacterService(
+      characters,
+      membership,
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('player-1', baseCommand({ bonds: ' a , A , b ' }));
+
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.objectContaining({ bonds: ['A', 'B'] }),
+    );
+  });
+
+  it('leaves bonds untouched when they are omitted', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+
+    await new CreateCharacterService(
+      characters,
+      membership,
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('player-1', baseCommand());
+
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.not.objectContaining({ bonds: expect.anything() }),
+    );
+  });
+
   describe('with starting skills', () => {
     const VITALIDADE_ID = '11111111-1111-1111-1111-111111111111';
     const CONDICIONAMENTO_ID = '22222222-2222-2222-2222-222222222222';

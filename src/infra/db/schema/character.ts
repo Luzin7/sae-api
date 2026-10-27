@@ -111,7 +111,7 @@ export const character = pgTable(
     afflictions: text('afflictions').array(),
     socialClass: socialClassEnum('social_class'),
     vaalaques: integer('vaalaques').default(0).notNull(),
-    bonds: text('bonds'),
+    bonds: text('bonds').array(),
     personality: varchar('personality', {
       length: 50,
     }),

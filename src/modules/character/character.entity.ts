@@ -53,7 +53,7 @@ export interface Character extends AttributeScores, ProficiencyScores {
   afflictions: string[];
   socialClass: SocialClassKey | null;
   vaalaques: number;
-  bonds: string | null;
+  bonds: string[];
   personality: string | null;
   posture: string | null;
   createdAt: Date;
@@ -84,10 +84,11 @@ export interface UpsertSkillInput {
 }
 
 export interface CreateCharacterInput
-  extends CharacterSheetInput, ProficiencyScores {
+  extends Omit<CharacterSheetInput, 'bonds'>, ProficiencyScores {
   playerId: string;
   gameId: string;
   skills: UpsertSkillInput[];
+  bonds?: string[];
   hairColor: string | null;
   size: string | null;
   vaalaques: number;
@@ -130,7 +131,7 @@ export interface UpdateCharacterInput {
   afflictions?: AfflictionKey[];
   socialClass?: SocialClassKey;
   vaalaques?: number;
-  bonds?: string;
+  bonds?: string[];
   personality?: string;
   posture?: string;
 }
