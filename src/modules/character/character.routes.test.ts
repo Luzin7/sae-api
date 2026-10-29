@@ -4,18 +4,21 @@ import authPlugin from '../../plugins/auth.plugin.js';
 import rateLimitPlugin from '../../plugins/rate-limit.plugin.js';
 import { registerErrorHandler } from '@infra/http/error-handler.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
+import { CharacterVersionConflictError } from './character.errors.js';
 import { CharacterQueryService } from './character-query.service.js';
 import type { CharacterRepository } from './character.repository.js';
 import characterRoutes, { type CharacterServices } from './character.routes.js';
 import {
   makeCharacter,
   makeCharacterRepository,
+  makeCreateResult,
   makeItem,
   makeMembership,
   makeNotifier,
   makeSkill,
   makeSkillDetail,
   makeSkillSummary,
+  stubUpdateSheet,
 } from './character.testkit.js';
 import { CreateCharacterService } from './create-character/create-character.service.js';
 import { DeleteCharacterService } from './delete-character/delete-character.service.js';
@@ -32,6 +35,7 @@ import { UpdateVitalsService } from './update-vitals/update-vitals.service.js';
 process.env.JWT_SECRET = 'test-secret-key-for-tests-only';
 
 const GAME_ID = '11111111-1111-1111-1111-111111111111';
+const CLIENT_REQUEST_ID = '33333333-3333-3333-3333-333333333333';
 const SKILL_ID = '22222222-2222-2222-2222-222222222222';
 
 function fixedRng(): number {
@@ -92,6 +96,7 @@ function makeToken(
 function createPayload() {
   return {
     gameId: GAME_ID,
+    clientRequestId: CLIENT_REQUEST_ID,
     nickname: 'Hero',
     personality: 'Erudito',
     posture: 'Abrutalhado',
@@ -133,7 +138,7 @@ describe('character routes', () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
     vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
     const app = await buildTestApp(makeServices(characters, membership));
 
     const res = await app.inject({
@@ -155,7 +160,7 @@ describe('character routes', () => {
       masterId: 'player-1',
     });
     vi.mocked(membership.isMember).mockResolvedValue(false);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
     const app = await buildTestApp(makeServices(characters, membership));
 
     const res = await app.inject({
@@ -532,7 +537,7 @@ describe('character size validation', () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
     vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
     const app = await buildTestApp(makeServices(characters, membership));
 
     const res = await app.inject({
@@ -550,22 +555,20 @@ describe('character size validation', () => {
     stored: Parameters<typeof makeCharacter>[0] = {},
   ) {
     const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({
-        heightCm: 160,
-        weightKg: 60,
-        size: 'pequeno',
-        ...stored,
-      }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    const current = makeCharacter({
+      heightCm: 160,
+      weightKg: 60,
+      size: 'pequeno',
+      ...stored,
+    });
+    vi.mocked(characters.findById).mockResolvedValue(current);
+    stubUpdateSheet(characters, current);
     const app = await buildTestApp(makeServices(characters, makeMembership()));
 
     const res = await app.inject({
       method: 'PATCH',
       url: '/characters/char-1',
-      payload,
+      payload: { version: 0, ...payload },
       headers: { cookie: `token=${makeToken(app)}` },
     });
 
@@ -704,14 +707,8 @@ describe('character size validation', () => {
     const { res, characters } = await patchCharacter({ nickname: 'Renamed' });
 
     expect(res.statusCode).toBe(200);
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({
-        nickname: 'Renamed',
-        heightCm: 160,
-        weightKg: 60,
-      }),
-    );
+    expect(characters.updateSheet).toHaveBeenCalledOnce();
+    expect(res.json().character.version).toBe(0);
   });
 
   it('rejects an update with both heightCm and heightRoll', async () => {
@@ -724,7 +721,7 @@ describe('character size validation', () => {
     expect(res.json().error.message).toContain(
       'heightCm: Informe a altura ou a rolagem, não as duas.',
     );
-    expect(characters.save).not.toHaveBeenCalled();
+    expect(characters.updateSheet).not.toHaveBeenCalled();
   });
 
   it('rejects an update with heightCm outside the exact band', async () => {
@@ -734,7 +731,7 @@ describe('character size validation', () => {
     expect(res.json().error.message).toContain(
       'heightCm: Altura deve estar entre 150 e 250 cm.',
     );
-    expect(characters.save).not.toHaveBeenCalled();
+    expect(characters.updateSheet).not.toHaveBeenCalled();
   });
 
   it('rejects an update with repeated afflictions', async () => {
@@ -744,7 +741,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain('Aflição repetida.');
-    expect(characters.save).not.toHaveBeenCalled();
+    expect(characters.updateSheet).not.toHaveBeenCalled();
   });
 });
 
@@ -753,7 +750,7 @@ describe('character sheet creation contract', () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
     vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
     vi.mocked(characters.findSkillsByIds).mockResolvedValue([
       makeSkillSummary({ id: SKILL_ID }),
     ]);
@@ -771,17 +768,15 @@ describe('character sheet creation contract', () => {
 
   async function patchCharacter(payload: Record<string, unknown>) {
     const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ afflictions: ['medo de altura'] }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    const current = makeCharacter({ afflictions: ['medo de altura'] });
+    vi.mocked(characters.findById).mockResolvedValue(current);
+    stubUpdateSheet(characters, current);
     const app = await buildTestApp(makeServices(characters, makeMembership()));
 
     return app.inject({
       method: 'PATCH',
       url: '/characters/char-1',
-      payload,
+      payload: { version: 0, ...payload },
       headers: { cookie: `token=${makeToken(app)}` },
     });
   }
@@ -1004,13 +999,9 @@ describe('character write access', () => {
 
   it('lets the master change np on another player character', async () => {
     const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ playerId: 'other-player' }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(
-      makeCharacter({ playerId: 'other-player', np: 2 }),
-    );
+    const current = makeCharacter({ playerId: 'other-player' });
+    vi.mocked(characters.findById).mockResolvedValue(current);
+    stubUpdateSheet(characters, current);
     const app = await buildTestApp(
       makeServices(characters, masterMembership()),
     );
@@ -1018,7 +1009,7 @@ describe('character write access', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/characters/char-1',
-      payload: { np: 2 },
+      payload: { version: 0, np: 2 },
       headers: { cookie: `token=${makeToken(app)}` },
     });
 
@@ -1035,7 +1026,7 @@ describe('character write access', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/characters/char-1',
-      payload: { np: 2 },
+      payload: { version: 0, np: 2 },
       headers: { cookie: `token=${makeToken(app)}` },
     });
 
@@ -1142,5 +1133,115 @@ describe('character preview rate limit', () => {
     expect(blocked.json().error.code).toBe('RATE_LIMITED');
     expect(otherPlayer.statusCode).toBe(200);
     expect(otherEndpoint.statusCode).toBe(200);
+  });
+});
+
+describe('character write integrity contract', () => {
+  async function patch(
+    characters: CharacterRepository,
+    payload: Record<string, unknown>,
+  ) {
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    return app.inject({
+      method: 'PATCH',
+      url: '/characters/char-1',
+      payload,
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+  }
+
+  it('returns 409 CONFLICT when the version is stale', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.updateSheet).mockRejectedValue(
+      new CharacterVersionConflictError(),
+    );
+
+    const res = await patch(characters, { version: 0, nickname: 'X' });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('CONFLICT');
+  });
+
+  it('updates with the matching version and returns the next one', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.updateSheet).mockResolvedValue(
+      makeCharacter({ version: 4 }),
+    );
+
+    const res = await patch(characters, { version: 3, nickname: 'X' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().character.version).toBe(4);
+    expect(characters.updateSheet).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'char-1', expectedVersion: 3 }),
+    );
+  });
+
+  it('rejects an update without version', async () => {
+    const characters = makeCharacterRepository();
+
+    const res = await patch(characters, { nickname: 'X' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION');
+    expect(characters.updateSheet).not.toHaveBeenCalled();
+  });
+
+  it('rejects a create without clientRequestId', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    const app = await buildTestApp(makeServices(characters, membership));
+    const payload = { ...createPayload(), clientRequestId: undefined };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters',
+      payload,
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION');
+    expect(characters.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a create with a malformed clientRequestId', async () => {
+    const characters = makeCharacterRepository();
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters',
+      payload: { ...createPayload(), clientRequestId: 'not-a-uuid' },
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('answers a replayed create with 201 and the stored character', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(
+      makeCreateResult({
+        character: makeCharacter({ id: 'first-char' }),
+        created: false,
+      }),
+    );
+    const app = await buildTestApp(makeServices(characters, membership));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters',
+      payload: createPayload(),
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().character.id).toBe('first-char');
   });
 });

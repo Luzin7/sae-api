@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -118,11 +119,17 @@ export const character = pgTable(
     posture: varchar('posture', {
       length: 50,
     }),
+    version: integer('version').default(0).notNull(),
+    clientRequestId: uuid('client_request_id'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => [
     index('character_player_idx').on(t.playerId),
+    uniqueIndex('character_player_client_request_uq').on(
+      t.playerId,
+      t.clientRequestId,
+    ),
     index('character_game_idx').on(t.gameId),
     check('character_np_check', sql`${t.np} BETWEEN 1 AND 20`),
   ],

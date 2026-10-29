@@ -29,6 +29,7 @@ import {
 
 export type CreateCharacterCommand = Omit<CharacterSheetInput, 'np'> & {
   gameId: string;
+  clientRequestId: string;
   skills: UpsertSkillInput[];
 };
 
@@ -69,7 +70,7 @@ export class CreateCharacterService {
     const hairColor = hairColorForRoll(this.rng(1, 20));
 
     const { bonds, ...sheet } = input;
-    const character = await this.characters.create({
+    const { character, created } = await this.characters.create({
       ...sheet,
       ...bondsPatch(bonds),
       np: STARTING_NP,
@@ -87,7 +88,7 @@ export class CreateCharacterService {
       bExp: bExp(STARTING_NP),
     });
 
-    await this.notifier.notifyRosterChanged(character.gameId);
+    if (created) await this.notifier.notifyRosterChanged(character.gameId);
 
     return character;
   }

@@ -6,6 +6,8 @@ import type {
   CharacterItem,
   CharacterSkill,
   CharacterSkillDetail,
+  CreateCharacterResult,
+  SheetChanges,
   SkillSummary,
 } from './character.entity.js';
 import type { CharacterRepository } from './character.repository.js';
@@ -50,6 +52,7 @@ export function makeCharacter(overrides: Partial<Character> = {}): Character {
     bonds: [],
     personality: null,
     posture: null,
+    version: 0,
     createdAt: new Date('2024-01-01T00:00:00.000Z'),
     updatedAt: new Date('2024-01-01T00:00:00.000Z'),
     ...overrides,
@@ -114,6 +117,7 @@ export function makeCharacterRepository(): CharacterRepository {
     findByPlayer: vi.fn(),
     findByGame: vi.fn(),
     save: vi.fn(),
+    updateSheet: vi.fn(),
     delete: vi.fn(),
     findItems: vi.fn(),
     findItemById: vi.fn(),
@@ -142,4 +146,26 @@ export function makeNotifier(): GameSessionNotifier {
     notifyHpChanged: vi.fn().mockResolvedValue(undefined),
     notifyCombatChanged: vi.fn().mockResolvedValue(undefined),
   };
+}
+
+/** Runs the service's decision against `current` and records what it chose. */
+export function stubUpdateSheet(
+  characters: CharacterRepository,
+  current: Character = makeCharacter(),
+  skills: CharacterSkillDetail[] = [],
+): { changes: () => SheetChanges | undefined } {
+  let decided: SheetChanges | undefined;
+  vi.mocked(characters.updateSheet).mockImplementation(async (command) => {
+    decided = command.decide(current, skills);
+
+    return current;
+  });
+
+  return { changes: () => decided };
+}
+
+export function makeCreateResult(
+  overrides: Partial<CreateCharacterResult> = {},
+): CreateCharacterResult {
+  return { character: makeCharacter(), created: true, ...overrides };
 }

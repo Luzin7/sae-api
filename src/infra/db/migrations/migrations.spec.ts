@@ -71,3 +71,32 @@ describe('reusable bestiary entries migration', () => {
     expect(sql).toContain('"created_by" IS NULL');
   });
 });
+
+describe('0008_flowery_paper_doll', () => {
+  const sql = migration('./0008_flowery_paper_doll.sql');
+
+  it('adds only nullable or defaulted columns', () => {
+    expect(sql).toContain(
+      'ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 0 NOT NULL',
+    );
+    expect(sql).toContain(
+      'ALTER TABLE "character" ADD COLUMN IF NOT EXISTS "client_request_id" uuid;',
+    );
+    expect(sql).toContain(
+      'ALTER TABLE "monster" ADD COLUMN IF NOT EXISTS "client_request_id" uuid;',
+    );
+  });
+
+  it('can run twice', () => {
+    const statements = sql.split('--> statement-breakpoint');
+
+    for (const statement of statements) {
+      expect(statement).toContain('IF NOT EXISTS');
+    }
+  });
+
+  it('scopes the idempotency keys to the creator', () => {
+    expect(sql).toContain('("player_id","client_request_id")');
+    expect(sql).toContain('("created_by","client_request_id")');
+  });
+});

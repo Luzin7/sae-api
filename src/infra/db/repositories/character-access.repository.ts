@@ -93,7 +93,11 @@ export function characterAccessRepository(): CharacterAccess {
       return db.transaction(async (tx) => {
         const [row] = await tx
           .update(character)
-          .set({ currentHp: newHp, updatedAt: new Date() })
+          .set({
+            currentHp: newHp,
+            version: sql`${character.version} + 1`,
+            updatedAt: new Date(),
+          })
           .where(eq(character.id, characterId))
           .returning();
         if (!row) throw new ChatCharacterNotFoundError();
@@ -122,6 +126,7 @@ export function characterAccessRepository(): CharacterAccess {
           .update(character)
           .set({
             currentHp: sql`GREATEST(0, ${character.currentHp} - ${damage})`,
+            version: sql`${character.version} + 1`,
             updatedAt: new Date(),
           })
           .where(eq(character.id, characterId))

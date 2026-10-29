@@ -44,6 +44,7 @@ export interface MonsterSheetInput {
 export interface CreateMonsterInput extends MonsterSheetInput {
   gameId?: string | null;
   createdBy: string;
+  clientRequestId: string;
 }
 
 export type UpdateMonsterInput = Partial<MonsterSheetInput>;

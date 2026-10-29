@@ -12,6 +12,22 @@ import { toMonster, toMonsterChanges } from './monster.repository.mappers.js';
 
 const DEFAULT_ATTRIBUTE = -5;
 
+async function findReplayedCreate(input: CreateMonsterInput): Promise<Monster> {
+  const [existing] = await db
+    .select()
+    .from(monsterTable)
+    .where(
+      and(
+        eq(monsterTable.createdBy, input.createdBy),
+        eq(monsterTable.clientRequestId, input.clientRequestId),
+      ),
+    )
+    .limit(1);
+  if (!existing) throw new MonsterNotFoundError();
+
+  return toMonster(existing);
+}
+
 export function monsterRepository(): MonsterRepository {
   return {
     async create(input: CreateMonsterInput): Promise<Monster> {
@@ -36,11 +52,15 @@ export function monsterRepository(): MonsterRepository {
           weightKg: input.weightKg ?? null,
           notes: input.notes ?? null,
           createdBy: input.createdBy,
+          clientRequestId: input.clientRequestId,
+        })
+        .onConflictDoNothing({
+          target: [monsterTable.createdBy, monsterTable.clientRequestId],
         })
         .returning();
-      if (!row) throw new MonsterNotFoundError();
+      if (row) return toMonster(row);
 
-      return toMonster(row);
+      return findReplayedCreate(input);
     },
 
     async findById(id: string): Promise<Monster | null> {

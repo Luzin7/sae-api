@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ForbiddenError } from '@shared/errors/http-errors.js';
 import type { Rng } from '../character.derivation.js';
+import type {
+  Character,
+  CharacterSkillDetail,
+  SheetChanges,
+} from '../character.entity.js';
 import {
   AttributeBudgetExceededError,
+  CharacterVersionConflictError,
   InvalidAttributeError,
   InvalidHeightError,
   InvalidWeightError,
@@ -15,11 +21,44 @@ import {
   makeMembership,
   makeNotifier,
   makeSkillDetail,
+  stubUpdateSheet,
 } from '../character.testkit.js';
-import { UpdateCharacterService } from './update-character.service.js';
+import {
+  type UpdateCharacterCommand,
+  UpdateCharacterService,
+} from './update-character.service.js';
 
 function fixedRng(value: number): Rng {
   return () => value;
+}
+
+interface Scenario {
+  character?: Character;
+  skills?: CharacterSkillDetail[];
+  requester?: string;
+  input?: Partial<UpdateCharacterCommand>;
+}
+
+async function decide(scenario: Scenario): Promise<SheetChanges> {
+  const character = scenario.character ?? makeCharacter();
+  const characters = makeCharacterRepository();
+  vi.mocked(characters.findById).mockResolvedValue(character);
+  const stub = stubUpdateSheet(characters, character, scenario.skills);
+
+  await new UpdateCharacterService(
+    characters,
+    makeMembership(),
+    fixedRng(1),
+    makeNotifier(),
+  ).execute('char-1', scenario.requester ?? 'player-1', {
+    version: 0,
+    ...scenario.input,
+  });
+
+  const changes = stub.changes();
+  if (!changes) throw new Error('decision was not made');
+
+  return changes;
 }
 
 describe('UpdateCharacterService', () => {
@@ -38,275 +77,209 @@ describe('UpdateCharacterService', () => {
         makeMembership(),
         fixedRng(1),
         notifier,
-      ).execute('char-1', 'intruder', { nickname: 'X' }),
+      ).execute('char-1', 'intruder', { version: 0, nickname: 'X' }),
     ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(characters.updateSheet).not.toHaveBeenCalled();
+    expect(notifier.notifyRosterChanged).not.toHaveBeenCalled();
+  });
+
+  it('sends the request version to the repository', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    stubUpdateSheet(characters);
+
+    await new UpdateCharacterService(
+      characters,
+      makeMembership(),
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('char-1', 'player-1', { version: 7, nickname: 'X' });
+
+    expect(characters.updateSheet).toHaveBeenCalledWith({
+      id: 'char-1',
+      expectedVersion: 7,
+      decide: expect.any(Function),
+    });
+  });
+
+  it('propagates a version conflict without notifying the roster', async () => {
+    const characters = makeCharacterRepository();
+    const notifier = makeNotifier();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.updateSheet).mockRejectedValue(
+      new CharacterVersionConflictError(),
+    );
+
+    await expect(
+      new UpdateCharacterService(
+        characters,
+        makeMembership(),
+        fixedRng(1),
+        notifier,
+      ).execute('char-1', 'player-1', { version: 0, nickname: 'X' }),
+    ).rejects.toBeInstanceOf(CharacterVersionConflictError);
     expect(notifier.notifyRosterChanged).not.toHaveBeenCalled();
   });
 
   it('notifies the live roster after saving', async () => {
     const characters = makeCharacterRepository();
     const notifier = makeNotifier();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ playerId: 'other-player' }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(
-      makeCharacter({ playerId: 'other-player' }),
-    );
+    const stored = makeCharacter({ playerId: 'other-player' });
+    vi.mocked(characters.findById).mockResolvedValue(stored);
+    stubUpdateSheet(characters, stored);
 
     await new UpdateCharacterService(
       characters,
       makeMembership(),
       fixedRng(1),
       notifier,
-    ).execute('char-1', 'master-1', { nickname: 'Renamed' });
+    ).execute('char-1', 'master-1', { version: 0, nickname: 'Renamed' });
 
     expect(notifier.notifyRosterChanged).toHaveBeenCalledWith('game-1');
   });
 
   it('rejects a sheet whose attributes exceed the np budget', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-
     await expect(
-      new UpdateCharacterService(
-        characters,
-        makeMembership(),
-        fixedRng(1),
-        makeNotifier(),
-      ).execute('char-1', 'player-1', {
-        cognition: 5,
-        psyche: 5,
-        instinct: 5,
-        motricity: 5,
+      decide({
+        input: { cognition: 5, psyche: 5, instinct: 5, motricity: 5 },
       }),
     ).rejects.toBeInstanceOf(AttributeBudgetExceededError);
   });
 
   it('rejects -1/0 as attribute values', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-
-    await expect(
-      new UpdateCharacterService(
-        characters,
-        makeMembership(),
-        fixedRng(1),
-        makeNotifier(),
-      ).execute('char-1', 'player-1', { perception: 0 }),
-    ).rejects.toBeInstanceOf(InvalidAttributeError);
+    await expect(decide({ input: { perception: 0 } })).rejects.toBeInstanceOf(
+      InvalidAttributeError,
+    );
   });
 
   it('recomputes maxHp, maxEffort and bExp on a sheet change', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    const changes = await decide({
+      requester: 'master-1',
+      input: { np: 2, constitution: -2 },
+    });
 
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'master-1', { np: 2, constitution: -2 });
-
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({
-        np: 2,
-        constitution: -2,
-        maxHp: 20 + 2 * 8,
-        maxEffort: 20,
-        bExp: 1,
-      }),
-    );
+    expect(changes).toMatchObject({
+      np: 2,
+      constitution: -2,
+      maxHp: 20 + 2 * 8,
+      maxEffort: 20,
+      bExp: 1,
+    });
   });
 
   it('adds the Vitalidade/Condicionamento skill bonuses to the vitals', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ constitutionProficiency: 'especialista' }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([
-      makeSkillDetail({ skillName: 'Vitalidade', proficiencyBonus: 6 }),
-      makeSkillDetail({
-        skillId: '22222222-2222-2222-2222-222222222222',
-        skillName: 'Condicionamento',
-        proficiencyBonus: 4,
-      }),
-    ]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    const changes = await decide({
+      requester: 'master-1',
+      character: makeCharacter({ constitutionProficiency: 'especialista' }),
+      skills: [
+        makeSkillDetail({ skillName: 'Vitalidade', proficiencyBonus: 6 }),
+        makeSkillDetail({
+          skillId: '22222222-2222-2222-2222-222222222222',
+          skillName: 'Condicionamento',
+          proficiencyBonus: 4,
+        }),
+      ],
+      input: { np: 1 },
+    });
 
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'master-1', { np: 1 });
-
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({ maxHp: 20 + 1 * 6 + 6, maxEffort: 24 }),
-    );
+    expect(changes).toMatchObject({ maxHp: 20 + 1 * 6 + 6, maxEffort: 24 });
   });
 
-  it('clamps current vitals down to a reduced maximum', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ currentHp: 500, currentEffort: 500 }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+  it('never carries current vitals, which the repository clamps in SQL', async () => {
+    const changes = await decide({
+      requester: 'master-1',
+      character: makeCharacter({ currentHp: 500, currentEffort: 500 }),
+      input: { np: 1 },
+    });
 
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'master-1', { np: 1 });
+    expect(changes).not.toHaveProperty('currentHp');
+    expect(changes).not.toHaveProperty('currentEffort');
+    expect(changes).toMatchObject({ maxHp: 26, maxEffort: 20 });
+  });
 
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({ currentHp: 26, currentEffort: 20 }),
-    );
+  it('does not forward the version as a sheet field', async () => {
+    const changes = await decide({ input: { nickname: 'Renamed' } });
+
+    expect(changes).not.toHaveProperty('version');
   });
 
   it('re-derives proficiency levels when the archetype changes', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
-
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'player-1', {
-      personality: 'Erudito',
-      posture: 'Abrutalhado',
+    const changes = await decide({
+      input: { personality: 'Erudito', posture: 'Abrutalhado' },
     });
 
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({
-        cognitionProficiency: 'especialista',
-        constitutionProficiency: 'especialista',
-        psycheProficiency: 'imperito',
-      }),
-    );
+    expect(changes).toMatchObject({
+      cognitionProficiency: 'especialista',
+      constitutionProficiency: 'especialista',
+      psycheProficiency: 'imperito',
+    });
   });
 
-  it('recomputes vaalaques only when the social class changes', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ socialClass: 'plebeu', vaalaques: 80 }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+  it('keeps vaalaques when the social class is unchanged', async () => {
+    const changes = await decide({
+      character: makeCharacter({ socialClass: 'plebeu', vaalaques: 80 }),
+      input: { nickname: 'Renamed' },
+    });
 
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'player-1', { nickname: 'Renamed' });
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({ vaalaques: 80 }),
-    );
+    expect(changes.vaalaques).toBe(80);
+  });
 
-    vi.mocked(characters.save).mockClear();
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'player-1', { socialClass: 'opulento' });
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({ socialClass: 'opulento', vaalaques: 2 * 720 }),
-    );
+  it('recomputes vaalaques when the social class changes', async () => {
+    const changes = await decide({
+      character: makeCharacter({ socialClass: 'plebeu', vaalaques: 80 }),
+      input: { socialClass: 'opulento' },
+    });
+
+    expect(changes).toMatchObject({
+      socialClass: 'opulento',
+      vaalaques: 2 * 720,
+    });
   });
 
   it('persists the resolved roll and derives the size from it', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ heightCm: 160, weightKg: 60, size: 'pequeno' }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
-
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'player-1', { heightRoll: 'max' });
-
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({
-        heightCm: 251,
-        weightKg: 60,
-        size: 'medio',
-      }),
-    );
-  });
-
-  it('keeps the current appearance when nothing is informed', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ heightCm: 160, weightKg: 60, size: 'pequeno' }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
-
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'player-1', { nickname: 'Renamed' });
-
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({
+    const changes = await decide({
+      character: makeCharacter({
         heightCm: 160,
         weightKg: 60,
         size: 'pequeno',
       }),
-    );
+      input: { heightRoll: 'max' },
+    });
+
+    expect(changes).toMatchObject({
+      heightCm: 251,
+      weightKg: 60,
+      size: 'medio',
+    });
+  });
+
+  it('keeps the current appearance when nothing is informed', async () => {
+    const changes = await decide({
+      character: makeCharacter({
+        heightCm: 160,
+        weightKg: 60,
+        size: 'pequeno',
+      }),
+      input: { nickname: 'Renamed' },
+    });
+
+    expect(changes).toMatchObject({
+      heightCm: 160,
+      weightKg: 60,
+      size: 'pequeno',
+    });
   });
 
   it('rejects an ambiguous height update', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-
     await expect(
-      new UpdateCharacterService(
-        characters,
-        makeMembership(),
-        fixedRng(1),
-        makeNotifier(),
-      ).execute('char-1', 'player-1', { heightCm: 160, heightRoll: 'min' }),
+      decide({ input: { heightCm: 160, heightRoll: 'min' } }),
     ).rejects.toBeInstanceOf(InvalidHeightError);
   });
 
   it('rejects an exact weight outside the 50..150 band', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-
-    await expect(
-      new UpdateCharacterService(
-        characters,
-        makeMembership(),
-        fixedRng(1),
-        makeNotifier(),
-      ).execute('char-1', 'player-1', { weightKg: 151 }),
-    ).rejects.toBeInstanceOf(InvalidWeightError);
+    await expect(decide({ input: { weightKg: 151 } })).rejects.toBeInstanceOf(
+      InvalidWeightError,
+    );
   });
 
   it('forbids the owner from changing np', async () => {
@@ -319,104 +292,70 @@ describe('UpdateCharacterService', () => {
         makeMembership(),
         fixedRng(1),
         makeNotifier(),
-      ).execute('char-1', 'player-1', { np: 2 }),
+      ).execute('char-1', 'player-1', { version: 0, np: 2 }),
     ).rejects.toBeInstanceOf(NpMasterOnlyError);
+    expect(characters.updateSheet).not.toHaveBeenCalled();
   });
 
   it('allows the master to change np and recomputes bExp and maxHp', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    const changes = await decide({
+      requester: 'master-1',
+      input: { np: 2 },
+    });
 
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'master-1', { np: 2 });
-
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({ np: 2, bExp: 1, maxHp: 20 + 2 * 6 }),
-    );
+    expect(changes).toMatchObject({ np: 2, bExp: 1, maxHp: 20 + 2 * 6 });
   });
 
   it('rejects an np reduction that leaves a skill pool exceeded', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter({ np: 5 }));
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([
-      makeSkillDetail({ proficiencyBonus: 6 }),
-    ]);
-
     await expect(
-      new UpdateCharacterService(
-        characters,
-        makeMembership(),
-        fixedRng(1),
-        makeNotifier(),
-      ).execute('char-1', 'master-1', { np: 3 }),
+      decide({
+        requester: 'master-1',
+        character: makeCharacter({ np: 5 }),
+        skills: [makeSkillDetail({ proficiencyBonus: 6 })],
+        input: { np: 3 },
+      }),
     ).rejects.toBeInstanceOf(SkillPoolExceededError);
   });
 
-  it('normalizes bonds before saving them', async () => {
+  it('decides from the character locked by the repository, not the stale read', async () => {
     const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ constitution: -5 }),
+    );
+    const locked = makeCharacter({ np: 3, constitution: -2 });
+    const stub = stubUpdateSheet(characters, locked);
 
     await new UpdateCharacterService(
       characters,
       makeMembership(),
       fixedRng(1),
       makeNotifier(),
-    ).execute('char-1', 'player-1', { bonds: ' a , A , b ' });
+    ).execute('char-1', 'player-1', { version: 0, nickname: 'X' });
 
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.objectContaining({ bonds: ['A', 'B'] }),
-    );
+    expect(stub.changes()).toMatchObject({ np: 3, constitution: -2 });
+  });
+
+  it('normalizes bonds before saving them', async () => {
+    const changes = await decide({ input: { bonds: ' a , A , b ' } });
+
+    expect(changes.bonds).toEqual(['A', 'B']);
   });
 
   it('keeps the stored bonds when the patch omits them', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ bonds: ['Aliado'] }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    const changes = await decide({
+      character: makeCharacter({ bonds: ['Aliado'] }),
+      input: { nickname: 'Renamed' },
+    });
 
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'player-1', { nickname: 'Renamed' });
-
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.not.objectContaining({ bonds: expect.anything() }),
-    );
+    expect(changes).not.toHaveProperty('bonds');
   });
 
   it('keeps legacy free-text afflictions when the patch omits them', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ afflictions: ['medo de altura'] }),
-    );
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    const changes = await decide({
+      character: makeCharacter({ afflictions: ['medo de altura'] }),
+      input: { nickname: 'Renamed' },
+    });
 
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('char-1', 'player-1', { nickname: 'Renamed' });
-
-    expect(characters.save).toHaveBeenCalledWith(
-      'char-1',
-      expect.not.objectContaining({ afflictions: expect.anything() }),
-    );
+    expect(changes).not.toHaveProperty('afflictions');
   });
 });

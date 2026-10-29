@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -47,12 +48,17 @@ export const monster = pgTable(
     createdBy: uuid('created_by')
       .notNull()
       .references(() => player.id),
+    clientRequestId: uuid('client_request_id'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => [
     index('monster_game_idx').on(t.gameId),
     index('monster_owner_idx').on(t.createdBy),
+    uniqueIndex('monster_creator_client_request_uq').on(
+      t.createdBy,
+      t.clientRequestId,
+    ),
     check('monster_np_check', sql`${t.np} BETWEEN 1 AND 20`),
   ],
 );

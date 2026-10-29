@@ -182,6 +182,7 @@ export const CreateCharacterBodySchema = CharacterSheetBodySchema.omit({
   np: true,
 })
   .extend({
+    clientRequestId: z.string().uuid(),
     skills: SkillAllocationsSchema.default([]),
   })
   .superRefine(refineSizeSources(true))
@@ -190,7 +191,9 @@ export const CreateCharacterBodySchema = CharacterSheetBodySchema.omit({
 
 const UpdateCharacterSheetBodySchema = CharacterSheetBodySchema.omit({
   gameId: true,
-}).partial();
+})
+  .partial()
+  .extend({ version: z.number().int().min(0) });
 
 export const UpdateCharacterBodySchema =
   UpdateCharacterSheetBodySchema.superRefine(

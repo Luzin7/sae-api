@@ -19,6 +19,8 @@ const GAME_A = '11111111-1111-4111-8111-111111111111';
 const GAME_A2 = '22222222-2222-4222-8222-222222222222';
 const GAME_B = '33333333-3333-4333-8333-333333333333';
 
+const CLIENT_REQUEST_ID = '44444444-4444-4444-8444-444444444444';
+
 const CREATED_AT = new Date('2024-01-01T00:00:00.000Z');
 const UPDATED_AT = new Date('2024-01-01T00:00:00.000Z');
 
@@ -77,9 +79,17 @@ interface FakeMonsterRepository extends MonsterRepository {
 function makeMonsters(seed: Monster[] = []): FakeMonsterRepository {
   const rows = new Map(seed.map((item) => [item.id, item]));
   let counter = 0;
+  const requestIds = new Map<string, string>();
 
   return {
     async create(input) {
+      const replayed = [...rows.values()].find(
+        (item) =>
+          item.createdBy === input.createdBy &&
+          requestIds.get(item.id) === input.clientRequestId,
+      );
+      if (replayed) return replayed;
+
       counter += 1;
       const monster = makeMonster({
         id: `monster-${counter}`,
@@ -93,6 +103,7 @@ function makeMonsters(seed: Monster[] = []): FakeMonsterRepository {
         createdBy: input.createdBy,
       });
       rows.set(monster.id, monster);
+      requestIds.set(monster.id, input.clientRequestId);
 
       return monster;
     },
@@ -123,7 +134,14 @@ function makeMonsters(seed: Monster[] = []): FakeMonsterRepository {
 }
 
 function makeBody(overrides: Record<string, unknown> = {}) {
-  return { name: 'Goblin', np: 1, maxHp: 10, maxEffort: 5, ...overrides };
+  return {
+    clientRequestId: CLIENT_REQUEST_ID,
+    name: 'Goblin',
+    np: 1,
+    maxHp: 10,
+    maxEffort: 5,
+    ...overrides,
+  };
 }
 
 async function buildTestApp(
@@ -187,6 +205,44 @@ describe('bestiary routes', () => {
     expect(res.json().monster.ownerId).toBe(MASTER_A);
     expect(res.json().monster.createdBy).toBe(MASTER_A);
     expect(gameAccess.mastersAnyGame).toHaveBeenCalledWith(MASTER_A);
+  });
+
+  it('creates one monster when the same clientRequestId is replayed', async () => {
+    const monsters = makeMonsters();
+    const app = await buildTestApp(monsters);
+    const request = {
+      method: 'POST' as const,
+      url: '/bestiary',
+      payload: makeBody(),
+      headers: { cookie: `token=${makeToken(app, MASTER_A)}` },
+    };
+
+    const first = await app.inject(request);
+    const replay = await app.inject(request);
+
+    expect(replay.statusCode).toBe(201);
+    expect(replay.json().monster.id).toBe(first.json().monster.id);
+    await expect(monsters.findReusableByOwner(MASTER_A)).resolves.toHaveLength(
+      1,
+    );
+  });
+
+  it('rejects a create without clientRequestId', async () => {
+    const monsters = makeMonsters();
+    const create = vi.spyOn(monsters, 'create');
+    const app = await buildTestApp(monsters);
+    const payload = { ...makeBody(), clientRequestId: undefined };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/bestiary',
+      payload,
+      headers: { cookie: `token=${makeToken(app, MASTER_A)}` },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION');
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('rejects a reusable entry from a user who masters no table', async () => {
