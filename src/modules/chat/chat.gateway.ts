@@ -17,6 +17,7 @@ import {
   sinkFor,
   toWireMessages,
 } from './chat.transport.js';
+import type { AddMonsterService } from './add-monster/add-monster.service.js';
 import type { CloseTestService } from './close-test/close-test.service.js';
 import type { ConnectService } from './connect/connect.service.js';
 import type { DeclareTestService } from './declare-test/declare-test.service.js';
@@ -51,6 +52,7 @@ export interface ChatServices {
   rollMonsterTest: RollMonsterTestService;
   updateMonsterVitals: UpdateMonsterVitalsService;
   monsterAttack: MonsterAttackService;
+  addMonster: AddMonsterService;
 }
 
 export interface ChatGatewayOptions {
@@ -324,6 +326,16 @@ async function dispatch(
         monsterId: frame.monsterId,
         currentHp: frame.currentHp,
         currentEffort: frame.currentEffort,
+        afflictions: frame.afflictions,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.add-monster') {
+      await opts.services.addMonster.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        monsterId: frame.monsterId,
       });
       return;
     }

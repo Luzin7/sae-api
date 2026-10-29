@@ -24,6 +24,17 @@ const STATE: CombatStatePayload = {
       name: 'Ana',
       initiativeValue: null,
       hasRolled: false,
+      currentHp: null,
+      maxHp: null,
+      currentEffort: null,
+      maxEffort: null,
+      afflictions: [],
+      cognition: null,
+      psyche: null,
+      instinct: null,
+      constitution: null,
+      motricity: null,
+      perception: null,
     },
   ],
 };
@@ -71,7 +82,24 @@ describe('StartCombatService', () => {
 
     expect(combat.start).toHaveBeenCalledWith(
       'session-1',
-      [{ kind: 'character', refId: 'char-1', name: 'Ana' }],
+      [
+        {
+          kind: 'character',
+          refId: 'char-1',
+          name: 'Ana',
+          currentHp: null,
+          maxHp: null,
+          currentEffort: null,
+          maxEffort: null,
+          afflictions: [],
+          cognition: null,
+          psyche: null,
+          instinct: null,
+          constitution: null,
+          motricity: null,
+          perception: null,
+        },
+      ],
       expect.any(Function),
       'p1',
     );
@@ -82,6 +110,79 @@ describe('StartCombatService', () => {
       type: 'session.combat',
       state: STATE,
     });
+  });
+
+  it('seeds monster vitals from the roster without per-monster reads', async () => {
+    const { combatants, combat, service } = build();
+    vi.mocked(combatants.listByGame).mockResolvedValue([
+      { kind: 'character', refId: 'char-1', name: 'Ana', ownerPlayerId: 'p1' },
+      {
+        kind: 'monster',
+        refId: 'mon-1',
+        name: 'Goblin',
+        ownerPlayerId: null,
+        template: {
+          attributes: {
+            cognition: 2,
+            psyche: -2,
+            instinct: 0,
+            constitution: 3,
+            motricity: 1,
+            perception: 0,
+          },
+          currentHp: 12,
+          maxHp: 20,
+          currentEffort: 7,
+          maxEffort: 10,
+        },
+      },
+    ]);
+    vi.mocked(combat.start).mockResolvedValue(STATE);
+
+    await service.execute({ playerId: 'p1', sessionId: 'session-1' });
+
+    expect(combatants.listByGame).toHaveBeenCalledTimes(1);
+    expect(combatants.findMonsterInGame).not.toHaveBeenCalled();
+    expect(combatants.findByRef).not.toHaveBeenCalled();
+    expect(combat.start).toHaveBeenCalledWith(
+      'session-1',
+      [
+        {
+          kind: 'character',
+          refId: 'char-1',
+          name: 'Ana',
+          currentHp: null,
+          maxHp: null,
+          currentEffort: null,
+          maxEffort: null,
+          afflictions: [],
+          cognition: null,
+          psyche: null,
+          instinct: null,
+          constitution: null,
+          motricity: null,
+          perception: null,
+        },
+        {
+          kind: 'monster',
+          refId: 'mon-1',
+          name: 'Goblin',
+          currentHp: 12,
+          maxHp: 20,
+          currentEffort: 7,
+          maxEffort: 10,
+          afflictions: [],
+          cognition: 2,
+          psyche: -2,
+          instinct: 0,
+          constitution: 3,
+          motricity: 1,
+          perception: 0,
+        },
+      ],
+      expect.any(Function),
+      'p1',
+    );
   });
 
   it('passes a plain d20 thunk to combat.start and never rolls initiative itself', async () => {
@@ -97,7 +198,22 @@ describe('StartCombatService', () => {
     const call = vi.mocked(combat.start).mock.calls[0];
     expect(call?.[0]).toBe('session-1');
     expect(call?.[1]).toEqual([
-      { kind: 'monster', refId: 'mon-1', name: 'Goblin' },
+      {
+        kind: 'monster',
+        refId: 'mon-1',
+        name: 'Goblin',
+        currentHp: null,
+        maxHp: null,
+        currentEffort: null,
+        maxEffort: null,
+        afflictions: [],
+        cognition: null,
+        psyche: null,
+        instinct: null,
+        constitution: null,
+        motricity: null,
+        perception: null,
+      },
     ]);
     expect(call?.[2]?.()).toBe(7);
     expect(call?.[3]).toBe('p1');

@@ -2,7 +2,7 @@ import type { Monster } from './bestiary.entity.js';
 
 export interface MonsterResponse {
   id: string;
-  gameId: string;
+  gameId: string | null;
   name: string;
   np: number;
   maxHp: number;
@@ -19,6 +19,8 @@ export interface MonsterResponse {
   heightCm: number | null;
   weightKg: number | null;
   notes: string | null;
+  ownerId: string;
+  /** @deprecated alias of `ownerId`, kept for the web client. */
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -45,6 +47,7 @@ export const BestiaryPresenter = {
       heightCm: monster.heightCm,
       weightKg: monster.weightKg,
       notes: monster.notes,
+      ownerId: monster.createdBy,
       createdBy: monster.createdBy,
       createdAt: monster.createdAt.toISOString(),
       updatedAt: monster.updatedAt.toISOString(),

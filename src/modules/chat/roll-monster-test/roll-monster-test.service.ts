@@ -11,10 +11,13 @@ import {
 } from '../chat.errors.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
 import type { CombatRepository } from '../combat.repository.js';
-import type { CombatantSource } from '../combatant-source.contract.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import { rollAttribute, type Rng } from '@shared/dice/roll.js';
 import type { AttributeKey } from '@shared/rules/attributes.js';
+import {
+  combatantAttributes,
+  type CombatStatePayload,
+} from '@modules/session/session.entity.js';
 
 export interface RollMonsterTestInput {
   playerId: string;
@@ -23,11 +26,23 @@ export interface RollMonsterTestInput {
   attribute: AttributeKey;
 }
 
+function requireMonsterInstance(
+  state: CombatStatePayload,
+  monsterId: string,
+): { name: string; attributes: Record<AttributeKey, number> } {
+  const instance = state.entries.find(
+    (entry) => entry.kind === 'monster' && entry.refId === monsterId,
+  );
+  const attributes = instance ? combatantAttributes(instance) : null;
+  if (!instance || !attributes) throw new ChatMonsterNotFoundError();
+
+  return { name: instance.name, attributes };
+}
+
 export class RollMonsterTestService {
   constructor(
     private readonly messages: ChatMessageRepository,
     private readonly access: GameAccess,
-    private readonly combatants: CombatantSource,
     private readonly combat: CombatRepository,
     private readonly bus: InMemoryMessageBus,
     private readonly rng: Rng,
@@ -45,11 +60,8 @@ export class RollMonsterTestService {
     const state = await this.combat.findState(input.sessionId);
     if (!state?.active) throw new CombatStateNotFoundError();
 
-    const monster = await this.combatants.findMonsterInGame(
-      session.gameId,
-      input.monsterId,
-    );
-    if (!monster) throw new ChatMonsterNotFoundError();
+    const monster = requireMonsterInstance(state, input.monsterId);
+    const monsterName = monster.name;
 
     const attribute = input.attribute;
     const roll = rollAttribute(monster.attributes[attribute], this.rng);
@@ -57,7 +69,7 @@ export class RollMonsterTestService {
     const event: RealtimeEvent = {
       type: 'session.monster-rolled',
       monsterId: input.monsterId,
-      name: monster.name,
+      name: monsterName,
       attribute,
       rolls: roll.rolls,
       result: roll.result,
@@ -69,7 +81,7 @@ export class RollMonsterTestService {
       playerId: input.playerId,
       eventType: 'dice_roll',
       payload: {
-        expression: `${monster.name} — ${attribute}`,
+        expression: `${monsterName} — ${attribute}`,
         results: roll.rolls,
         total: roll.result,
       },

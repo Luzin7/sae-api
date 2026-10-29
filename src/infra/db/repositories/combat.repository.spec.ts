@@ -18,18 +18,57 @@ function row(overrides: Partial<Row> & { id: string }): Row {
     name: overrides.id,
     initiativeValue: null,
     hasRolled: false,
+    currentHp: null,
+    maxHp: null,
+    currentEffort: null,
+    maxEffort: null,
+    afflictions: [],
+    cognition: null,
+    psyche: null,
+    instinct: null,
+    constitution: null,
+    motricity: null,
+    perception: null,
     createdAt: new Date('2024-01-01T00:00:00.000Z'),
     ...overrides,
   };
 }
 
-const ANA: CombatantSeed = { kind: 'character', refId: 'char-1', name: 'Ana' };
-const GOBLIN: CombatantSeed = {
+function seed(
+  overrides: Partial<CombatantSeed> &
+    Pick<CombatantSeed, 'kind' | 'refId' | 'name'>,
+): CombatantSeed {
+  return {
+    currentHp: null,
+    maxHp: null,
+    currentEffort: null,
+    maxEffort: null,
+    afflictions: [],
+    cognition: null,
+    psyche: null,
+    instinct: null,
+    constitution: null,
+    motricity: null,
+    perception: null,
+    ...overrides,
+  };
+}
+
+const ANA: CombatantSeed = seed({
+  kind: 'character',
+  refId: 'char-1',
+  name: 'Ana',
+});
+const GOBLIN: CombatantSeed = seed({
   kind: 'monster',
   refId: 'mon-1',
   name: 'Goblin',
-};
-const ORC: CombatantSeed = { kind: 'monster', refId: 'mon-2', name: 'Orc' };
+});
+const ORC: CombatantSeed = seed({
+  kind: 'monster',
+  refId: 'mon-2',
+  name: 'Orc',
+});
 
 function sequenced(values: number[]): () => number {
   let index = 0;
@@ -139,7 +178,7 @@ describe('planCombatants', () => {
   it('reports a rename for a kept row whose name changed', () => {
     const plan = planCombatants(
       [row({ id: 'r-1', refId: 'char-1', name: 'Ana' })],
-      [{ kind: 'character', refId: 'char-1', name: 'Ana Maria' }],
+      [seed({ kind: 'character', refId: 'char-1', name: 'Ana Maria' })],
     );
 
     expect(plan.rename).toEqual([{ id: 'r-1', name: 'Ana Maria' }]);

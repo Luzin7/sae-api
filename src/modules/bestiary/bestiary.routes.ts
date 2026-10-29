@@ -49,6 +49,12 @@ export default async function bestiaryRoutes(
     return { monsters: monsters.map(BestiaryPresenter.toHTTP) };
   });
 
+  app.get('/mine', { preHandler: authenticate }, async (request) => {
+    const monsters = await opts.services.query.listReusable(request.playerId);
+
+    return { monsters: monsters.map(BestiaryPresenter.toHTTP) };
+  });
+
   app.get('/:id', { preHandler: authenticate }, async (request) => {
     const { id } = BestiaryParamsSchema.parse(request.params);
     const monster = await opts.services.query.getById(request.playerId, id);

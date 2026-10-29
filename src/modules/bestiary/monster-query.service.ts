@@ -1,9 +1,7 @@
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
+import { requireManageableMonster } from './bestiary.authorization.js';
 import type { Monster } from './bestiary.entity.js';
-import {
-  BestiaryForbiddenError,
-  MonsterNotFoundError,
-} from './bestiary.errors.js';
+import { BestiaryForbiddenError } from './bestiary.errors.js';
 import type { MonsterRepository } from './bestiary.repository.js';
 
 export class MonsterQueryService {
@@ -18,18 +16,22 @@ export class MonsterQueryService {
       throw new BestiaryForbiddenError();
     }
 
-    return this.monsters.findByGame(gameId);
+    const table = await this.monsters.findByGame(gameId);
+    const reusable = await this.monsters.findReusableByOwner(game.masterId);
+
+    return [...table, ...reusable];
+  }
+
+  async listReusable(requesterId: string): Promise<Monster[]> {
+    return this.monsters.findReusableByOwner(requesterId);
   }
 
   async getById(requesterId: string, id: string): Promise<Monster> {
-    const monster = await this.monsters.findById(id);
-    if (!monster) throw new MonsterNotFoundError();
-
-    const game = await this.gameAccess.findById(monster.gameId);
-    if (!game || game.masterId !== requesterId) {
-      throw new BestiaryForbiddenError();
-    }
-
-    return monster;
+    return requireManageableMonster(
+      this.monsters,
+      this.gameAccess,
+      id,
+      requesterId,
+    );
   }
 }

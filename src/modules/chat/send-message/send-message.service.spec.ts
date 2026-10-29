@@ -36,7 +36,7 @@ function makeMessages(): ChatMessageRepository {
 }
 
 function makeAccess(): GameAccess {
-  return { findById: vi.fn(), isMember: vi.fn() };
+  return { findById: vi.fn(), isMember: vi.fn(), mastersAnyGame: vi.fn() };
 }
 
 describe('SendMessageService', () => {

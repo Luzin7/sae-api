@@ -3,9 +3,30 @@ import type {
   CombatantRef,
   CombatantSource,
   MonsterRef,
+  MonsterTemplate,
 } from '@modules/chat/combatant-source.contract.js';
 import { db, type Database } from '../index.js';
-import { character, monster } from '../schema.js';
+import { character, game, monster } from '../schema.js';
+
+type MonsterAttributesAndVitals = {
+  cognition: number;
+  psyche: number;
+  instinct: number;
+  constitution: number;
+  motricity: number;
+  perception: number;
+  currentHp: number;
+  maxHp: number;
+  currentEffort: number;
+  maxEffort: number;
+};
+
+type MonsterRow = {
+  id: string;
+  name: string;
+  gameId: string | null;
+  createdBy: string;
+} & MonsterAttributesAndVitals;
 
 async function findCharacter(
   database: Database,
@@ -51,6 +72,45 @@ async function findMonster(
   };
 }
 
+async function findGameMasterId(
+  database: Database,
+  gameId: string,
+): Promise<string | null> {
+  const [row] = await database
+    .select({ masterId: game.masterId })
+    .from(game)
+    .where(eq(game.id, gameId))
+    .limit(1);
+
+  return row?.masterId ?? null;
+}
+
+function toMonsterTemplate(row: MonsterAttributesAndVitals): MonsterTemplate {
+  return {
+    attributes: {
+      cognition: row.cognition,
+      psyche: row.psyche,
+      instinct: row.instinct,
+      constitution: row.constitution,
+      motricity: row.motricity,
+      perception: row.perception,
+    },
+    currentHp: row.currentHp,
+    maxHp: row.maxHp,
+    currentEffort: row.currentEffort,
+    maxEffort: row.maxEffort,
+  };
+}
+
+function toMonsterRef(row: MonsterRow): MonsterRef {
+  return {
+    id: row.id,
+    name: row.name,
+    ...toMonsterTemplate(row),
+    afflictions: [],
+  };
+}
+
 export function combatantSourceRepository(
   database: Database = db,
 ): CombatantSource {
@@ -66,7 +126,20 @@ export function combatantSourceRepository(
           .from(character)
           .where(eq(character.gameId, gameId)),
         database
-          .select({ id: monster.id, name: monster.name })
+          .select({
+            id: monster.id,
+            name: monster.name,
+            cognition: monster.cognition,
+            psyche: monster.psyche,
+            instinct: monster.instinct,
+            constitution: monster.constitution,
+            motricity: monster.motricity,
+            perception: monster.perception,
+            currentHp: monster.currentHp,
+            maxHp: monster.maxHp,
+            currentEffort: monster.currentEffort,
+            maxEffort: monster.maxEffort,
+          })
           .from(monster)
           .where(eq(monster.gameId, gameId)),
       ]);
@@ -82,6 +155,7 @@ export function combatantSourceRepository(
         refId: row.id,
         name: row.name,
         ownerPlayerId: null,
+        template: toMonsterTemplate(row),
       }));
 
       return [...characterRefs, ...monsterRefs];
@@ -101,6 +175,8 @@ export function combatantSourceRepository(
         .select({
           id: monster.id,
           name: monster.name,
+          gameId: monster.gameId,
+          createdBy: monster.createdBy,
           cognition: monster.cognition,
           psyche: monster.psyche,
           instinct: monster.instinct,
@@ -113,33 +189,27 @@ export function combatantSourceRepository(
           maxEffort: monster.maxEffort,
         })
         .from(monster)
-        .where(and(eq(monster.gameId, gameId), eq(monster.id, monsterId)))
+        .where(eq(monster.id, monsterId))
         .limit(1);
       if (!row) return null;
 
-      return {
-        id: row.id,
-        name: row.name,
-        attributes: {
-          cognition: row.cognition,
-          psyche: row.psyche,
-          instinct: row.instinct,
-          constitution: row.constitution,
-          motricity: row.motricity,
-          perception: row.perception,
-        },
-        currentHp: row.currentHp,
-        maxHp: row.maxHp,
-        currentEffort: row.currentEffort,
-        maxEffort: row.maxEffort,
-      };
-    },
+      const reachable = await isReachableByGame(database, gameId, row);
+      if (!reachable) return null;
 
-    async saveMonsterVitals(monsterId, patch) {
-      await database
-        .update(monster)
-        .set({ currentHp: patch.currentHp, currentEffort: patch.currentEffort })
-        .where(eq(monster.id, monsterId));
+      return toMonsterRef(row);
     },
   };
+}
+
+async function isReachableByGame(
+  database: Database,
+  gameId: string,
+  row: MonsterRow,
+): Promise<boolean> {
+  if (row.gameId === gameId) return true;
+  if (row.gameId !== null) return false;
+
+  const masterId = await findGameMasterId(database, gameId);
+
+  return masterId !== null && masterId === row.createdBy;
 }

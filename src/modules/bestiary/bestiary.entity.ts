@@ -1,6 +1,6 @@
 export interface Monster {
   id: string;
-  gameId: string;
+  gameId: string | null;
   name: string;
   np: number;
   maxHp: number;
@@ -42,7 +42,7 @@ export interface MonsterSheetInput {
 }
 
 export interface CreateMonsterInput extends MonsterSheetInput {
-  gameId: string;
+  gameId?: string | null;
   createdBy: string;
 }
 

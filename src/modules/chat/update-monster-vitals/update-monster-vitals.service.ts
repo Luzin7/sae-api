@@ -10,8 +10,14 @@ import {
   CombatStateNotFoundError,
 } from '../chat.errors.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
-import type { CombatRepository } from '../combat.repository.js';
-import type { CombatantSource } from '../combatant-source.contract.js';
+import type {
+  CombatRepository,
+  InstanceVitalsPatch,
+} from '../combat.repository.js';
+import type {
+  CombatantPayload,
+  CombatStatePayload,
+} from '@modules/session/session.entity.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 
 export interface UpdateMonsterVitalsInput {
@@ -20,13 +26,47 @@ export interface UpdateMonsterVitalsInput {
   monsterId: string;
   currentHp: number;
   currentEffort: number;
+  afflictions?: string[];
+}
+
+interface InstanceVitals {
+  instance: CombatantPayload;
+  maxHp: number;
+  maxEffort: number;
+}
+
+function requireInstanceVitals(
+  state: CombatStatePayload,
+  monsterId: string,
+): InstanceVitals {
+  const instance = state.entries.find(
+    (entry) => entry.kind === 'monster' && entry.refId === monsterId,
+  );
+  if (!instance || instance.maxHp === null || instance.maxEffort === null) {
+    throw new ChatMonsterNotFoundError();
+  }
+
+  return { instance, maxHp: instance.maxHp, maxEffort: instance.maxEffort };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function toVitalsPatch(
+  input: UpdateMonsterVitalsInput,
+  currentHp: number,
+  currentEffort: number,
+): InstanceVitalsPatch {
+  if (input.afflictions === undefined) return { currentHp, currentEffort };
+
+  return { currentHp, currentEffort, afflictions: input.afflictions };
 }
 
 export class UpdateMonsterVitalsService {
   constructor(
     private readonly messages: ChatMessageRepository,
     private readonly access: GameAccess,
-    private readonly combatants: CombatantSource,
     private readonly combat: CombatRepository,
     private readonly bus: InMemoryMessageBus,
   ) {}
@@ -43,30 +83,29 @@ export class UpdateMonsterVitalsService {
     const state = await this.combat.findState(input.sessionId);
     if (!state?.active) throw new CombatStateNotFoundError();
 
-    const monster = await this.combatants.findMonsterInGame(
-      session.gameId,
+    const { instance, maxHp, maxEffort } = requireInstanceVitals(
+      state,
       input.monsterId,
     );
-    if (!monster) throw new ChatMonsterNotFoundError();
 
-    const currentHp = Math.min(Math.max(input.currentHp, 0), monster.maxHp);
-    const currentEffort = Math.min(
-      Math.max(input.currentEffort, 0),
-      monster.maxEffort,
+    const currentHp = clamp(input.currentHp, 0, maxHp);
+    const currentEffort = clamp(input.currentEffort, 0, maxEffort);
+
+    await this.combat.saveInstanceVitals(
+      input.sessionId,
+      input.monsterId,
+      toVitalsPatch(input, currentHp, currentEffort),
+      input.playerId,
     );
-
-    await this.combatants.saveMonsterVitals(input.monsterId, {
-      currentHp,
-      currentEffort,
-    });
 
     const event: RealtimeEvent = {
       type: 'session.monster-vitals',
-      monsterId: monster.id,
+      monsterId: instance.refId,
       currentHp,
-      maxHp: monster.maxHp,
+      maxHp,
       currentEffort,
-      maxEffort: monster.maxEffort,
+      maxEffort,
+      afflictions: input.afflictions ?? instance.afflictions,
     };
     this.bus.publish(chatRoom(input.sessionId), event);
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AFFLICTION_KEYS } from '@shared/rules/afflictions.js';
 
 export const MAX_CHAT_BODY_LENGTH = 2000;
 export const CHAT_HISTORY_LIMIT = 50;
@@ -42,6 +43,17 @@ const CombatantWireSchema = z.object({
   name: z.string(),
   initiativeValue: z.number().int().nullable(),
   hasRolled: z.boolean(),
+  currentHp: z.number().int().nullable(),
+  maxHp: z.number().int().nullable(),
+  currentEffort: z.number().int().nullable(),
+  maxEffort: z.number().int().nullable(),
+  afflictions: z.array(z.string()),
+  cognition: z.number().int().nullable(),
+  psyche: z.number().int().nullable(),
+  instinct: z.number().int().nullable(),
+  constitution: z.number().int().nullable(),
+  motricity: z.number().int().nullable(),
+  perception: z.number().int().nullable(),
 });
 
 /**
@@ -123,6 +135,7 @@ export const InboundFrameSchema = z.discriminatedUnion('type', [
     monsterId: UuidSchema,
     currentHp: NonNegativeIntSchema,
     currentEffort: NonNegativeIntSchema,
+    afflictions: z.array(z.enum(AFFLICTION_KEYS)).optional(),
   }),
   z.object({
     type: z.literal('master.monster-attack'),
@@ -131,6 +144,11 @@ export const InboundFrameSchema = z.discriminatedUnion('type', [
     attribute: AttributeSchema,
     targetCharacterId: UuidSchema,
     damage: NonNegativeIntSchema,
+  }),
+  z.object({
+    type: z.literal('master.add-monster'),
+    sessionId: UuidSchema,
+    monsterId: UuidSchema,
   }),
   z.object({ type: z.literal('ping') }),
 ]);
@@ -243,6 +261,7 @@ export const OutboundEventSchema = z.union([
     maxHp: z.number().int(),
     currentEffort: z.number().int(),
     maxEffort: z.number().int(),
+    afflictions: z.array(z.string()),
   }),
   z.object({
     type: z.literal('session.monster-attacked'),

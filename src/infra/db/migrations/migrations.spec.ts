@@ -49,3 +49,25 @@ describe('0005_testes_sessao', () => {
     expect(sql).toContain('CREATE UNIQUE INDEX IF NOT EXISTS');
   });
 });
+
+describe('reusable bestiary entries migration', () => {
+  const sql = migration('./0007_wealthy_gamma_corps.sql');
+
+  it('backfills created_by before enforcing NOT NULL', () => {
+    const backfilled = sql.search(/UPDATE "monster"[\s\S]*?SET "created_by"/);
+    const notNull = sql.indexOf('ALTER COLUMN "created_by" SET NOT NULL');
+
+    expect(backfilled).toBeGreaterThanOrEqual(0);
+    expect(notNull).toBeGreaterThan(backfilled);
+  });
+
+  it('aborts between the backfill and NOT NULL when a row has no owner', () => {
+    const backfilled = sql.search(/UPDATE "monster"[\s\S]*?SET "created_by"/);
+    const guard = sql.indexOf('RAISE EXCEPTION');
+    const notNull = sql.indexOf('ALTER COLUMN "created_by" SET NOT NULL');
+
+    expect(guard).toBeGreaterThan(backfilled);
+    expect(guard).toBeLessThan(notNull);
+    expect(sql).toContain('"created_by" IS NULL');
+  });
+});
