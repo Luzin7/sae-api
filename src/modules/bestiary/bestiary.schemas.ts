@@ -31,12 +31,16 @@ const SheetFields = {
   notes: z.string().max(2000).nullable().optional(),
 };
 
-export const CreateMonsterBodySchema = z.object({
+const MonsterBodySchema = z.object({
   gameId: z.string().uuid().optional(),
   ...SheetFields,
 });
 
-export const UpdateMonsterBodySchema = CreateMonsterBodySchema.omit({
+export const CreateMonsterBodySchema = MonsterBodySchema.extend({
+  clientRequestId: z.string().uuid(),
+});
+
+export const UpdateMonsterBodySchema = MonsterBodySchema.omit({
   gameId: true,
 }).partial();
 

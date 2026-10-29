@@ -56,6 +56,7 @@ export interface Character extends AttributeScores, ProficiencyScores {
   bonds: string[];
   personality: string | null;
   posture: string | null;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,6 +88,7 @@ export interface CreateCharacterInput
   extends Omit<CharacterSheetInput, 'bonds'>, ProficiencyScores {
   playerId: string;
   gameId: string;
+  clientRequestId: string;
   skills: UpsertSkillInput[];
   bonds?: string[];
   hairColor: string | null;
@@ -224,4 +226,25 @@ export const DEFAULT_CHARACTER_PAGE: Page = { limit: 20, offset: 0 };
 export interface Vitals {
   hp: number;
   effort: number;
+}
+
+export type SheetChanges = Omit<
+  UpdateCharacterInput,
+  'currentHp' | 'currentEffort' | 'maxHp' | 'maxEffort'
+> & { maxHp: number; maxEffort: number };
+
+export type SheetDecision = (
+  current: Character,
+  skills: CharacterSkillDetail[],
+) => SheetChanges;
+
+export interface UpdateSheetCommand {
+  id: string;
+  expectedVersion: number;
+  decide: SheetDecision;
+}
+
+export interface CreateCharacterResult {
+  character: Character;
+  created: boolean;
 }

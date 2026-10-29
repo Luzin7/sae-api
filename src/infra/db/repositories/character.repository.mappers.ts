@@ -56,6 +56,7 @@ export function toCharacter(row: CharacterRow): Character {
     bonds: row.bonds ?? [],
     personality: row.personality,
     posture: row.posture,
+    version: row.version,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

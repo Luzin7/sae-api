@@ -2,7 +2,11 @@ import {
   DomainError,
   type DomainErrorCode,
 } from '@shared/errors/domain-error.js';
-import { ForbiddenError, NotFoundError } from '@shared/errors/http-errors.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '@shared/errors/http-errors.js';
 import { attributeDisplayName } from '@shared/rules/attributes.js';
 
 export class CharacterNotFoundError extends NotFoundError {
@@ -115,5 +119,13 @@ export class SkillCatalogEmptyError extends Error {
   constructor() {
     super('Catálogo de perícias vazio.');
     this.name = new.target.name;
+  }
+}
+
+export class CharacterVersionConflictError extends ConflictError {
+  constructor() {
+    super(
+      'A ficha foi alterada por outra pessoa. Recarregue e tente novamente.',
+    );
   }
 }

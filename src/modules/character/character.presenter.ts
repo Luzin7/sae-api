@@ -37,6 +37,7 @@ export interface CharacterResponse {
   bonds: string[];
   personality: string | null;
   posture: string | null;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -80,6 +81,7 @@ export const CharacterPresenter = {
       bonds: character.bonds,
       personality: character.personality,
       posture: character.posture,
+      version: character.version,
       createdAt: character.createdAt.toISOString(),
       updatedAt: character.updatedAt.toISOString(),
     };
