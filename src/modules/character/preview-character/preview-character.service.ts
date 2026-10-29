@@ -25,7 +25,7 @@ import { attributePointsSpent } from '../character.attributes.js';
 import type { PreviewCharacterBody } from '../character.schemas.js';
 import {
   deriveProficiencies,
-  deriveSizeDetail,
+  derivePreviewSizeDetail,
   proficiencyBonus,
   type SizeDetail,
 } from '../character.derivation.js';
@@ -87,7 +87,7 @@ export class PreviewCharacterService {
       skillBudget:
         proficiencyLevels && this.skillBudget(proficiencyLevels, input.np),
       attributePoints: this.attributePoints(input),
-      size: deriveSizeDetail(input.heightCm, input.weightKg),
+      size: derivePreviewSizeDetail(input),
       startingWealth: input.socialClass
         ? startingWealthRange(input.socialClass)
         : null,

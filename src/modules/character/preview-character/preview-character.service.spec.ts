@@ -168,6 +168,62 @@ describe('PreviewCharacterService', () => {
     expect(preview.size).toEqual({ factor: 5, category: 'enorme', next: null });
   });
 
+  it('resolves size from the fixed factor of a rolled height band', async () => {
+    const { service } = makeService();
+
+    const preview = await service.execute({
+      np: 1,
+      heightRoll: 'min',
+      weightKg: 70,
+    });
+
+    expect(preview.size).toEqual({
+      factor: 0.5,
+      category: 'pequeno',
+      next: { category: 'medio', factorNeeded: 2 },
+    });
+  });
+
+  it('resolves size from the fixed factor of a rolled weight band', async () => {
+    const { service } = makeService();
+
+    const preview = await service.execute({
+      np: 1,
+      heightCm: 180,
+      weightRoll: 'max',
+    });
+
+    expect(preview.size).toEqual({
+      factor: 3.5,
+      category: 'grande',
+      next: { category: 'enorme', factorNeeded: 5 },
+    });
+  });
+
+  it('has no next category when both dimensions roll max', async () => {
+    const { service } = makeService();
+
+    const preview = await service.execute({
+      np: 1,
+      heightRoll: 'max',
+      weightRoll: 'max',
+    });
+
+    expect(preview.size).toEqual({ factor: 5, category: 'enorme', next: null });
+  });
+
+  it('returns miudo when both dimensions roll min', async () => {
+    const { service } = makeService();
+
+    const preview = await service.execute({
+      np: 1,
+      heightRoll: 'min',
+      weightRoll: 'min',
+    });
+
+    expect(preview.size?.category).toBe('miudo');
+  });
+
   it('returns null size when only one of height and weight is given', async () => {
     const { service } = makeService();
 

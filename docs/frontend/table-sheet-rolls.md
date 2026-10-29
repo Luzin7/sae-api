@@ -170,15 +170,15 @@ Explicit ranges: `heightCm` 150–250, `weightKg` 50–150 (`weightKg` must be w
 HTTP 400 envelope:
 
 ```json
-{ "error": { "code": "VALIDATION", "message": "Dados inválidos: heightCm: Informe a altura ou escolha rolar.; weightKg: Informe o peso ou escolha rolar." } }
+{ "error": { "code": "VALIDATION", "message": "Dados inválidos: heightCm: Informe a altura ou deixe para o destino.; weightKg: Informe o peso ou deixe para o destino." } }
 ```
 
 | Case | Field path | Message |
 | --- | --- | --- |
-| Missing height | `heightCm` | Informe a altura ou escolha rolar. |
-| Missing weight | `weightKg` | Informe o peso ou escolha rolar. |
-| Both height sources | `heightCm` | Informe a altura ou a rolagem, não as duas. |
-| Both weight sources | `weightKg` | Informe o peso ou a rolagem, não as duas. |
+| Missing height | `heightCm` | Informe a altura ou deixe para o destino. |
+| Missing weight | `weightKg` | Informe o peso ou deixe para o destino. |
+| Both height sources | `heightCm` | Escolha a altura ou deixe para o destino, não os dois. |
+| Both weight sources | `weightKg` | Escolha o peso ou deixe para o destino, não os dois. |
 | Height out of range | `heightCm` | Altura deve estar entre 150 e 250 cm. |
 | Weight out of range | `weightKg` | Peso deve estar entre 50 e 150 kg. |
 | Weight not whole kg | `weightKg` | Peso deve ser um número inteiro. |

@@ -87,6 +87,24 @@ export function weightFactor(kg: number): number | null {
   return findFactor(WEIGHT_FACTORS, kg);
 }
 
+function extremeFactor(
+  bands: readonly SizeFactorBand[],
+  band: SizeExtremeBand,
+): number {
+  const edge = band === 'min' ? bands[0] : bands[bands.length - 1];
+  return edge.factor;
+}
+
+/** Factor shared by every possible roll of the height band. */
+export function rolledHeightFactor(band: SizeExtremeBand): number {
+  return extremeFactor(HEIGHT_FACTORS, band);
+}
+
+/** Factor shared by every possible roll of the weight band. */
+export function rolledWeightFactor(band: SizeExtremeBand): number {
+  return extremeFactor(WEIGHT_FACTORS, band);
+}
+
 /** Size = arithmetic mean of the height and weight factors. */
 export function sizeFactorMean(
   heightCm: number,
