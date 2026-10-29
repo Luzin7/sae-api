@@ -109,6 +109,36 @@ describe('GameSessionNotifierService', () => {
     });
   });
 
+  it('publishes the np change to the active session', async () => {
+    const { bus, notifier } = build();
+    const publish = vi.spyOn(bus, 'publish');
+
+    await notifier.notifyNpChanged('game-1', {
+      characterId: 'char-1',
+      oldNp: 3,
+      newNp: 4,
+    });
+
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'character.np-changed',
+      characterId: 'char-1',
+      oldNp: 3,
+      newNp: 4,
+    });
+  });
+
+  it('publishes the advancement to the active session', async () => {
+    const { bus, notifier } = build();
+    const publish = vi.spyOn(bus, 'publish');
+
+    await notifier.notifyCharacterAdvanced('game-1', { characterId: 'char-1' });
+
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'character.advanced',
+      characterId: 'char-1',
+    });
+  });
+
   it('publishes the combat state of the active session', async () => {
     const { bus, combat, notifier } = build();
     const state: CombatStatePayload = {

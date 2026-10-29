@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { authenticate } from '@infra/http/authenticate.js';
+import type { AdvanceCharacterService } from './advance-character/advance-character.service.js';
 import type { AddItemService } from './items/add-item/add-item.service.js';
 import type { DeleteItemService } from './items/delete-item/delete-item.service.js';
 import type { UpdateItemService } from './items/update-item/update-item.service.js';
 import type { CharacterQueryService } from './character-query.service.js';
 import { CharacterPresenter } from './character.presenter.js';
 import {
+  AdvanceCharacterBodySchema,
   CharacterGameParamsSchema,
   CharacterItemParamsSchema,
   CharacterListQuerySchema,
@@ -17,7 +19,6 @@ import {
   UpdateItemBodySchema,
   ChangeEffortBodySchema,
   ChangeHpBodySchema,
-  UpsertSkillBodySchema,
 } from './character.schemas.js';
 import type { ChangeHpService } from './change-hp/change-hp.service.js';
 import type { ChangeEffortService } from './change-effort/change-effort.service.js';
@@ -28,7 +29,6 @@ import type { GetSheetService } from './get-sheet/get-sheet.service.js';
 import { CharacterPreviewPresenter } from './preview-character/preview-character.presenter.js';
 import { previewRateLimit } from './preview-character/preview-character.rate-limit.js';
 import type { PreviewCharacterService } from './preview-character/preview-character.service.js';
-import type { UpsertSkillService } from './skills/upsert-skill/upsert-skill.service.js';
 import type { UpdateCharacterService } from './update-character/update-character.service.js';
 
 export interface CharacterServices {
@@ -37,13 +37,13 @@ export interface CharacterServices {
   getCharacter: GetCharacterService;
   getSheet: GetSheetService;
   updateCharacter: UpdateCharacterService;
+  advanceCharacter: AdvanceCharacterService;
   deleteCharacter: DeleteCharacterService;
   changeHp: ChangeHpService;
   changeEffort: ChangeEffortService;
   addItem: AddItemService;
   updateItem: UpdateItemService;
   deleteItem: DeleteItemService;
-  upsertSkill: UpsertSkillService;
   query: CharacterQueryService;
 }
 
@@ -85,7 +85,7 @@ export default async function characterRoutes(
       page,
     );
 
-    return { characters: characters.map(CharacterPresenter.toHTTP) };
+    return { characters: characters.map(CharacterPresenter.toReadHTTP) };
   });
 
   app.get('/game/:gameId', { preHandler: authenticate }, async (request) => {
@@ -95,7 +95,7 @@ export default async function characterRoutes(
       request.playerId,
     );
 
-    return { characters: characters.map(CharacterPresenter.toHTTP) };
+    return { characters: characters.map(CharacterPresenter.toReadHTTP) };
   });
 
   app.get('/:id', { preHandler: authenticate }, async (request) => {
@@ -105,7 +105,7 @@ export default async function characterRoutes(
       request.playerId,
     );
 
-    return { character: CharacterPresenter.toHTTP(character) };
+    return { character: CharacterPresenter.toReadHTTP(character) };
   });
 
   app.get('/:id/sheet', { preHandler: authenticate }, async (request) => {
@@ -126,6 +126,22 @@ export default async function characterRoutes(
 
     return { character: CharacterPresenter.toHTTP(character) };
   });
+
+  app.post(
+    '/:id/advancement',
+    { preHandler: authenticate },
+    async (request) => {
+      const { id } = CharacterParamsSchema.parse(request.params);
+      const body = AdvanceCharacterBodySchema.parse(request.body);
+      const view = await opts.services.advanceCharacter.execute(
+        id,
+        request.playerId,
+        body,
+      );
+
+      return { character: CharacterPresenter.toReadHTTP(view) };
+    },
+  );
 
   app.patch('/:id/hp', { preHandler: authenticate }, async (request) => {
     const { id } = CharacterParamsSchema.parse(request.params);
@@ -208,22 +224,6 @@ export default async function characterRoutes(
 
     return { skills };
   });
-
-  app.post(
-    '/:id/skills',
-    { preHandler: authenticate },
-    async (request, reply) => {
-      const { id } = CharacterParamsSchema.parse(request.params);
-      const body = UpsertSkillBodySchema.parse(request.body);
-      const skill = await opts.services.upsertSkill.execute(
-        id,
-        request.playerId,
-        body,
-      );
-
-      return reply.status(200).send({ skill });
-    },
-  );
 
   app.delete('/:id', { preHandler: authenticate }, async (request, reply) => {
     const { id } = CharacterParamsSchema.parse(request.params);

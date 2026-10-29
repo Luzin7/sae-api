@@ -4,13 +4,13 @@ import {
   requireReadableCharacter,
 } from './character.authorization.js';
 import {
-  type Character,
   type CharacterItem,
   type CharacterSkillDetail,
   DEFAULT_CHARACTER_PAGE,
   type Page,
 } from './character.entity.js';
 import type { CharacterRepository } from './character.repository.js';
+import { type CharacterView, withAdvancement } from './character-view.js';
 
 /**
  * Read-only operations. No orchestration beyond the ownership/membership
@@ -25,14 +25,23 @@ export class CharacterQueryService {
   async listMine(
     playerId: string,
     page: Page = DEFAULT_CHARACTER_PAGE,
-  ): Promise<Character[]> {
-    return this.characters.findByPlayer(playerId, page);
+  ): Promise<CharacterView[]> {
+    return withAdvancement(
+      this.characters,
+      await this.characters.findByPlayer(playerId, page),
+    );
   }
 
-  async listByGame(gameId: string, requesterId: string): Promise<Character[]> {
+  async listByGame(
+    gameId: string,
+    requesterId: string,
+  ): Promise<CharacterView[]> {
     await requireMembership(this.membership, gameId, requesterId);
 
-    return this.characters.findByGame(gameId);
+    return withAdvancement(
+      this.characters,
+      await this.characters.findByGame(gameId),
+    );
   }
 
   async listItems(

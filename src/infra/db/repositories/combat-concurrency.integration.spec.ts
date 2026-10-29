@@ -20,6 +20,8 @@ const notifier = {
   notifyRosterChanged: async () => undefined,
   notifyHpChanged: async () => undefined,
   notifyEffortChanged: async () => undefined,
+  notifyNpChanged: async () => undefined,
+  notifyCharacterAdvanced: async () => undefined,
   notifyCombatChanged: async () => undefined,
 };
 

@@ -85,6 +85,18 @@ export class NpMasterOnlyError extends ForbiddenError {
   }
 }
 
+export class SheetPointsMasterOnlyError extends ForbiddenError {
+  constructor() {
+    super('Use Evoluir personagem para distribuir pontos.');
+  }
+}
+
+export class ArchetypeMasterOnlyError extends ForbiddenError {
+  constructor() {
+    super('Só o Mestre muda personalidade e postura.');
+  }
+}
+
 export class SkillPoolExceededError extends DomainError {
   readonly code: DomainErrorCode = 'VALIDATION';
   readonly httpStatus = 400;
@@ -97,12 +109,39 @@ export class SkillPoolExceededError extends DomainError {
   }
 }
 
+export class NpReductionBlockedError extends DomainError {
+  readonly code: DomainErrorCode = 'VALIDATION';
+  readonly httpStatus = 400;
+
+  constructor(overruns: readonly string[]) {
+    super(`Não dá para descer: ${overruns.join(' ')}`);
+  }
+}
+
 export class SkillBonusCapExceededError extends DomainError {
   readonly code: DomainErrorCode = 'VALIDATION';
   readonly httpStatus = 400;
 
   constructor(skillName: string, cap: number) {
     super(`Bônus de ${skillName} acima do limite de +${cap}.`);
+  }
+}
+
+export class SpentPointsLockedError extends DomainError {
+  readonly code: DomainErrorCode = 'VALIDATION';
+  readonly httpStatus = 400;
+
+  constructor() {
+    super('Pontos distribuídos não podem ser retirados.');
+  }
+}
+
+export class EmptyAdvancementError extends DomainError {
+  readonly code: DomainErrorCode = 'VALIDATION';
+  readonly httpStatus = 400;
+
+  constructor() {
+    super('Nada para evoluir.');
   }
 }
 

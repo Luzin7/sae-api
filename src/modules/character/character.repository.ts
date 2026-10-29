@@ -8,11 +8,11 @@ import type {
   CreateItemInput,
   VitalsChangeOutcome,
   Page,
+  SkillSpendRow,
   SkillSummary,
   UpdateCharacterInput,
   UpdateSheetCommand,
   UpdateItemInput,
-  UpsertSkillCommand,
 } from './character.entity.js';
 
 export interface CharacterRepository {
@@ -34,11 +34,8 @@ export interface CharacterRepository {
   deleteItem(itemId: string): Promise<void>;
   findSkills(characterId: string): Promise<CharacterSkill[]>;
   findSkillDetails(characterId: string): Promise<CharacterSkillDetail[]>;
+  /** One grouped query: proficiency points spent per character and attribute. */
+  findSkillSpend(characterIds: readonly string[]): Promise<SkillSpendRow[]>;
   findSkillById(skillId: string): Promise<SkillSummary | null>;
   findSkillsByIds(ids: readonly string[]): Promise<SkillSummary[]>;
-  /**
-   * Upserts the skill and, in the same transaction, applies the limits the
-   * command derives, clamping current HP and PE to them.
-   */
-  upsertSkill(command: UpsertSkillCommand): Promise<CharacterSkill>;
 }

@@ -1,17 +1,23 @@
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import type { GameSessionNotifier } from '@shared/game-session/game-session-notifier.contract.js';
+import {
+  bExp,
+  CONDICIONAMENTO,
+  maxEffort,
+  maxHp,
+  VITALIDADE,
+} from '@shared/rules/vitals.js';
 import { resolveHeight, resolveWeight } from '../character.appearance.js';
 import { assertAttributeBudget } from '../character.attributes.js';
 import { requireEditableCharacter } from '../character.authorization.js';
+import { assertNpReductionFits } from '../character.np-reduction.js';
 import { bondsPatch } from '../character.bonds.js';
 import {
-  CONDICIONAMENTO,
   deriveProficiencies,
   deriveSize,
   deriveVaalaques,
   proficiencyBonus,
   type Rng,
-  VITALIDADE,
 } from '../character.derivation.js';
 import {
   type AttributeScores,
@@ -21,9 +27,12 @@ import {
   type SheetChanges,
   type UpdateCharacterInput,
 } from '../character.entity.js';
-import { NpMasterOnlyError } from '../character.errors.js';
+import {
+  ArchetypeMasterOnlyError,
+  NpMasterOnlyError,
+  SheetPointsMasterOnlyError,
+} from '../character.errors.js';
 import type { CharacterRepository } from '../character.repository.js';
-import { bExp, maxEffort, maxHp } from '../character.stats.js';
 import { assertSkillPools } from '../skills/skill-allocation.js';
 
 type SheetRequest = Omit<
@@ -34,6 +43,24 @@ type SheetRequest = Omit<
 };
 
 export type UpdateCharacterCommand = SheetRequest & { version: number };
+
+const ATTRIBUTE_FIELDS = [
+  'cognition',
+  'psyche',
+  'instinct',
+  'constitution',
+  'motricity',
+  'perception',
+] as const;
+
+function assertPlayerSheetFields(input: SheetRequest): void {
+  if (ATTRIBUTE_FIELDS.some((field) => input[field] !== undefined)) {
+    throw new SheetPointsMasterOnlyError();
+  }
+  if (input.personality !== undefined || input.posture !== undefined) {
+    throw new ArchetypeMasterOnlyError();
+  }
+}
 
 function mergeAttributes(
   character: Character,
@@ -132,15 +159,28 @@ export class UpdateCharacterService {
       requesterId,
     );
     if (input.np !== undefined && !isMaster) throw new NpMasterOnlyError();
+    if (!isMaster) assertPlayerSheetFields(input);
 
     const { version, ...request } = input;
+    let oldNp: number | undefined;
     const updated = await this.characters.updateSheet({
       id,
       expectedVersion: version,
-      decide: (current, skills) => this.decide(current, skills, request),
+      decide: (current, skills) => {
+        oldNp = current.np;
+
+        return this.decide(current, skills, request);
+      },
     });
 
     await this.notifier.notifyRosterChanged(updated.gameId);
+    if (oldNp === undefined || oldNp === updated.np) return updated;
+
+    await this.notifier.notifyNpChanged(updated.gameId, {
+      characterId: updated.id,
+      oldNp,
+      newNp: updated.np,
+    });
 
     return updated;
   }
@@ -152,9 +192,15 @@ export class UpdateCharacterService {
   ): SheetChanges {
     const attributes = mergeAttributes(character, input);
     const np = input.np ?? character.np;
-    assertAttributeBudget(np, attributes);
-
     const proficiencies = resolveProficiencies(character, input);
+    assertNpReductionFits({
+      oldNp: character.np,
+      newNp: np,
+      attributes,
+      proficiencies,
+      skills,
+    });
+    assertAttributeBudget(np, attributes);
     assertSkillPools(proficiencies, np, skills);
 
     const appearance = resolveAppearance(character, input, this.rng);

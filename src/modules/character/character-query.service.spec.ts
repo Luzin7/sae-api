@@ -26,6 +26,31 @@ describe('CharacterQueryService', () => {
       offset: 0,
     });
     expect(result).toHaveLength(1);
+    expect(result[0]?.character.id).toBe('char-1');
+  });
+
+  it('computes the advancement of two listed characters with one findSkillSpend call', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findByPlayer).mockResolvedValue([
+      makeCharacter({ id: 'char-1', np: 3, cognitionProficiency: 'versado' }),
+      makeCharacter({ id: 'char-2' }),
+    ]);
+    vi.mocked(characters.findSkillSpend).mockResolvedValue([
+      { characterId: 'char-1', attribute: 'cognition', spent: 10 },
+    ]);
+
+    const result = await new CharacterQueryService(
+      characters,
+      makeMembership(),
+    ).listMine('player-1', { limit: 20, offset: 0 });
+
+    expect(characters.findSkillSpend).toHaveBeenCalledTimes(1);
+    expect(characters.findSkillSpend).toHaveBeenCalledWith([
+      'char-1',
+      'char-2',
+    ]);
+    expect(result[0]?.advancement.skillPoints.cognition.remaining).toBe(10);
+    expect(result[1]?.advancement.skillPoints.cognition.spent).toBe(0);
   });
 
   it('forbids listing a game the requester does not belong to', async () => {
@@ -55,6 +80,7 @@ describe('CharacterQueryService', () => {
 
     expect(characters.findByGame).toHaveBeenCalledWith('game-1');
     expect(result).toHaveLength(1);
+    expect(characters.findSkillSpend).toHaveBeenCalledTimes(1);
   });
 
   it('lists items of an owned character', async () => {

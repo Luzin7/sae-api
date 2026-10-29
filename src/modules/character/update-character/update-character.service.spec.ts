@@ -7,13 +7,15 @@ import type {
   SheetChanges,
 } from '../character.entity.js';
 import {
+  ArchetypeMasterOnlyError,
   AttributeBudgetExceededError,
   CharacterVersionConflictError,
   InvalidAttributeError,
   InvalidHeightError,
   InvalidWeightError,
   NpMasterOnlyError,
-  SkillPoolExceededError,
+  NpReductionBlockedError,
+  SheetPointsMasterOnlyError,
 } from '../character.errors.js';
 import {
   makeCharacter,
@@ -141,15 +143,16 @@ describe('UpdateCharacterService', () => {
   it('rejects a sheet whose attributes exceed the np budget', async () => {
     await expect(
       decide({
+        requester: 'master-1',
         input: { cognition: 5, psyche: 5, instinct: 5, motricity: 5 },
       }),
     ).rejects.toBeInstanceOf(AttributeBudgetExceededError);
   });
 
   it('rejects -1/0 as attribute values', async () => {
-    await expect(decide({ input: { perception: 0 } })).rejects.toBeInstanceOf(
-      InvalidAttributeError,
-    );
+    await expect(
+      decide({ requester: 'master-1', input: { perception: 0 } }),
+    ).rejects.toBeInstanceOf(InvalidAttributeError);
   });
 
   it('recomputes maxHp, maxEffort and bExp on a sheet change', async () => {
@@ -205,6 +208,7 @@ describe('UpdateCharacterService', () => {
 
   it('re-derives proficiency levels when the archetype changes', async () => {
     const changes = await decide({
+      requester: 'master-1',
       input: { personality: 'Erudito', posture: 'Abrutalhado' },
     });
 
@@ -282,6 +286,52 @@ describe('UpdateCharacterService', () => {
     );
   });
 
+  it.each([
+    'cognition',
+    'psyche',
+    'instinct',
+    'constitution',
+    'motricity',
+    'perception',
+  ] as const)('forbids a player from sending %s', async (attribute) => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+
+    const execution = new UpdateCharacterService(
+      characters,
+      makeMembership(),
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('char-1', 'player-1', { version: 0, [attribute]: -4 });
+
+    await expect(execution).rejects.toBeInstanceOf(SheetPointsMasterOnlyError);
+    await expect(execution).rejects.toThrow(
+      'Use Evoluir personagem para distribuir pontos.',
+    );
+    expect(characters.updateSheet).not.toHaveBeenCalled();
+  });
+
+  it.each(['personality', 'posture'] as const)(
+    'forbids a player from sending %s',
+    async (field) => {
+      const characters = makeCharacterRepository();
+      vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+
+      const execution = new UpdateCharacterService(
+        characters,
+        makeMembership(),
+        fixedRng(1),
+        makeNotifier(),
+      ).execute('char-1', 'player-1', { version: 0, [field]: 'Altruísta' });
+
+      await expect(execution).rejects.toBeInstanceOf(ArchetypeMasterOnlyError);
+      await expect(execution).rejects.toThrow(
+        'Só o Mestre muda personalidade e postura.',
+      );
+      expect(characters.updateSheet).not.toHaveBeenCalled();
+    },
+  );
+
   it('forbids the owner from changing np', async () => {
     const characters = makeCharacterRepository();
     vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
@@ -306,15 +356,101 @@ describe('UpdateCharacterService', () => {
     expect(changes).toMatchObject({ np: 2, bExp: 1, maxHp: 20 + 2 * 6 });
   });
 
-  it('rejects an np reduction that leaves a skill pool exceeded', async () => {
-    await expect(
-      decide({
-        requester: 'master-1',
-        character: makeCharacter({ np: 5 }),
-        skills: [makeSkillDetail({ proficiencyBonus: 6 })],
-        input: { np: 3 },
+  it('blocks an np reduction below the spent skill pool and names it', async () => {
+    const error = await decide({
+      requester: 'master-1',
+      character: makeCharacter({ np: 5 }),
+      skills: [makeSkillDetail({ proficiencyBonus: 6 })],
+      input: { np: 3 },
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NpReductionBlockedError);
+    expect((error as Error).message).toBe(
+      'Não dá para descer: Perícias de Constituição usam 6 de 4.',
+    );
+  });
+
+  it('blocks an np reduction below the spent attribute points and names it', async () => {
+    const error = await decide({
+      requester: 'master-1',
+      character: makeCharacter({
+        np: 5,
+        cognition: 5,
+        psyche: 5,
+        instinct: 5,
+        motricity: 5,
       }),
-    ).rejects.toBeInstanceOf(SkillPoolExceededError);
+      input: { np: 1 },
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NpReductionBlockedError);
+    expect((error as Error).message).toBe(
+      'Não dá para descer: Pontos de Atributo usam 32 de 20.',
+    );
+  });
+
+  describe('np change notification', () => {
+    async function run(
+      npFrom: number,
+      npTo: number | undefined,
+      notifier: ReturnType<typeof makeNotifier>,
+    ): Promise<void> {
+      const characters = makeCharacterRepository();
+      const current = makeCharacter({ np: npFrom });
+      vi.mocked(characters.findById).mockResolvedValue(current);
+      vi.mocked(characters.updateSheet).mockImplementation(async (command) => {
+        const changes = command.decide(current, []);
+
+        return { ...current, np: changes.np ?? current.np };
+      });
+
+      await new UpdateCharacterService(
+        characters,
+        makeMembership(),
+        fixedRng(1),
+        notifier,
+      ).execute('char-1', 'master-1', { version: 0, np: npTo });
+    }
+
+    it('publishes the old and new np to the game', async () => {
+      const notifier = makeNotifier();
+
+      await run(3, 4, notifier);
+
+      expect(notifier.notifyNpChanged).toHaveBeenCalledWith('game-1', {
+        characterId: 'char-1',
+        oldNp: 3,
+        newNp: 4,
+      });
+      expect(notifier.notifyRosterChanged).toHaveBeenCalledWith('game-1');
+    });
+
+    it('publishes nothing when np is unchanged', async () => {
+      const notifier = makeNotifier();
+
+      await run(3, 3, notifier);
+
+      expect(notifier.notifyNpChanged).not.toHaveBeenCalled();
+    });
+
+    it('publishes nothing on a version conflict', async () => {
+      const notifier = makeNotifier();
+      const characters = makeCharacterRepository();
+      vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+      vi.mocked(characters.updateSheet).mockRejectedValue(
+        new CharacterVersionConflictError(),
+      );
+
+      await expect(
+        new UpdateCharacterService(
+          characters,
+          makeMembership(),
+          fixedRng(1),
+          notifier,
+        ).execute('char-1', 'master-1', { version: 0, np: 4 }),
+      ).rejects.toBeInstanceOf(CharacterVersionConflictError);
+      expect(notifier.notifyNpChanged).not.toHaveBeenCalled();
+    });
   });
 
   it('decides from the character locked by the repository, not the stale read', async () => {

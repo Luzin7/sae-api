@@ -11,6 +11,10 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
+import {
+  SIZE_CATEGORY_KEYS,
+  type SizeCategoryKey,
+} from '@shared/rules/size.js';
 import { game } from './game.js';
 import { player } from './player.js';
 
@@ -31,7 +35,7 @@ export const monster = pgTable(
     currentEffort: integer('current_effort').default(0).notNull(),
     size: varchar('size', {
       length: 30,
-    }),
+    }).$type<SizeCategoryKey>(),
     cognition: integer('cognition').default(-5).notNull(),
     psyche: integer('psyche').default(-5).notNull(),
     instinct: integer('instinct').default(-5).notNull(),
@@ -58,6 +62,13 @@ export const monster = pgTable(
     uniqueIndex('monster_creator_client_request_uq').on(
       t.createdBy,
       t.clientRequestId,
+    ),
+    check(
+      'monster_size_check',
+      sql`${t.size} IS NULL OR ${t.size} IN (${sql.join(
+        SIZE_CATEGORY_KEYS.map((key) => sql.raw(`'${key}'`)),
+        sql`, `,
+      )})`,
     ),
     check('monster_np_check', sql`${t.np} BETWEEN 1 AND 20`),
     check(

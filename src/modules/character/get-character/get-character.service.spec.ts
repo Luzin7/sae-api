@@ -46,7 +46,8 @@ describe('GetCharacterService', () => {
       makeMembership(),
     ).execute('char-1', 'player-1');
 
-    expect(result.nickname).toBe('Hero');
+    expect(result.character.nickname).toBe('Hero');
+    expect(result.advancement.attributePoints.budget).toBe(20);
   });
 
   it('returns the character for the game master', async () => {
@@ -65,6 +66,6 @@ describe('GetCharacterService', () => {
       'master-1',
     );
 
-    expect(result.id).toBe('char-1');
+    expect(result.character.id).toBe('char-1');
   });
 });

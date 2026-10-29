@@ -241,6 +241,16 @@ export const OutboundEventSchema = z.union([
     newPe: z.number().int(),
   }),
   z.object({
+    type: z.literal('character.np-changed'),
+    characterId: z.string(),
+    oldNp: z.number().int(),
+    newNp: z.number().int(),
+  }),
+  z.object({
+    type: z.literal('character.advanced'),
+    characterId: z.string(),
+  }),
+  z.object({
     type: z.literal('master.narration'),
     playerId: z.string(),
     playerName: z.string(),

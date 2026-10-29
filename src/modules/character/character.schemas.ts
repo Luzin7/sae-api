@@ -106,14 +106,14 @@ const SIZE_SOURCE_RULES: readonly SizeSourceRule[] = [
   {
     exact: 'heightCm',
     roll: 'heightRoll',
-    missingMessage: 'Informe a altura ou escolha rolar.',
-    conflictMessage: 'Informe a altura ou a rolagem, não as duas.',
+    missingMessage: 'Informe a altura ou deixe para o destino.',
+    conflictMessage: 'Escolha a altura ou deixe para o destino, não os dois.',
   },
   {
     exact: 'weightKg',
     roll: 'weightRoll',
-    missingMessage: 'Informe o peso ou escolha rolar.',
-    conflictMessage: 'Informe o peso ou a rolagem, não as duas.',
+    missingMessage: 'Informe o peso ou deixe para o destino.',
+    conflictMessage: 'Escolha o peso ou deixe para o destino, não os dois.',
   },
 ];
 
@@ -202,6 +202,24 @@ export const UpdateCharacterBodySchema =
     refineSizeSources(false),
   ).superRefine(refineUniqueAfflictions);
 
+export const AdvanceCharacterBodySchema = z
+  .object({
+    version: z.number().int().min(0),
+    attributes: z
+      .object({
+        cognition: AttributeSchema,
+        psyche: AttributeSchema,
+        instinct: AttributeSchema,
+        constitution: AttributeSchema,
+        motricity: AttributeSchema,
+        perception: AttributeSchema,
+      })
+      .partial()
+      .default({}),
+    skills: SkillAllocationsSchema.default([]),
+  })
+  .superRefine(refineUniqueSkills);
+
 export const PreviewCharacterBodySchema = CharacterSheetBodySchema.pick({
   np: true,
   cognition: true,
@@ -213,7 +231,9 @@ export const PreviewCharacterBodySchema = CharacterSheetBodySchema.pick({
   personality: true,
   posture: true,
   heightCm: true,
+  heightRoll: true,
   weightKg: true,
+  weightRoll: true,
   socialClass: true,
 })
   .partial()
@@ -221,6 +241,7 @@ export const PreviewCharacterBodySchema = CharacterSheetBodySchema.pick({
     np: CharacterSheetBodySchema.shape.np,
     skills: SkillAllocationsSchema.optional(),
   })
+  .superRefine(refineSizeSources(false))
   .superRefine(refineUniqueSkills);
 
 export const ChangeHpBodySchema = z.object({
@@ -284,10 +305,10 @@ export const CharacterListQuerySchema = z.object({
 
 export type CreateCharacterBody = z.infer<typeof CreateCharacterBodySchema>;
 export type PreviewCharacterBody = z.infer<typeof PreviewCharacterBodySchema>;
+export type AdvanceCharacterBody = z.infer<typeof AdvanceCharacterBodySchema>;
 export type UpdateCharacterBody = z.infer<typeof UpdateCharacterBodySchema>;
 export type ChangeHpBody = z.infer<typeof ChangeHpBodySchema>;
 export type ChangeEffortBody = z.infer<typeof ChangeEffortBodySchema>;
 export type CreateItemBody = z.infer<typeof CreateItemBodySchema>;
 export type UpdateItemBody = z.infer<typeof UpdateItemBodySchema>;
-export type UpsertSkillBody = z.infer<typeof UpsertSkillBodySchema>;
 export type CharacterListQuery = z.infer<typeof CharacterListQuerySchema>;

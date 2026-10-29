@@ -89,6 +89,28 @@ A master joining or leaving emits neither event.
 
 `attribute` is one of `cognition | psyche | instinct | constitution | motricity | perception`.
 
+### 3.1.1 Advancement balance (`advancement`)
+
+Read responses carry a derived `advancement` object: `GET /characters/mine`, `GET /characters/game/:gameId`, `GET /characters/:id` and `GET /characters/:id/sheet` (inside `character`). Write responses (`POST`, `PATCH`) do not include it; refetch to update it. Nothing is stored: unspent points are the budget for the character's NP minus what the sheet already spends.
+
+```json
+"advancement": {
+  "attributePoints": { "budget": 22, "spent": 20, "remaining": 2 },
+  "skillPoints": {
+    "cognition": { "budget": 20, "spent": 10, "remaining": 10 },
+    "psyche": { "budget": 4, "spent": 0, "remaining": 4 },
+    "instinct": { "budget": 4, "spent": 0, "remaining": 4 },
+    "constitution": { "budget": 4, "spent": 0, "remaining": 4 },
+    "motricity": { "budget": 4, "spent": 0, "remaining": 4 },
+    "perception": { "budget": 4, "spent": 0, "remaining": 4 }
+  }
+}
+```
+
+- `attributePoints.budget` is the attribute budget for the NP; `spent` is the sum of the attribute costs.
+- `skillPoints.<attribute>.budget` is the proficiency pool of that attribute (level pool x tiers earned at the NP); `spent` is the sum of `proficiencyBonus` of the skills of that attribute.
+- `remaining = budget - spent`; leveling is add-only, so it is never negative for a valid sheet.
+
 ### 3.2 Access and status
 
 - The `GET /characters/:id/sheet` endpoint itself is read-only. Access is allowed for the character owner **or** the master of that character's game; write access is defined in the matrix below.
@@ -97,10 +119,10 @@ A master joining or leaving emits neither event.
 
 | Actor | Allowed writes |
 | --- | --- |
-| Master | Read any sheet in their game; `PATCH /characters/:id` (general fields and NP); `PATCH /characters/:id/hp`; `PATCH /characters/:id/pe`; `character.hp-change` / `character.pe-change` over WS. |
-| Player | Own character's general fields, items and skills (never HP or PE: only the Mestre changes them, `403` otherwise); delete their own character. Cannot change NP (`403`, `Apenas o mestre pode alterar o NP.`). |
+| Master | Read any sheet in their game; `PATCH /characters/:id` (general fields, NP, attributes, personality and posture); `PATCH /characters/:id/hp`; `PATCH /characters/:id/pe`; `character.hp-change` / `character.pe-change` over WS. |
+| Player | Own character's narrative fields and items (never HP or PE: only the Mestre changes them, `403` otherwise); points only through `POST /characters/:id/advancement`; delete their own character. Cannot change NP (`403`, `Apenas o mestre pode alterar o NP.`). Cannot send any attribute through `PATCH /characters/:id` (`403`, `Use Evoluir personagem para distribuir pontos.`) nor `personality`/`posture` (`403`, `Só o Mestre muda personalidade e postura.`). |
 
-- Master write access is still owner-only for adding, updating and deleting items, upserting skills and deleting a player's character.
+- Master write access is still owner-only for adding, updating and deleting items and deleting a player's character.
 - The master read widening below does not extend any write beyond the table above.
 
 The master can also read `GET /characters/:id`, `GET /characters/:id/items`, `GET /characters/:id/skills` and `GET /characters/:id/sheet` for characters in their game.
@@ -113,11 +135,37 @@ The master can also read `GET /characters/:id`, `GET /characters/:id/items`, `GE
 - Refetch after mutations.
 - The backend pushes `character.hp-changed` (`{ "characterId": "uuid", "oldHp": 10, "newHp": 7 }`) when HP changes through REST or the WS force path.
 - `character.pe-changed` (`{ "characterId": "uuid", "oldPe": 5, "newPe": 8 }`) is pushed whenever PE changes: `character.pe-change` frame, `PATCH /characters/:id/pe`, or per-turn recovery. See section 3.5 (PE) and 3.6 (PS).
-- Items and skills are not pushed; refetch after those mutations.
+- `character.np-changed` (`{ "characterId": "uuid", "oldNp": 3, "newNp": 4 }`) is pushed to the game room after `PATCH /characters/:id` changes NP (Mestre only). Nothing is pushed when NP is unchanged or the save fails (including a `409` version conflict). Refetch the sheet on receipt: `maxHp`, `bExp` and the attribute and skill pools change with NP. Best-effort: no active session, no frame.
+- Lowering NP below what is already spent answers `400 VALIDATION` (never `409`) with a message naming each item, e.g. `Não dá para descer: Perícias de Cognição usam 14 de 10. Pontos de Atributo usam 22 de 20.`; nothing is written.
+- `character.advanced` (`{ "characterId": "uuid" }`) is pushed to the game room after `POST /characters/:id/advancement` succeeds. Refetch the sheet on receipt. Nothing is pushed when the request fails (including `409`). Best-effort: no active session, no frame.
+- Items are not pushed; refetch after those mutations.
+
+### 3.3.1 Advancement (add-only spend)
+
+`POST /characters/:id/advancement`, owner only (the Mestre who is not the owner gets `403`).
+
+```json
+{ "version": 3, "attributes": { "constitution": 3 }, "skills": [{ "skillId": "uuid", "proficiencyBonus": 4 }] }
+```
+
+- `attributes` (optional, partial) and `skills` carry TARGET values, never deltas. `skills` has no repeated `skillId`.
+- Only points gained are added; points already spent never go back. Any target below the saved value answers `400 VALIDATION` `Pontos distribuídos não podem ser retirados.`; a request that raises nothing answers `400 VALIDATION` `Nada para evoluir.`. Nothing is written in either case.
+- Attribute budget, skill pools and per-skill caps are checked against the current NP; the existing messages apply.
+- `maxHp` is recomputed from Constituição and Vitalidade, `maxEffort` from Condicionamento. Current PS and PE are kept, only clamped down if the new limit is lower. NP and `bExp` are untouched.
+- `version` is the sheet version the client read; a stale one answers `409`, so a replay of the same body also answers `409`.
+- Answers `200 { "character": { ... } }` with the same shape as `GET /characters/:id`, including `advancement` and the bumped `version`.
+
+`POST /characters/:id/skills` was removed (`404`); skill points are spent only here.
 
 ### 3.4 Legacy data
 
 Legacy rows may still have `character.heightCm`, `character.weightKg` and `character.size` as `null`. Render them gracefully (placeholder, omit the line, never crash or print `null`).
+
+### 3.4.1 Bestiary: monster size
+
+`size` on bestiary create (`POST /bestiary`) and update (`PATCH /bestiary/:id`) is a choice, no longer free text. Send one of the keys `miudo`, `pequeno`, `medio`, `grande`, `enorme`, or `null`/omit it. Any other value (for example `"Médio"` or `"Gigantão"`) is a `400` with `error.code: "VALIDATION"`. Responses return the same key or `null`.
+
+Render the label from `GET /rules` -> `sizeCategories` (`[{ key, name, min, max }]`, e.g. `{ "key": "medio", "name": "Médio" }`); never show the raw key. Build the picker from the same list. Monsters saved before this change were normalized by the server: a recognizable name became its key, anything else became `null` (render a placeholder).
 
 ### 3.5 Pontos de Esforco (PE)
 
@@ -170,15 +218,15 @@ Explicit ranges: `heightCm` 150–250, `weightKg` 50–150 (`weightKg` must be w
 HTTP 400 envelope:
 
 ```json
-{ "error": { "code": "VALIDATION", "message": "Dados inválidos: heightCm: Informe a altura ou escolha rolar.; weightKg: Informe o peso ou escolha rolar." } }
+{ "error": { "code": "VALIDATION", "message": "Dados inválidos: heightCm: Informe a altura ou deixe para o destino.; weightKg: Informe o peso ou deixe para o destino." } }
 ```
 
 | Case | Field path | Message |
 | --- | --- | --- |
-| Missing height | `heightCm` | Informe a altura ou escolha rolar. |
-| Missing weight | `weightKg` | Informe o peso ou escolha rolar. |
-| Both height sources | `heightCm` | Informe a altura ou a rolagem, não as duas. |
-| Both weight sources | `weightKg` | Informe o peso ou a rolagem, não as duas. |
+| Missing height | `heightCm` | Informe a altura ou deixe para o destino. |
+| Missing weight | `weightKg` | Informe o peso ou deixe para o destino. |
+| Both height sources | `heightCm` | Escolha a altura ou deixe para o destino, não os dois. |
+| Both weight sources | `weightKg` | Escolha o peso ou deixe para o destino, não os dois. |
 | Height out of range | `heightCm` | Altura deve estar entre 150 e 250 cm. |
 | Weight out of range | `weightKg` | Peso deve estar entre 50 e 150 kg. |
 | Weight not whole kg | `weightKg` | Peso deve ser um número inteiro. |
@@ -303,6 +351,6 @@ WS frame: `{ "type": "error", "error": { "code", "message" } }`.
 - **Multiple characters per player:** `characterIds` can hold several ids; choose or default to the oldest, and keep the choice consistent.
 - **Legacy nulls:** `heightCm`, `weightKg` and `size` may be `null`; do not assume numeric values.
 - **Roster push is best-effort:** no frame is sent when no active session exists or when the push fails; refetch `GET /games/:id/players` on reconnect.
-- **Master read widening and write scope:** the master can read sheets of characters in their game and can write general fields, NP, HP and PE; items, skills and deleting a player's character remain owner-only.
+- **Master read widening and write scope:** the master can read sheets of characters in their game and can write general fields, NP, HP and PE; items and deleting a player's character remain owner-only.
 - **PE push is best-effort over REST:** `character.pe-changed` from `PATCH /characters/:id/pe` goes through the game-session notifier (no active session, no frame); refetch on reconnect.
 - **HP and PE pushed:** `character.hp-changed` and `character.pe-changed` are pushed character events; handle them independently of sheet refetches.

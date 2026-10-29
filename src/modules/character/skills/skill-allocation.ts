@@ -1,4 +1,7 @@
-import { ATTRIBUTE_NAMES } from '@shared/rules/attributes.js';
+import {
+  ATTRIBUTE_NAMES,
+  type AttributeKey,
+} from '@shared/rules/attributes.js';
 import { proficiencyPool, skillBonusCap } from '@shared/rules/proficiency.js';
 import type {
   CharacterSkillDetail,
@@ -18,21 +21,35 @@ export type SkillAllocationDetail = Pick<
   'skillId' | 'skillName' | 'attribute' | 'proficiencyBonus'
 >;
 
+export interface SkillPoolOverrun {
+  attribute: AttributeKey;
+  pool: number;
+  spent: number;
+}
+
+export function skillPoolOverruns(
+  proficiencies: ProficiencyScores,
+  np: number,
+  skills: readonly SkillAllocationDetail[],
+): SkillPoolOverrun[] {
+  return ATTRIBUTE_NAMES.map((attribute) => ({
+    attribute,
+    pool: proficiencyPool(proficiencyLevelFor(proficiencies, attribute), np),
+    spent: skills
+      .filter((skill) => skill.attribute === attribute)
+      .reduce((total, skill) => total + skill.proficiencyBonus, 0),
+  })).filter(({ pool, spent }) => spent > pool);
+}
+
 export function assertSkillPools(
   proficiencies: ProficiencyScores,
   np: number,
   skills: readonly SkillAllocationDetail[],
 ): void {
-  for (const attribute of ATTRIBUTE_NAMES) {
-    const pool = proficiencyPool(
-      proficiencyLevelFor(proficiencies, attribute),
-      np,
-    );
-    const spent = skills
-      .filter((skill) => skill.attribute === attribute)
-      .reduce((total, skill) => total + skill.proficiencyBonus, 0);
-    if (spent > pool) throw new SkillPoolExceededError(attribute, pool, spent);
-  }
+  const [first] = skillPoolOverruns(proficiencies, np, skills);
+  if (!first) return;
+
+  throw new SkillPoolExceededError(first.attribute, first.pool, first.spent);
 }
 
 export function assertSkillBonusCaps(

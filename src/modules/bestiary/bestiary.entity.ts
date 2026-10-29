@@ -1,3 +1,4 @@
+import type { SizeCategoryKey } from '@shared/rules/size.js';
 export interface Monster {
   id: string;
   gameId: string | null;
@@ -6,7 +7,7 @@ export interface Monster {
   maxHp: number;
   currentHp: number;
   maxEffort: number;
-  size: string | null;
+  size: SizeCategoryKey | null;
   cognition: number;
   psyche: number;
   instinct: number;
@@ -27,7 +28,7 @@ export interface MonsterSheetInput {
   maxHp: number;
   maxEffort: number;
   currentHp?: number;
-  size?: string | null;
+  size?: SizeCategoryKey | null;
   cognition?: number;
   psyche?: number;
   instinct?: number;

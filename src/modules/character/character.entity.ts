@@ -217,25 +217,10 @@ export interface CharacterSkillDetail extends CharacterSkill {
   attribute: AttributeName;
 }
 
-export interface VitalLimits {
-  maxHp: number;
-  maxEffort: number;
-}
-
-/**
- * Decides, from the locked character and its skills after the upsert, the new
- * limits; null leaves the limits untouched.
- */
-export type VitalLimitsDecision = (
-  character: Character,
-  skills: CharacterSkillDetail[],
-) => VitalLimits | null;
-
-export interface UpsertSkillCommand {
+export interface SkillSpendRow {
   characterId: string;
-  skillId: string;
-  proficiencyBonus: number;
-  deriveLimits: VitalLimitsDecision;
+  attribute: AttributeName;
+  spent: number;
 }
 
 export interface Page {
@@ -253,7 +238,7 @@ export interface Vitals {
 export type SheetChanges = Omit<
   UpdateCharacterInput,
   'currentHp' | 'currentEffort' | 'maxHp' | 'maxEffort'
-> & { maxHp: number; maxEffort: number };
+> & { maxHp: number; maxEffort: number; skills?: UpsertSkillInput[] };
 
 export type SheetDecision = (
   current: Character,

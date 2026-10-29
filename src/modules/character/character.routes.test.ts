@@ -15,11 +15,11 @@ import {
   makeItem,
   makeMembership,
   makeNotifier,
-  makeSkill,
   makeSkillDetail,
   makeSkillSummary,
   stubUpdateSheet,
 } from './character.testkit.js';
+import { AdvanceCharacterService } from './advance-character/advance-character.service.js';
 import { CreateCharacterService } from './create-character/create-character.service.js';
 import { DeleteCharacterService } from './delete-character/delete-character.service.js';
 import { GetCharacterService } from './get-character/get-character.service.js';
@@ -28,7 +28,6 @@ import { AddItemService } from './items/add-item/add-item.service.js';
 import { DeleteItemService } from './items/delete-item/delete-item.service.js';
 import { UpdateItemService } from './items/update-item/update-item.service.js';
 import { PreviewCharacterService } from './preview-character/preview-character.service.js';
-import { UpsertSkillService } from './skills/upsert-skill/upsert-skill.service.js';
 import { UpdateCharacterService } from './update-character/update-character.service.js';
 import { ChangeEffortService } from './change-effort/change-effort.service.js';
 import { ChangeHpService } from './change-hp/change-hp.service.js';
@@ -65,6 +64,7 @@ function makeServices(
       fixedRng,
       notifier,
     ),
+    advanceCharacter: new AdvanceCharacterService(characters, notifier),
     deleteCharacter: new DeleteCharacterService(
       characters,
       membership,
@@ -75,7 +75,6 @@ function makeServices(
     addItem: new AddItemService(characters),
     updateItem: new UpdateItemService(characters),
     deleteItem: new DeleteItemService(characters),
-    upsertSkill: new UpsertSkillService(characters),
     query: new CharacterQueryService(characters, membership),
   };
 }
@@ -246,6 +245,62 @@ describe('character routes', () => {
     expect(res.json().character.currentHp).toBe(15);
   });
 
+  it('answers 200 to the owner advancing, with the advancement balance', async () => {
+    const characters = makeCharacterRepository();
+    const owned = makeCharacter({ np: 2, version: 0 });
+    vi.mocked(characters.findById).mockResolvedValue(owned);
+    stubUpdateSheet(characters, owned);
+    vi.mocked(characters.updateSheet).mockResolvedValue(
+      makeCharacter({ np: 2, cognition: -4, version: 1 }),
+    );
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters/char-1/advancement',
+      payload: { version: 0, attributes: { cognition: -4 } },
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().character.version).toBe(1);
+    expect(res.json().character.advancement.attributePoints.budget).toBe(22);
+  });
+
+  it('answers 403 to the Mestre advancing a character he does not own', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters/char-1/advancement',
+      payload: { version: 0, attributes: { cognition: -4 } },
+      headers: { cookie: `token=${makeToken(app, 'master-1')}` },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(characters.updateSheet).not.toHaveBeenCalled();
+  });
+
+  it('answers 409 to an advancement with a stale version', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.updateSheet).mockRejectedValue(
+      new CharacterVersionConflictError(),
+    );
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters/char-1/advancement',
+      payload: { version: 0, attributes: { cognition: -4 } },
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(409);
+  });
+
   it('answers 403 to the character owner changing PS and writes nothing', async () => {
     const characters = makeCharacterRepository();
     vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
@@ -342,14 +397,8 @@ describe('character routes', () => {
     expect(listed.json().items).toHaveLength(1);
   });
 
-  it('upserts a skill using skillId and proficiencyBonus', async () => {
+  it('answers 404 to the removed skills upsert route', async () => {
     const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ constitutionProficiency: 'especialista' }),
-    );
-    vi.mocked(characters.findSkillById).mockResolvedValue(makeSkillSummary());
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.upsertSkill).mockResolvedValue(makeSkill());
     const app = await buildTestApp(makeServices(characters, makeMembership()));
 
     const res = await app.inject({
@@ -359,13 +408,7 @@ describe('character routes', () => {
       headers: { cookie: `token=${makeToken(app)}` },
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(characters.upsertSkill).toHaveBeenCalledWith({
-      characterId: 'char-1',
-      skillId: SKILL_ID,
-      proficiencyBonus: 3,
-      deriveLimits: expect.any(Function),
-    });
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -628,7 +671,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'heightCm: Informe a altura ou escolha rolar.',
+      'heightCm: Informe a altura ou deixe para o destino.',
     );
     expect(characters.create).not.toHaveBeenCalled();
   });
@@ -641,7 +684,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'weightKg: Informe o peso ou escolha rolar.',
+      'weightKg: Informe o peso ou deixe para o destino.',
     );
     expect(characters.create).not.toHaveBeenCalled();
   });
@@ -654,7 +697,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'heightCm: Informe a altura ou a rolagem, não as duas.',
+      'heightCm: Escolha a altura ou deixe para o destino, não os dois.',
     );
   });
 
@@ -666,7 +709,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'weightKg: Informe o peso ou a rolagem, não as duas.',
+      'weightKg: Escolha o peso ou deixe para o destino, não os dois.',
     );
   });
 
@@ -764,7 +807,7 @@ describe('character size validation', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
-      'heightCm: Informe a altura ou a rolagem, não as duas.',
+      'heightCm: Escolha a altura ou deixe para o destino, não os dois.',
     );
     expect(characters.updateSheet).not.toHaveBeenCalled();
   });
@@ -811,7 +854,10 @@ describe('character sheet creation contract', () => {
     return { res, characters };
   }
 
-  async function patchCharacter(payload: Record<string, unknown>) {
+  async function patchCharacter(
+    payload: Record<string, unknown>,
+    requesterId = 'player-1',
+  ) {
     const characters = makeCharacterRepository();
     const current = makeCharacter({ afflictions: ['medo de altura'] });
     vi.mocked(characters.findById).mockResolvedValue(current);
@@ -822,7 +868,7 @@ describe('character sheet creation contract', () => {
       method: 'PATCH',
       url: '/characters/char-1',
       payload: { version: 0, ...payload },
-      headers: { cookie: `token=${makeToken(app)}` },
+      headers: { cookie: `token=${makeToken(app, requesterId)}` },
     });
   }
 
@@ -901,32 +947,40 @@ describe('character sheet creation contract', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('updates a legacy character without revalidating its afflictions', async () => {
-    const res = await patchCharacter({ nickname: 'Renamed' });
+  it('forbids a player from patching an attribute', async () => {
+    const res = await patchCharacter({ cognition: -4 });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.message).toBe(
+      'Use Evoluir personagem para distribuir pontos.',
+    );
+  });
+
+  it('forbids a player from patching the personality', async () => {
+    const res = await patchCharacter({ personality: 'Altruísta' });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('lets the master patch an attribute', async () => {
+    const res = await patchCharacter({ cognition: -4 }, 'master-1');
 
     expect(res.statusCode).toBe(200);
   });
 
-  it('rejects a skill bonus above the cap', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ np: 20, constitutionProficiency: 'versado' }),
+  it('lets the master patch the personality', async () => {
+    const res = await patchCharacter(
+      { personality: 'Erudito', posture: 'Abrutalhado' },
+      'master-1',
     );
-    vi.mocked(characters.findSkillById).mockResolvedValue(makeSkillSummary());
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    const app = await buildTestApp(makeServices(characters, makeMembership()));
 
-    const res = await app.inject({
-      method: 'POST',
-      url: '/characters/char-1/skills',
-      payload: { skillId: SKILL_ID, proficiencyBonus: 21 },
-      headers: { cookie: `token=${makeToken(app)}` },
-    });
+    expect(res.statusCode).toBe(200);
+  });
 
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.message).toBe(
-      'Bônus de Vitalidade acima do limite de +20.',
-    );
+  it('updates a legacy character without revalidating its afflictions', async () => {
+    const res = await patchCharacter({ nickname: 'Renamed' });
+
+    expect(res.statusCode).toBe(200);
   });
 });
 
@@ -1157,6 +1211,32 @@ describe('character preview contract', () => {
     expect(characters.create).not.toHaveBeenCalled();
   });
 
+  it('derives size from a rolled band and an exact value', async () => {
+    const { res } = await postPreview({
+      np: 1,
+      heightRoll: 'min',
+      weightKg: 70,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().preview.size).toEqual({
+      factor: 0.5,
+      category: 'pequeno',
+      next: { category: 'medio', factorNeeded: 2 },
+    });
+  });
+
+  it('rejects an exact value together with a roll for the same dimension', async () => {
+    const { res } = await postPreview({
+      np: 1,
+      heightCm: 180,
+      heightRoll: 'max',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION');
+  });
+
   it('rejects an invalid attribute value', async () => {
     const { res } = await postPreview({ constitution: 0 });
 
@@ -1322,5 +1402,40 @@ describe('character write integrity contract', () => {
 
     expect(res.statusCode).toBe(201);
     expect(res.json().character.id).toBe('first-char');
+  });
+});
+
+describe('character advancement on reads', () => {
+  it('exposes advancement on the four read endpoints', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.findByPlayer).mockResolvedValue([makeCharacter()]);
+    vi.mocked(characters.findByGame).mockResolvedValue([makeCharacter()]);
+    vi.mocked(characters.findItems).mockResolvedValue([]);
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    const app = await buildTestApp(makeServices(characters, membership));
+    const headers = { cookie: `token=${makeToken(app)}` };
+    const get = (url: string) => app.inject({ method: 'GET', url, headers });
+
+    const mine = await get('/characters/mine');
+    const byGame = await get('/characters/game/game-1');
+    const one = await get('/characters/char-1');
+    const sheet = await get('/characters/char-1/sheet');
+
+    const expected = { budget: 20, spent: 0, remaining: 20 };
+    expect(mine.json().characters[0].advancement.attributePoints).toEqual(
+      expected,
+    );
+    expect(byGame.json().characters[0].advancement.attributePoints).toEqual(
+      expected,
+    );
+    expect(one.json().character.advancement.attributePoints).toEqual(expected);
+    expect(sheet.json().character.advancement.skillPoints.cognition).toEqual({
+      budget: 2,
+      spent: 0,
+      remaining: 2,
+    });
   });
 });

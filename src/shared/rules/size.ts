@@ -3,22 +3,25 @@ export const HEIGHT_EXACT_MAX = 250;
 export const WEIGHT_EXACT_MIN = 50;
 export const WEIGHT_EXACT_MAX = 150;
 
+export const BELOW_EXACT_DIE_SIDES = 10;
+export const ABOVE_EXACT_DIE_SIDES = 20;
+
 export type SizeExtremeBand = 'min' | 'max';
 
 export function rollHeight(
   band: SizeExtremeBand,
   rng: (min: number, max: number) => number,
 ): number {
-  if (band === 'min') return HEIGHT_EXACT_MIN - rng(1, 10);
-  return HEIGHT_EXACT_MAX + rng(1, 20);
+  if (band === 'min') return HEIGHT_EXACT_MIN - rng(1, BELOW_EXACT_DIE_SIDES);
+  return HEIGHT_EXACT_MAX + rng(1, ABOVE_EXACT_DIE_SIDES);
 }
 
 export function rollWeight(
   band: SizeExtremeBand,
   rng: (min: number, max: number) => number,
 ): number {
-  if (band === 'min') return WEIGHT_EXACT_MIN - rng(1, 10);
-  return WEIGHT_EXACT_MAX + rng(1, 20);
+  if (band === 'min') return WEIGHT_EXACT_MIN - rng(1, BELOW_EXACT_DIE_SIDES);
+  return WEIGHT_EXACT_MAX + rng(1, ABOVE_EXACT_DIE_SIDES);
 }
 
 export interface SizeFactorBand {
@@ -47,8 +50,15 @@ export const WEIGHT_FACTORS: readonly SizeFactorBand[] = [
   { min: 151, max: null, factor: 5 },
 ];
 
-export type SizeCategoryKey =
-  'miudo' | 'pequeno' | 'medio' | 'grande' | 'enorme';
+export const SIZE_CATEGORY_KEYS = [
+  'miudo',
+  'pequeno',
+  'medio',
+  'grande',
+  'enorme',
+] as const;
+
+export type SizeCategoryKey = (typeof SIZE_CATEGORY_KEYS)[number];
 
 export interface SizeCategoryDefinition {
   key: SizeCategoryKey;
@@ -82,6 +92,24 @@ export function heightFactor(cm: number): number | null {
 
 export function weightFactor(kg: number): number | null {
   return findFactor(WEIGHT_FACTORS, kg);
+}
+
+function extremeFactor(
+  bands: readonly SizeFactorBand[],
+  band: SizeExtremeBand,
+): number {
+  const edge = band === 'min' ? bands[0] : bands[bands.length - 1];
+  return edge.factor;
+}
+
+/** Factor shared by every possible roll of the height band. */
+export function rolledHeightFactor(band: SizeExtremeBand): number {
+  return extremeFactor(HEIGHT_FACTORS, band);
+}
+
+/** Factor shared by every possible roll of the weight band. */
+export function rolledWeightFactor(band: SizeExtremeBand): number {
+  return extremeFactor(WEIGHT_FACTORS, band);
 }
 
 /** Size = arithmetic mean of the height and weight factors. */

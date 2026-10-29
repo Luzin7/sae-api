@@ -15,6 +15,8 @@ import { levelPoints, proficiencyPool } from './proficiency.js';
 import {
   rollHeight,
   rollWeight,
+  rolledHeightFactor,
+  rolledWeightFactor,
   sizeCategory,
   sizeFactorMean,
   heightFactor,
@@ -98,6 +100,20 @@ describe('ofício CD reduction by NP', () => {
 });
 
 describe('size mean to category', () => {
+  it.each(['min', 'max'] as const)(
+    'every %s roll falls in the fixed band factor',
+    (band) => {
+      for (let die = 1; die <= 20; die += 1) {
+        expect(heightFactor(rollHeight(band, () => die))).toBe(
+          rolledHeightFactor(band),
+        );
+        expect(weightFactor(rollWeight(band, () => die))).toBe(
+          rolledWeightFactor(band),
+        );
+      }
+    },
+  );
+
   it('derives the factor mean from height and weight', () => {
     expect(sizeFactorMean(160, 60)).toBe(1);
     expect(sizeFactorMean(200, 100)).toBe(3);

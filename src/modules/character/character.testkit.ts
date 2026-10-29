@@ -128,9 +128,9 @@ export function makeCharacterRepository(): CharacterRepository {
     deleteItem: vi.fn(),
     findSkills: vi.fn(),
     findSkillDetails: vi.fn(),
+    findSkillSpend: vi.fn().mockResolvedValue([]),
     findSkillById: vi.fn(),
     findSkillsByIds: vi.fn(),
-    upsertSkill: vi.fn(),
   };
 }
 
@@ -147,6 +147,8 @@ export function makeNotifier(): GameSessionNotifier {
     notifyRosterChanged: vi.fn().mockResolvedValue(undefined),
     notifyHpChanged: vi.fn().mockResolvedValue(undefined),
     notifyEffortChanged: vi.fn().mockResolvedValue(undefined),
+    notifyNpChanged: vi.fn().mockResolvedValue(undefined),
+    notifyCharacterAdvanced: vi.fn().mockResolvedValue(undefined),
     notifyCombatChanged: vi.fn().mockResolvedValue(undefined),
   };
 }
