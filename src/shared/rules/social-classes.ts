@@ -56,3 +56,19 @@ export function socialClassEconomy(
   if (!definition) return 0;
   return roll * definition.multiplier;
 }
+
+const WEALTH_DICE_COUNT = 2;
+export const WEALTH_DIE_SIDES = 4;
+
+export interface WealthRange {
+  min: number;
+  max: number;
+}
+
+/** Bounds of the initial economy: the 2d4 roll's extremes × class multiplier. */
+export function startingWealthRange(socialClass: SocialClassKey): WealthRange {
+  return {
+    min: socialClassEconomy(socialClass, WEALTH_DICE_COUNT),
+    max: socialClassEconomy(socialClass, WEALTH_DICE_COUNT * WEALTH_DIE_SIDES),
+  };
+}

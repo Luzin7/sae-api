@@ -101,3 +101,19 @@ export class SkillBonusCapExceededError extends DomainError {
     super(`Bônus de ${skillName} acima do limite de +${cap}.`);
   }
 }
+
+export class PreviewRateLimitedError extends DomainError {
+  readonly code: DomainErrorCode = 'RATE_LIMITED';
+  readonly httpStatus = 429;
+
+  constructor() {
+    super('Muitas simulações de personagem. Aguarde um instante.');
+  }
+}
+
+export class SkillCatalogEmptyError extends Error {
+  constructor() {
+    super('Catálogo de perícias vazio.');
+    this.name = new.target.name;
+  }
+}

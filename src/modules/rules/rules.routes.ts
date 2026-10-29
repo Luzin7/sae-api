@@ -22,6 +22,7 @@ import {
   SOCIAL_DISTANCE_MODIFIERS,
   WEIGHT_FACTORS,
 } from '@shared/rules/index.js';
+import { startingWealthRange } from '@shared/rules/social-classes.js';
 import type { SkillCatalog } from './skill-catalog.contract.js';
 
 const MAX_NP = 20;
@@ -60,7 +61,10 @@ export default async function rulesRoutes(
     },
     oficios: OFICIOS,
     oficioCdReduction: OFICIO_CD_REDUCTION,
-    socialClasses: SOCIAL_CLASSES,
+    socialClasses: SOCIAL_CLASSES.map((socialClass) => ({
+      ...socialClass,
+      startingWealth: startingWealthRange(socialClass.key),
+    })),
     socialDistanceModifiers: SOCIAL_DISTANCE_MODIFIERS,
     difficultyClasses: DIFFICULTY_CLASSES,
     heightFactors: HEIGHT_FACTORS,
