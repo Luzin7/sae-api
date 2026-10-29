@@ -4,6 +4,7 @@ import { hairColorForRoll } from '@shared/rules/hair-color.js';
 import { resolveHeight, resolveWeight } from '../character.appearance.js';
 import { assertAttributeBudget } from '../character.attributes.js';
 import { requireMembership } from '../character.authorization.js';
+import { bondsPatch } from '../character.bonds.js';
 import {
   CONDICIONAMENTO,
   deriveProficiencies,
@@ -18,17 +19,17 @@ import type {
   CharacterSheetInput,
   UpsertSkillInput,
 } from '../character.entity.js';
-import { SkillNotFoundError } from '../character.errors.js';
 import type { CharacterRepository } from '../character.repository.js';
 import { bExp, maxEffort, maxHp } from '../character.stats.js';
 import {
   assertSkillBonusCaps,
   assertSkillPools,
-  type SkillAllocationDetail,
+  resolveSkillAllocations,
 } from '../skills/skill-allocation.js';
 
 export type CreateCharacterCommand = Omit<CharacterSheetInput, 'np'> & {
   gameId: string;
+  clientRequestId: string;
   skills: UpsertSkillInput[];
 };
 
@@ -51,7 +52,10 @@ export class CreateCharacterService {
     assertAttributeBudget(STARTING_NP, input);
 
     const proficiencies = deriveProficiencies(input.personality, input.posture);
-    const allocations = await this.resolveAllocations(input.skills);
+    const allocations = await resolveSkillAllocations(
+      this.characters,
+      input.skills,
+    );
     assertSkillBonusCaps(proficiencies, allocations);
     assertSkillPools(proficiencies, STARTING_NP, allocations);
 
@@ -65,8 +69,10 @@ export class CreateCharacterService {
     const weightKg = resolveWeight(input, this.rng);
     const hairColor = hairColorForRoll(this.rng(1, 20));
 
-    const character = await this.characters.create({
-      ...input,
+    const { bonds, ...sheet } = input;
+    const { character, created } = await this.characters.create({
+      ...sheet,
+      ...bondsPatch(bonds),
       np: STARTING_NP,
       playerId,
       ...proficiencies,
@@ -82,31 +88,8 @@ export class CreateCharacterService {
       bExp: bExp(STARTING_NP),
     });
 
-    await this.notifier.notifyRosterChanged(character.gameId);
+    if (created) await this.notifier.notifyRosterChanged(character.gameId);
 
     return character;
-  }
-
-  private async resolveAllocations(
-    requested: readonly UpsertSkillInput[],
-  ): Promise<SkillAllocationDetail[]> {
-    if (requested.length === 0) return [];
-
-    const found = await this.characters.findSkillsByIds(
-      requested.map((entry) => entry.skillId),
-    );
-    if (found.length !== requested.length) throw new SkillNotFoundError();
-
-    return requested.map((entry) => {
-      const skill = found.find((candidate) => candidate.id === entry.skillId);
-      if (!skill) throw new SkillNotFoundError();
-
-      return {
-        skillId: skill.id,
-        skillName: skill.name,
-        attribute: skill.attribute,
-        proficiencyBonus: entry.proficiencyBonus,
-      };
-    });
   }
 }

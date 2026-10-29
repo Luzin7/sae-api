@@ -13,12 +13,15 @@ import {
 import {
   makeCharacter,
   makeCharacterRepository,
+  makeCreateResult,
   makeMembership,
   makeNotifier,
   makeSkillSummary,
 } from '../character.testkit.js';
 import { CreateCharacterService } from './create-character.service.js';
 import type { CreateCharacterCommand } from './create-character.service.js';
+
+const CLIENT_REQUEST_ID = '33333333-3333-3333-3333-333333333333';
 
 function fixedRng(value: number): Rng {
   return () => value;
@@ -29,6 +32,7 @@ function baseCommand(
 ): CreateCharacterCommand {
   return {
     gameId: 'game-1',
+    clientRequestId: CLIENT_REQUEST_ID,
     nickname: 'Hero',
     cognition: -5,
     psyche: -5,
@@ -65,12 +69,54 @@ describe('CreateCharacterService', () => {
     expect(notifier.notifyRosterChanged).not.toHaveBeenCalled();
   });
 
+  it('keys the creation by player and clientRequestId', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
+
+    await new CreateCharacterService(
+      characters,
+      membership,
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('player-1', baseCommand());
+
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        playerId: 'player-1',
+        clientRequestId: CLIENT_REQUEST_ID,
+      }),
+    );
+  });
+
+  it('returns the stored character of a replay without notifying again', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    const notifier = makeNotifier();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    const stored = makeCharacter({ id: 'first-char' });
+    vi.mocked(characters.create).mockResolvedValue(
+      makeCreateResult({ character: stored, created: false }),
+    );
+
+    const result = await new CreateCharacterService(
+      characters,
+      membership,
+      fixedRng(1),
+      notifier,
+    ).execute('player-1', baseCommand());
+
+    expect(result).toBe(stored);
+    expect(notifier.notifyRosterChanged).not.toHaveBeenCalled();
+  });
+
   it('notifies the live roster with the created character game', async () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
     const notifier = makeNotifier();
     vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
 
     await new CreateCharacterService(
       characters,
@@ -90,7 +136,7 @@ describe('CreateCharacterService', () => {
       masterId: 'player-1',
     });
     vi.mocked(membership.isMember).mockResolvedValue(false);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
 
     await new CreateCharacterService(
       characters,
@@ -154,7 +200,7 @@ describe('CreateCharacterService', () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
     vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
 
     await new CreateCharacterService(
       characters,
@@ -179,7 +225,7 @@ describe('CreateCharacterService', () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
     vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
 
     await new CreateCharacterService(
       characters,
@@ -205,7 +251,7 @@ describe('CreateCharacterService', () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
     vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
 
     await new CreateCharacterService(
       characters,
@@ -223,7 +269,7 @@ describe('CreateCharacterService', () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
     vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
 
     await new CreateCharacterService(
       characters,
@@ -241,7 +287,7 @@ describe('CreateCharacterService', () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
     vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
 
     await new CreateCharacterService(
       characters,
@@ -277,6 +323,42 @@ describe('CreateCharacterService', () => {
     ).rejects.toBeInstanceOf(InvalidHeightError);
   });
 
+  it('normalizes bonds before persisting them', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
+
+    await new CreateCharacterService(
+      characters,
+      membership,
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('player-1', baseCommand({ bonds: ' a , A , b ' }));
+
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.objectContaining({ bonds: ['A', 'B'] }),
+    );
+  });
+
+  it('leaves bonds untouched when they are omitted', async () => {
+    const characters = makeCharacterRepository();
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
+
+    await new CreateCharacterService(
+      characters,
+      membership,
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('player-1', baseCommand());
+
+    expect(characters.create).toHaveBeenCalledWith(
+      expect.not.objectContaining({ bonds: expect.anything() }),
+    );
+  });
+
   describe('with starting skills', () => {
     const VITALIDADE_ID = '11111111-1111-1111-1111-111111111111';
     const CONDICIONAMENTO_ID = '22222222-2222-2222-2222-222222222222';
@@ -290,7 +372,7 @@ describe('CreateCharacterService', () => {
       const characters = makeCharacterRepository();
       const membership = makeMembership();
       vi.mocked(membership.isMember).mockResolvedValue(true);
-      vi.mocked(characters.create).mockResolvedValue(makeCharacter());
+      vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
       vi.mocked(characters.findSkillsByIds).mockResolvedValue([
         vitalidade,
         condicionamento,

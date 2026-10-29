@@ -3,11 +3,14 @@ import { proficiencyPool, skillBonusCap } from '@shared/rules/proficiency.js';
 import type {
   CharacterSkillDetail,
   ProficiencyScores,
+  UpsertSkillInput,
 } from '../character.entity.js';
 import {
   SkillBonusCapExceededError,
+  SkillNotFoundError,
   SkillPoolExceededError,
 } from '../character.errors.js';
+import type { CharacterRepository } from '../character.repository.js';
 import { proficiencyLevelFor } from './proficiency-field.js';
 
 export type SkillAllocationDetail = Pick<
@@ -44,4 +47,28 @@ export function assertSkillBonusCaps(
       throw new SkillBonusCapExceededError(allocation.skillName, cap);
     }
   }
+}
+
+export async function resolveSkillAllocations(
+  characters: Pick<CharacterRepository, 'findSkillsByIds'>,
+  requested: readonly UpsertSkillInput[],
+): Promise<SkillAllocationDetail[]> {
+  if (requested.length === 0) return [];
+
+  const found = await characters.findSkillsByIds(
+    requested.map((entry) => entry.skillId),
+  );
+  if (found.length !== requested.length) throw new SkillNotFoundError();
+
+  return requested.map((entry) => {
+    const skill = found.find((candidate) => candidate.id === entry.skillId);
+    if (!skill) throw new SkillNotFoundError();
+
+    return {
+      skillId: skill.id,
+      skillName: skill.name,
+      attribute: skill.attribute,
+      proficiencyBonus: entry.proficiencyBonus,
+    };
+  });
 }

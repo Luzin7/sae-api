@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type {
   CreateMonsterInput,
   Monster,
@@ -12,19 +12,34 @@ import { toMonster, toMonsterChanges } from './monster.repository.mappers.js';
 
 const DEFAULT_ATTRIBUTE = -5;
 
+async function findReplayedCreate(input: CreateMonsterInput): Promise<Monster> {
+  const [existing] = await db
+    .select()
+    .from(monsterTable)
+    .where(
+      and(
+        eq(monsterTable.createdBy, input.createdBy),
+        eq(monsterTable.clientRequestId, input.clientRequestId),
+      ),
+    )
+    .limit(1);
+  if (!existing) throw new MonsterNotFoundError();
+
+  return toMonster(existing);
+}
+
 export function monsterRepository(): MonsterRepository {
   return {
     async create(input: CreateMonsterInput): Promise<Monster> {
       const [row] = await db
         .insert(monsterTable)
         .values({
-          gameId: input.gameId,
+          gameId: input.gameId ?? null,
           name: input.name,
           np: input.np,
           maxHp: input.maxHp,
           currentHp: input.currentHp ?? input.maxHp,
           maxEffort: input.maxEffort,
-          currentEffort: input.currentEffort ?? input.maxEffort,
           size: input.size ?? null,
           cognition: input.cognition ?? DEFAULT_ATTRIBUTE,
           psyche: input.psyche ?? DEFAULT_ATTRIBUTE,
@@ -36,11 +51,15 @@ export function monsterRepository(): MonsterRepository {
           weightKg: input.weightKg ?? null,
           notes: input.notes ?? null,
           createdBy: input.createdBy,
+          clientRequestId: input.clientRequestId,
+        })
+        .onConflictDoNothing({
+          target: [monsterTable.createdBy, monsterTable.clientRequestId],
         })
         .returning();
-      if (!row) throw new MonsterNotFoundError();
+      if (row) return toMonster(row);
 
-      return toMonster(row);
+      return findReplayedCreate(input);
     },
 
     async findById(id: string): Promise<Monster | null> {
@@ -58,6 +77,17 @@ export function monsterRepository(): MonsterRepository {
         .select()
         .from(monsterTable)
         .where(eq(monsterTable.gameId, gameId));
+
+      return rows.map(toMonster);
+    },
+
+    async findReusableByOwner(ownerId: string): Promise<Monster[]> {
+      const rows = await db
+        .select()
+        .from(monsterTable)
+        .where(
+          and(isNull(monsterTable.gameId), eq(monsterTable.createdBy, ownerId)),
+        );
 
       return rows.map(toMonster);
     },

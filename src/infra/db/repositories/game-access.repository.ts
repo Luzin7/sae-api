@@ -29,5 +29,15 @@ export function gameAccessRepository(): GameAccess {
 
       return row !== undefined;
     },
+
+    async mastersAnyGame(playerId: string): Promise<boolean> {
+      const [row] = await db
+        .select({ id: game.id })
+        .from(game)
+        .where(eq(game.masterId, playerId))
+        .limit(1);
+
+      return row !== undefined;
+    },
   };
 }

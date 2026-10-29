@@ -8,16 +8,33 @@ export interface MonsterRef {
   attributes: Record<AttributeKey, number>;
   currentHp: number;
   maxHp: number;
-  currentEffort: number;
+  maxEffort: number;
+  afflictions: string[];
+}
+
+export interface MonsterTemplate {
+  attributes: Record<AttributeKey, number>;
+  currentHp: number;
+  maxHp: number;
   maxEffort: number;
 }
 
-export interface CombatantRef {
-  kind: CombatantKind;
+interface CombatantRefBase {
   refId: string;
   name: string;
   ownerPlayerId: string | null;
 }
+
+export interface CharacterRef extends CombatantRefBase {
+  kind: 'character';
+}
+
+export interface MonsterCombatantRef extends CombatantRefBase {
+  kind: 'monster';
+  template?: MonsterTemplate;
+}
+
+export type CombatantRef = CharacterRef | MonsterCombatantRef;
 
 export interface CombatantSource {
   listByGame(gameId: string): Promise<CombatantRef[]>;
@@ -30,8 +47,4 @@ export interface CombatantSource {
     gameId: string,
     monsterId: string,
   ): Promise<MonsterRef | null>;
-  saveMonsterVitals(
-    monsterId: string,
-    patch: { currentHp: number; currentEffort: number },
-  ): Promise<void>;
 }

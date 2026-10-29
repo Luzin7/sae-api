@@ -4,7 +4,8 @@ export type DomainErrorCode =
   | 'CONFLICT'
   | 'UNAUTHORIZED'
   | 'VALIDATION'
-  | 'INVALID_OPERATION';
+  | 'INVALID_OPERATION'
+  | 'RATE_LIMITED';
 
 export abstract class DomainError extends Error {
   abstract readonly code: DomainErrorCode;

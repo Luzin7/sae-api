@@ -1,13 +1,19 @@
 import type { Rng } from '@shared/dice/roll.js';
+import { pickUniqueValue } from '@shared/dice/initiative.js';
+import { systemRng } from '@shared/dice/random.js';
 import { vi } from 'vitest';
 import type { CharacterAccess } from './character-access.contract.js';
 import type { ChatMessageRepository } from './chat.repository.js';
 import type {
   AdvanceTurnInput,
+  ChangeInstanceEffortInput,
+  ChangeInstanceHpInput,
+  SetInstanceAfflictionsInput,
   CombatantSeed,
   CombatRepository,
 } from './combat.repository.js';
 import {
+  CombatantNotFoundError,
   CombatNotReadyError,
   CombatStateNotFoundError,
 } from './chat.errors.js';
@@ -16,6 +22,11 @@ import type {
   CombatantRef,
   CombatantSource,
 } from './combatant-source.contract.js';
+import { applyHpChange } from '@shared/rules/hp.js';
+import {
+  applyEffortChange,
+  recoverEffortOnTurnAdvance,
+} from '@shared/rules/effort.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
 import type {
@@ -38,7 +49,7 @@ export function makeChatMessages(): ChatMessageRepository {
 }
 
 export function makeGameAccess(): GameAccess {
-  return { findById: vi.fn(), isMember: vi.fn() };
+  return { findById: vi.fn(), isMember: vi.fn(), mastersAnyGame: vi.fn() };
 }
 
 export function makeCombatants(): CombatantSource {
@@ -46,7 +57,6 @@ export function makeCombatants(): CombatantSource {
     listByGame: vi.fn(),
     findByRef: vi.fn(),
     findMonsterInGame: vi.fn(),
-    saveMonsterVitals: vi.fn(),
   };
 }
 
@@ -54,8 +64,12 @@ export function makeCombat(): CombatRepository {
   return {
     findState: vi.fn(),
     start: vi.fn(),
+    addCombatant: vi.fn(),
     rollInitiative: vi.fn(),
     advanceTurn: vi.fn(),
+    changeInstanceEffort: vi.fn(),
+    changeInstanceHp: vi.fn(),
+    setInstanceAfflictions: vi.fn(),
     end: vi.fn(),
   };
 }
@@ -65,8 +79,8 @@ export function makeCharacterAccess(): CharacterAccess {
     findById: vi.fn(),
     findSkillById: vi.fn(),
     findSkillForCharacter: vi.fn(),
-    updateHpWithLog: vi.fn(),
-    damageHp: vi.fn(),
+    changeHp: vi.fn(),
+    changeEffort: vi.fn(),
   };
 }
 
@@ -121,7 +135,7 @@ export function fixedRng(value: number): Rng {
 }
 
 /** RNG that walks a fixed sequence, repeating the last value forever. */
-export function sequenceRng(values: number[]): Rng {
+export function sequenceRng(values: number[]): () => number {
   let index = 0;
 
   return () => {
@@ -145,9 +159,6 @@ export function makeInMemoryCombatants(refs: CombatantRef[]): CombatantSource {
     async findMonsterInGame() {
       return null;
     },
-    async saveMonsterVitals() {
-      return undefined;
-    },
   };
 }
 
@@ -158,11 +169,26 @@ export interface InMemoryCombatantRow {
   name: string;
   initiativeValue: number | null;
   hasRolled: boolean;
+  currentHp: number | null;
+  maxHp: number | null;
+  currentEffort: number | null;
+  maxEffort: number | null;
+  afflictions: string[];
+  cognition: number | null;
+  psyche: number | null;
+  instinct: number | null;
+  constitution: number | null;
+  motricity: number | null;
+  perception: number | null;
   createdAt: Date;
 }
 
 export interface InMemoryCombat extends CombatRepository {
   rows(): InMemoryCombatantRow[];
+}
+
+function combatantKey(kind: CombatantKind, refId: string): string {
+  return `${kind}:${refId}`;
 }
 
 export function makeInMemoryCombat(
@@ -194,6 +220,17 @@ export function makeInMemoryCombat(
         name: row.name,
         initiativeValue: row.initiativeValue,
         hasRolled: row.hasRolled,
+        currentHp: row.currentHp,
+        maxHp: row.maxHp,
+        currentEffort: row.currentEffort,
+        maxEffort: row.maxEffort,
+        afflictions: [...row.afflictions],
+        cognition: row.cognition,
+        psyche: row.psyche,
+        instinct: row.instinct,
+        constitution: row.constitution,
+        motricity: row.motricity,
+        perception: row.perception,
       }));
   }
 
@@ -229,30 +266,132 @@ export function makeInMemoryCombat(
     async start(
       sessionId: string,
       seeds: CombatantSeed[],
+      roll: () => number,
       playerId: string | null,
     ) {
-      state.set(sessionId, { active: true, turnIndex: 0, round: 1 });
-      combatants.set(
-        sessionId,
-        seeds.map((seed) => {
-          counter += 1;
+      const running = state.get(sessionId);
+      state.set(sessionId, {
+        active: true,
+        turnIndex: running?.turnIndex ?? 0,
+        round: running?.round ?? 1,
+      });
 
-          return {
-            id: `c-${counter}`,
-            kind: seed.kind,
-            refId: seed.refId,
-            name: seed.name,
-            initiativeValue: null,
-            hasRolled: false,
-            createdAt: new Date(2024, 0, 1, 0, 0, counter),
-          };
-        }),
+      const previous = combatants.get(sessionId) ?? [];
+      const byKey = new Map(
+        previous.map((row) => [combatantKey(row.kind, row.refId), row]),
       );
+      const instances = previous.filter(
+        (row) =>
+          row.kind === 'monster' &&
+          !seeds.some(
+            (seed) => seed.kind === 'monster' && seed.refId === row.refId,
+          ),
+      );
+      const next = seeds.map((seed) => {
+        const kept = byKey.get(combatantKey(seed.kind, seed.refId));
+        if (kept) {
+          kept.name = seed.name;
+
+          return kept;
+        }
+
+        counter += 1;
+
+        return {
+          id: `c-${counter}`,
+          kind: seed.kind,
+          refId: seed.refId,
+          name: seed.name,
+          initiativeValue: null,
+          hasRolled: false,
+          currentHp: seed.currentHp,
+          maxHp: seed.maxHp,
+          currentEffort: seed.currentEffort,
+          maxEffort: seed.maxEffort,
+          afflictions: [...seed.afflictions],
+          cognition: seed.cognition,
+          psyche: seed.psyche,
+          instinct: seed.instinct,
+          constitution: seed.constitution,
+          motricity: seed.motricity,
+          perception: seed.perception,
+          createdAt: new Date(2024, 0, 1, 0, 0, counter),
+        };
+      });
+      next.push(...instances);
+      combatants.set(sessionId, next);
+
+      const taken = next
+        .filter((row) => row.hasRolled && row.initiativeValue !== null)
+        .map((row) => row.initiativeValue as number);
+      for (const seed of seeds) {
+        if (seed.kind !== 'monster') continue;
+        const row = next.find(
+          (item) => item.kind === seed.kind && item.refId === seed.refId,
+        );
+        if (!row || row.hasRolled) continue;
+
+        const value = pickUniqueValue(taken, roll);
+        taken.push(value);
+        row.initiativeValue = value;
+        row.hasRolled = true;
+      }
 
       const current = payload(sessionId)!;
       await writeLog(sessionId, playerId, current);
 
       return current;
+    },
+
+    async addCombatant(
+      sessionId: string,
+      seed: CombatantSeed,
+      playerId: string | null,
+    ) {
+      const current = state.get(sessionId);
+      if (!current?.active) throw new CombatStateNotFoundError();
+
+      const rows = combatants.get(sessionId) ?? [];
+      const exists = rows.some(
+        (row) => row.kind === seed.kind && row.refId === seed.refId,
+      );
+      if (exists) return payload(sessionId)!;
+
+      const taken = rows
+        .filter((item) => item.hasRolled && item.initiativeValue !== null)
+        .map((item) => item.initiativeValue as number);
+      let value = systemRng(1, 20);
+      for (let attempt = 0; attempt < 20 && taken.includes(value); attempt++) {
+        value = systemRng(1, 20);
+      }
+
+      counter += 1;
+      rows.push({
+        id: `c-${counter}`,
+        kind: seed.kind,
+        refId: seed.refId,
+        name: seed.name,
+        initiativeValue: value,
+        hasRolled: true,
+        currentHp: seed.currentHp,
+        maxHp: seed.maxHp,
+        currentEffort: seed.currentEffort,
+        maxEffort: seed.maxEffort,
+        afflictions: [...seed.afflictions],
+        cognition: seed.cognition,
+        psyche: seed.psyche,
+        instinct: seed.instinct,
+        constitution: seed.constitution,
+        motricity: seed.motricity,
+        perception: seed.perception,
+        createdAt: new Date(2024, 0, 1, 0, 0, counter),
+      });
+      combatants.set(sessionId, rows);
+
+      const next = payload(sessionId)!;
+      await writeLog(sessionId, playerId, next);
+
+      return next;
     },
 
     async rollInitiative(
@@ -266,17 +405,14 @@ export function makeInMemoryCombat(
       const target = rows.find(
         (item) => item.kind === kind && item.refId === refId,
       );
-      if (!target) throw new Error('missing');
+      if (!target) throw new CombatantNotFoundError();
 
       if (target.hasRolled) return payload(sessionId)!;
 
       const taken = rows
         .filter((item) => item.hasRolled && item.initiativeValue !== null)
         .map((item) => item.initiativeValue as number);
-      let value = roll();
-      for (let attempt = 0; attempt < 20 && taken.includes(value); attempt++) {
-        value = roll();
-      }
+      const value = pickUniqueValue(taken, roll);
       target.initiativeValue = value;
       target.hasRolled = true;
 
@@ -297,7 +433,7 @@ export function makeInMemoryCombat(
       const stale =
         current.turnIndex !== input.expectedTurnIndex ||
         current.round !== input.expectedRound;
-      if (stale) return payload(input.sessionId)!;
+      if (stale) return { state: payload(input.sessionId)!, recovered: [] };
 
       const wrapping = current.turnIndex + 1 >= rows.length;
       state.set(input.sessionId, {
@@ -306,10 +442,105 @@ export function makeInMemoryCombat(
         round: wrapping ? current.round + 1 : current.round,
       });
 
+      const starting = entries(input.sessionId)[
+        state.get(input.sessionId)!.turnIndex
+      ]!;
+      const monsters = rows.filter(
+        (row) => row.kind === 'monster' && row.currentEffort !== null,
+      );
+      for (const recovery of recoverEffortOnTurnAdvance(
+        monsters.map((row) => ({
+          id: row.id,
+          currentEffort: row.currentEffort as number,
+        })),
+        starting.combatantId,
+      )) {
+        monsters.find((row) => row.id === recovery.id)!.currentEffort =
+          recovery.newEffort;
+      }
+
       const next = payload(input.sessionId)!;
       await writeLog(input.sessionId, input.playerId, next);
 
-      return next;
+      return { state: next, recovered: [] };
+    },
+
+    async changeInstanceEffort(input: ChangeInstanceEffortInput) {
+      if (!state.get(input.sessionId)) throw new CombatStateNotFoundError();
+
+      const target = (combatants.get(input.sessionId) ?? []).find(
+        (row) => row.kind === 'monster' && row.refId === input.monsterId,
+      );
+      if (
+        !target ||
+        target.currentEffort === null ||
+        target.maxEffort === null ||
+        target.currentHp === null
+      ) {
+        throw new CombatantNotFoundError();
+      }
+
+      const oldEffort = target.currentEffort;
+      const oldHp = target.currentHp;
+      const applied = applyEffortChange(
+        {
+          currentEffort: oldEffort,
+          effortLimit: target.maxEffort,
+          currentHp: oldHp,
+        },
+        input.delta,
+      );
+      target.currentEffort = applied.currentEffort;
+      target.currentHp = applied.currentHp;
+
+      const next = payload(input.sessionId)!;
+      await writeLog(input.sessionId, input.playerId, next);
+
+      return {
+        state: next,
+        oldEffort,
+        newEffort: applied.currentEffort,
+        oldHp,
+        newHp: applied.currentHp,
+      };
+    },
+
+    async changeInstanceHp(input: ChangeInstanceHpInput) {
+      if (!state.get(input.sessionId)) throw new CombatStateNotFoundError();
+
+      const target = (combatants.get(input.sessionId) ?? []).find(
+        (row) => row.kind === 'monster' && row.refId === input.monsterId,
+      );
+      if (!target || target.currentHp === null || target.maxHp === null) {
+        throw new CombatantNotFoundError();
+      }
+
+      const oldHp = target.currentHp;
+      target.currentHp = applyHpChange(
+        { currentHp: oldHp, maxHp: target.maxHp },
+        input.delta,
+      ).currentHp;
+
+      const next = payload(input.sessionId)!;
+      await writeLog(input.sessionId, input.playerId, next);
+
+      return { state: next, oldHp, newHp: target.currentHp };
+    },
+
+    async setInstanceAfflictions(input: SetInstanceAfflictionsInput) {
+      if (!state.get(input.sessionId)) throw new CombatStateNotFoundError();
+
+      const target = (combatants.get(input.sessionId) ?? []).find(
+        (row) => row.kind === 'monster' && row.refId === input.monsterId,
+      );
+      if (!target) throw new CombatantNotFoundError();
+
+      target.afflictions = [...input.afflictions];
+
+      const next = payload(input.sessionId)!;
+      await writeLog(input.sessionId, input.playerId, next);
+
+      return { state: next };
     },
 
     async end(sessionId: string, playerId: string | null) {

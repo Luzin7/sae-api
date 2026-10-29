@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AttributeKey } from '@shared/rules/attributes.js';
 
 export interface GameSession {
   id: string;
@@ -82,6 +83,41 @@ export interface CombatantPayload {
   name: string;
   initiativeValue: number | null;
   hasRolled: boolean;
+  currentHp: number | null;
+  maxHp: number | null;
+  currentEffort: number | null;
+  maxEffort: number | null;
+  afflictions: string[];
+  cognition: number | null;
+  psyche: number | null;
+  instinct: number | null;
+  constitution: number | null;
+  motricity: number | null;
+  perception: number | null;
+}
+
+export function combatantAttributes(
+  entry: CombatantPayload,
+): Record<AttributeKey, number> | null {
+  if (
+    entry.cognition === null ||
+    entry.psyche === null ||
+    entry.instinct === null ||
+    entry.constitution === null ||
+    entry.motricity === null ||
+    entry.perception === null
+  ) {
+    return null;
+  }
+
+  return {
+    cognition: entry.cognition,
+    psyche: entry.psyche,
+    instinct: entry.instinct,
+    constitution: entry.constitution,
+    motricity: entry.motricity,
+    perception: entry.perception,
+  };
 }
 
 export interface CombatStatePayload {
@@ -189,6 +225,17 @@ export const CombatantPayloadSchema = z.object({
   name: z.string().min(1),
   initiativeValue: z.number().int().nullable(),
   hasRolled: z.boolean(),
+  currentHp: z.number().int().nullish().default(null),
+  maxHp: z.number().int().nullish().default(null),
+  currentEffort: z.number().int().nullish().default(null),
+  maxEffort: z.number().int().nullish().default(null),
+  afflictions: z.array(z.string()).default([]),
+  cognition: z.number().int().nullish().default(null),
+  psyche: z.number().int().nullish().default(null),
+  instinct: z.number().int().nullish().default(null),
+  constitution: z.number().int().nullish().default(null),
+  motricity: z.number().int().nullish().default(null),
+  perception: z.number().int().nullish().default(null),
 });
 
 export const CombatStatePayloadSchema = z.object({
@@ -214,7 +261,7 @@ export const TestClosedPayloadSchema = z.object({
 
 export const SessionEventPayloadSchemas: Record<
   SessionEventType,
-  z.ZodType<SessionEventPayload>
+  z.ZodType<SessionEventPayload, z.ZodTypeDef, unknown>
 > = {
   dice_roll: DiceRollPayloadSchema,
   hp_change: HpChangePayloadSchema,

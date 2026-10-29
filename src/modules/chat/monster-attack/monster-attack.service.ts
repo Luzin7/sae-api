@@ -12,11 +12,14 @@ import {
 } from '../chat.errors.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
 import type { CombatRepository } from '../combat.repository.js';
-import type { CombatantSource } from '../combatant-source.contract.js';
 import type { CharacterAccess } from '../character-access.contract.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import { rollAttribute, type Rng } from '@shared/dice/roll.js';
 import type { AttributeKey } from '@shared/rules/attributes.js';
+import {
+  combatantAttributes,
+  type CombatStatePayload,
+} from '@modules/session/session.entity.js';
 
 export interface MonsterAttackInput {
   playerId: string;
@@ -27,12 +30,24 @@ export interface MonsterAttackInput {
   damage: number;
 }
 
+function requireMonsterInstance(
+  state: CombatStatePayload,
+  monsterId: string,
+): { name: string; attributes: Record<AttributeKey, number> } {
+  const instance = state.entries.find(
+    (entry) => entry.kind === 'monster' && entry.refId === monsterId,
+  );
+  const attributes = instance ? combatantAttributes(instance) : null;
+  if (!instance || !attributes) throw new ChatMonsterNotFoundError();
+
+  return { name: instance.name, attributes };
+}
+
 export class MonsterAttackService {
   constructor(
     private readonly messages: ChatMessageRepository,
     private readonly access: GameAccess,
     private readonly characters: CharacterAccess,
-    private readonly combatants: CombatantSource,
     private readonly combat: CombatRepository,
     private readonly bus: InMemoryMessageBus,
     private readonly rng: Rng,
@@ -50,11 +65,8 @@ export class MonsterAttackService {
     const state = await this.combat.findState(input.sessionId);
     if (!state?.active) throw new CombatStateNotFoundError();
 
-    const monster = await this.combatants.findMonsterInGame(
-      session.gameId,
-      input.monsterId,
-    );
-    if (!monster) throw new ChatMonsterNotFoundError();
+    const monster = requireMonsterInstance(state, input.monsterId);
+    const monsterName = monster.name;
 
     const target = await this.characters.findById(input.targetCharacterId);
     if (!target || target.gameId !== session.gameId) {
@@ -68,29 +80,32 @@ export class MonsterAttackService {
       playerId: input.playerId,
       eventType: 'dice_roll',
       payload: {
-        expression: `${monster.name} atacou ${target.name} (${input.attribute})`,
+        expression: `${monsterName} atacou ${target.name} (${input.attribute})`,
         results: roll.rolls,
         total: roll.result,
       },
     });
 
     if (input.damage > 0) {
-      const { previousHp, character } = await this.characters.damageHp(
+      const { oldHp, newHp } = await this.characters.changeHp(
         target.id,
-        input.damage,
+        -input.damage,
+        { sessionId: input.sessionId, playerId: input.playerId },
       );
-      this.bus.publish(chatRoom(input.sessionId), {
-        type: 'character.hp-changed',
-        characterId: character.id,
-        oldHp: previousHp,
-        newHp: character.currentHp,
-      });
+      if (oldHp !== newHp) {
+        this.bus.publish(chatRoom(input.sessionId), {
+          type: 'character.hp-changed',
+          characterId: target.id,
+          oldHp,
+          newHp,
+        });
+      }
     }
 
     const event: RealtimeEvent = {
       type: 'session.monster-attacked',
-      monsterId: monster.id,
-      name: monster.name,
+      monsterId: input.monsterId,
+      name: monsterName,
       attribute: input.attribute,
       targetCharacterId: target.id,
       targetName: target.name,

@@ -102,3 +102,15 @@ export function sizeCategory(mean: number): SizeCategoryKey | null {
   if (!category) return null;
   return category.key;
 }
+
+export interface NextSizeCategory {
+  category: SizeCategoryKey;
+  factorNeeded: number;
+}
+
+/** The nearest category above `mean`, with the factor mean that reaches it. */
+export function nextSizeCategory(mean: number): NextSizeCategory | null {
+  const next = SIZE_CATEGORIES.find((entry) => entry.min > mean);
+  if (!next) return null;
+  return { category: next.key, factorNeeded: next.min };
+}

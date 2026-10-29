@@ -15,16 +15,13 @@ export class CreateMonsterService {
     requesterId: string,
     input: Omit<CreateMonsterInput, 'createdBy'>,
   ): Promise<Monster> {
-    const game = await this.gameAccess.findById(input.gameId);
-    if (!game || game.masterId !== requesterId) {
-      throw new BestiaryForbiddenError();
-    }
+    await this.requireCanCreate(requesterId, input.gameId);
 
     return this.monsters.create({
       ...input,
+      gameId: input.gameId ?? null,
       createdBy: requesterId,
       currentHp: input.currentHp ?? input.maxHp,
-      currentEffort: input.currentEffort ?? input.maxEffort,
       cognition: input.cognition ?? DEFAULT_ATTRIBUTE,
       psyche: input.psyche ?? DEFAULT_ATTRIBUTE,
       instinct: input.instinct ?? DEFAULT_ATTRIBUTE,
@@ -32,5 +29,21 @@ export class CreateMonsterService {
       motricity: input.motricity ?? DEFAULT_ATTRIBUTE,
       perception: input.perception ?? DEFAULT_ATTRIBUTE,
     });
+  }
+
+  private async requireCanCreate(
+    requesterId: string,
+    gameId: string | null | undefined,
+  ): Promise<void> {
+    if (!gameId) {
+      if (await this.gameAccess.mastersAnyGame(requesterId)) return;
+
+      throw new BestiaryForbiddenError();
+    }
+
+    const game = await this.gameAccess.findById(gameId);
+    if (!game || game.masterId !== requesterId) {
+      throw new BestiaryForbiddenError();
+    }
   }
 }

@@ -9,7 +9,6 @@ import {
   fixedRng,
   makeChatMessages,
   makeCombat,
-  makeCombatants,
   makeGameAccess,
 } from '../chat.testkit.js';
 import type { CombatStatePayload } from '@modules/session/session.entity.js';
@@ -27,20 +26,39 @@ const STATE: CombatStatePayload = {
       name: 'Goblin',
       initiativeValue: null,
       hasRolled: false,
+      currentHp: 10,
+      maxHp: 10,
+      currentEffort: 5,
+      maxEffort: 5,
+      afflictions: [],
+      cognition: 2,
+      psyche: -2,
+      instinct: 0,
+      constitution: 3,
+      motricity: 1,
+      perception: 0,
     },
   ],
+};
+
+const SNAPSHOT_STATE: CombatStatePayload = {
+  ...STATE,
+  entries: [{ ...STATE.entries[0]!, cognition: 3 }],
+};
+
+const UNKNOWN_ATTRIBUTES_STATE: CombatStatePayload = {
+  ...STATE,
+  entries: [{ ...STATE.entries[0]!, cognition: null }],
 };
 
 function build() {
   const messages = makeChatMessages();
   const access = makeGameAccess();
-  const combatants = makeCombatants();
   const combat = makeCombat();
   const bus = new InMemoryMessageBus();
   const service = new RollMonsterTestService(
     messages,
     access,
-    combatants,
     combat,
     bus,
     fixedRng(12),
@@ -56,31 +74,15 @@ function build() {
   });
   vi.mocked(access.isMember).mockResolvedValue(true);
 
-  return { messages, access, combatants, combat, bus, service };
+  return { messages, access, combat, bus, service };
 }
 
 describe('RollMonsterTestService', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('rolls a monster attribute and publishes the event', async () => {
-    const { messages, combatants, combat, bus, service } = build();
+    const { messages, combat, bus, service } = build();
     vi.mocked(combat.findState).mockResolvedValue(STATE);
-    vi.mocked(combatants.findMonsterInGame).mockResolvedValue({
-      id: 'monster-1',
-      name: 'Goblin',
-      attributes: {
-        cognition: 2,
-        psyche: -2,
-        instinct: 0,
-        constitution: 3,
-        motricity: 1,
-        perception: 0,
-      },
-      currentHp: 10,
-      maxHp: 10,
-      currentEffort: 5,
-      maxEffort: 5,
-    });
     const publish = vi.spyOn(bus, 'publish');
 
     const event = await service.execute({
@@ -147,10 +149,41 @@ describe('RollMonsterTestService', () => {
     ).rejects.toBeInstanceOf(CombatStateNotFoundError);
   });
 
-  it('rejects a monster from another game', async () => {
-    const { combat, combatants, service } = build();
+  it('rolls the attribute snapshotted on the combatant instance', async () => {
+    const { combat, service } = build();
+    vi.mocked(combat.findState).mockResolvedValue(SNAPSHOT_STATE);
+
+    const event = await service.execute({
+      playerId: 'p1',
+      sessionId: 'session-1',
+      monsterId: 'monster-1',
+      attribute: 'cognition',
+    });
+
+    expect(event).toMatchObject({
+      rolls: [12, 12, 12],
+      result: 12,
+      kind: 'best',
+    });
+  });
+
+  it('rejects a combatant without a snapshotted attribute', async () => {
+    const { combat, service } = build();
+    vi.mocked(combat.findState).mockResolvedValue(UNKNOWN_ATTRIBUTES_STATE);
+
+    await expect(
+      service.execute({
+        playerId: 'p1',
+        sessionId: 'session-1',
+        monsterId: 'monster-1',
+        attribute: 'cognition',
+      }),
+    ).rejects.toBeInstanceOf(ChatMonsterNotFoundError);
+  });
+
+  it('rejects a monster that is not in the combat', async () => {
+    const { combat, service } = build();
     vi.mocked(combat.findState).mockResolvedValue(STATE);
-    vi.mocked(combatants.findMonsterInGame).mockResolvedValue(null);
 
     await expect(
       service.execute({

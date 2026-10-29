@@ -2,7 +2,11 @@ import {
   DomainError,
   type DomainErrorCode,
 } from '@shared/errors/domain-error.js';
-import { ForbiddenError, NotFoundError } from '@shared/errors/http-errors.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '@shared/errors/http-errors.js';
 import { attributeDisplayName } from '@shared/rules/attributes.js';
 
 export class CharacterNotFoundError extends NotFoundError {
@@ -99,5 +103,29 @@ export class SkillBonusCapExceededError extends DomainError {
 
   constructor(skillName: string, cap: number) {
     super(`Bônus de ${skillName} acima do limite de +${cap}.`);
+  }
+}
+
+export class PreviewRateLimitedError extends DomainError {
+  readonly code: DomainErrorCode = 'RATE_LIMITED';
+  readonly httpStatus = 429;
+
+  constructor() {
+    super('Muitas simulações de personagem. Aguarde um instante.');
+  }
+}
+
+export class SkillCatalogEmptyError extends Error {
+  constructor() {
+    super('Catálogo de perícias vazio.');
+    this.name = new.target.name;
+  }
+}
+
+export class CharacterVersionConflictError extends ConflictError {
+  constructor() {
+    super(
+      'A ficha foi alterada por outra pessoa. Recarregue e tente novamente.',
+    );
   }
 }

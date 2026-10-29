@@ -11,4 +11,5 @@ export interface GameRef {
 export interface GameAccess {
   findById(gameId: string): Promise<GameRef | null>;
   isMember(gameId: string, playerId: string): Promise<boolean>;
+  mastersAnyGame(playerId: string): Promise<boolean>;
 }

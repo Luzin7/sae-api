@@ -125,15 +125,6 @@ export class EmptyChatMessageError extends DomainError {
   }
 }
 
-export class InvalidHpError extends DomainError {
-  readonly code: DomainErrorCode = 'VALIDATION';
-  readonly httpStatus = 400;
-
-  constructor() {
-    super('HP inválido para este personagem.');
-  }
-}
-
 export class EmptyNarrationError extends DomainError {
   readonly code: DomainErrorCode = 'VALIDATION';
   readonly httpStatus = 400;

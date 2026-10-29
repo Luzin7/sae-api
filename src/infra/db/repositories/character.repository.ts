@@ -1,23 +1,33 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type {
   Character,
   CharacterItem,
   CharacterSkill,
   CharacterSkillDetail,
   CreateCharacterInput,
+  CreateCharacterResult,
   CreateItemInput,
+  VitalsChangeOutcome,
   Page,
   SkillSummary,
   UpdateCharacterInput,
   UpdateItemInput,
+  UpdateSheetCommand,
+  UpsertSkillCommand,
 } from '@modules/character/character.entity.js';
 import {
   CharacterItemNotFoundError,
   CharacterNotFoundError,
+  CharacterVersionConflictError,
   SkillNotFoundError,
 } from '@modules/character/character.errors.js';
 import type { CharacterRepository } from '@modules/character/character.repository.js';
 import { db } from '../index.js';
+import {
+  changeLockedCharacterEffort,
+  changeLockedCharacterHp,
+} from './character-vitals.js';
+import { removeCharacterCombatants } from './combat.repository.js';
 import { isForeignKeyViolation } from '../pg-errors.js';
 import {
   character as characterTable,
@@ -36,15 +46,46 @@ import {
 const SKILL_FOREIGN_KEY = 'character_skill_skill_id_skill_id_fk';
 const CHARACTER_FOREIGN_KEY = 'character_skill_character_id_character_id_fk';
 
+const SKILL_DETAIL_COLUMNS = {
+  id: characterSkillTable.id,
+  characterId: characterSkillTable.characterId,
+  skillId: characterSkillTable.skillId,
+  proficiencyBonus: characterSkillTable.proficiencyBonus,
+  skillName: skillTable.name,
+  attribute: skillTable.attribute,
+};
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function replayCreate(
+  tx: Transaction,
+  input: CreateCharacterInput,
+): Promise<CreateCharacterResult> {
+  const [existing] = await tx
+    .select()
+    .from(characterTable)
+    .where(
+      and(
+        eq(characterTable.playerId, input.playerId),
+        eq(characterTable.clientRequestId, input.clientRequestId),
+      ),
+    )
+    .limit(1);
+  if (!existing) throw new CharacterNotFoundError();
+
+  return { character: toCharacter(existing), created: false };
+}
+
 export function characterRepository(): CharacterRepository {
   return {
-    async create(input: CreateCharacterInput): Promise<Character> {
+    async create(input: CreateCharacterInput): Promise<CreateCharacterResult> {
       return db.transaction(async (tx) => {
         const [row] = await tx
           .insert(characterTable)
           .values({
             playerId: input.playerId,
             gameId: input.gameId,
+            clientRequestId: input.clientRequestId,
             nickname: input.nickname,
             epithet: input.epithet ?? null,
             np: input.np,
@@ -75,12 +116,15 @@ export function characterRepository(): CharacterRepository {
             afflictions: input.afflictions ?? [],
             socialClass: input.socialClass,
             vaalaques: input.vaalaques,
-            bonds: input.bonds ?? null,
+            bonds: input.bonds ?? [],
             personality: input.personality,
             posture: input.posture,
           })
+          .onConflictDoNothing({
+            target: [characterTable.playerId, characterTable.clientRequestId],
+          })
           .returning();
-        if (!row) throw new CharacterNotFoundError();
+        if (!row) return replayCreate(tx, input);
 
         if (input.skills.length > 0) {
           await tx.insert(characterSkillTable).values(
@@ -92,7 +136,7 @@ export function characterRepository(): CharacterRepository {
           );
         }
 
-        return toCharacter(row);
+        return { character: toCharacter(row), created: true };
       });
     },
 
@@ -132,7 +176,10 @@ export function characterRepository(): CharacterRepository {
     ): Promise<Character> {
       const [row] = await db
         .update(characterTable)
-        .set(toCharacterChanges(patch))
+        .set({
+          ...toCharacterChanges(patch),
+          version: sql`${characterTable.version} + 1`,
+        })
         .where(eq(characterTable.id, id))
         .returning();
       if (!row) throw new CharacterNotFoundError();
@@ -140,8 +187,76 @@ export function characterRepository(): CharacterRepository {
       return toCharacter(row);
     },
 
+    async updateSheet(command: UpdateSheetCommand): Promise<Character> {
+      return db.transaction(async (tx) => {
+        const [locked] = await tx
+          .select()
+          .from(characterTable)
+          .where(eq(characterTable.id, command.id))
+          .for('update');
+        if (!locked) throw new CharacterNotFoundError();
+        if (locked.version !== command.expectedVersion)
+          throw new CharacterVersionConflictError();
+
+        const skills = await tx
+          .select(SKILL_DETAIL_COLUMNS)
+          .from(characterSkillTable)
+          .innerJoin(skillTable, eq(characterSkillTable.skillId, skillTable.id))
+          .where(eq(characterSkillTable.characterId, command.id))
+          .for('update', { of: characterSkillTable });
+
+        const changes = command.decide(toCharacter(locked), skills);
+        const [row] = await tx
+          .update(characterTable)
+          .set({
+            ...toCharacterChanges(changes),
+            currentHp: sql`LEAST(${characterTable.currentHp}, ${changes.maxHp})`,
+            currentEffort: sql`LEAST(${characterTable.currentEffort}, ${changes.maxEffort})`,
+            version: sql`${characterTable.version} + 1`,
+          })
+          .where(
+            and(
+              eq(characterTable.id, command.id),
+              eq(characterTable.version, command.expectedVersion),
+            ),
+          )
+          .returning();
+        if (!row) throw new CharacterVersionConflictError();
+
+        return toCharacter(row);
+      });
+    },
+
+    async changeEffort(
+      id: string,
+      delta: number,
+    ): Promise<VitalsChangeOutcome> {
+      const change = await changeLockedCharacterEffort(db, id, delta, null);
+      if (!change) throw new CharacterNotFoundError();
+
+      return {
+        character: toCharacter(change.row),
+        oldEffort: change.oldEffort,
+        oldHp: change.oldHp,
+      };
+    },
+
+    async changeHp(id: string, delta: number): Promise<VitalsChangeOutcome> {
+      const change = await changeLockedCharacterHp(db, id, delta, null);
+      if (!change) throw new CharacterNotFoundError();
+
+      return {
+        character: toCharacter(change.row),
+        oldEffort: change.oldEffort,
+        oldHp: change.oldHp,
+      };
+    },
+
     async delete(id: string): Promise<void> {
-      await db.delete(characterTable).where(eq(characterTable.id, id));
+      await db.transaction(async (tx) => {
+        await removeCharacterCombatants(tx, id);
+        await tx.delete(characterTable).where(eq(characterTable.id, id));
+      });
     },
 
     async findItems(characterId: string): Promise<CharacterItem[]> {
@@ -218,14 +333,7 @@ export function characterRepository(): CharacterRepository {
       characterId: string,
     ): Promise<CharacterSkillDetail[]> {
       const rows = await db
-        .select({
-          id: characterSkillTable.id,
-          characterId: characterSkillTable.characterId,
-          skillId: characterSkillTable.skillId,
-          proficiencyBonus: characterSkillTable.proficiencyBonus,
-          skillName: skillTable.name,
-          attribute: skillTable.attribute,
-        })
+        .select(SKILL_DETAIL_COLUMNS)
         .from(characterSkillTable)
         .innerJoin(skillTable, eq(characterSkillTable.skillId, skillTable.id))
         .where(eq(characterSkillTable.characterId, characterId));
@@ -258,26 +366,55 @@ export function characterRepository(): CharacterRepository {
         .where(inArray(skillTable.id, [...ids]));
     },
 
-    async upsertSkill(
-      characterId: string,
-      skillId: string,
-      proficiencyBonus: number,
-    ): Promise<CharacterSkill> {
+    async upsertSkill(command: UpsertSkillCommand): Promise<CharacterSkill> {
+      const { characterId, skillId, proficiencyBonus } = command;
       try {
-        const [row] = await db
-          .insert(characterSkillTable)
-          .values({ characterId, skillId, proficiencyBonus })
-          .onConflictDoUpdate({
-            target: [
-              characterSkillTable.characterId,
-              characterSkillTable.skillId,
-            ],
-            set: { proficiencyBonus },
-          })
-          .returning();
-        if (!row) throw new CharacterNotFoundError();
+        return await db.transaction(async (tx) => {
+          const [locked] = await tx
+            .select()
+            .from(characterTable)
+            .where(eq(characterTable.id, characterId))
+            .for('update');
+          if (!locked) throw new CharacterNotFoundError();
 
-        return toSkill(row);
+          const [row] = await tx
+            .insert(characterSkillTable)
+            .values({ characterId, skillId, proficiencyBonus })
+            .onConflictDoUpdate({
+              target: [
+                characterSkillTable.characterId,
+                characterSkillTable.skillId,
+              ],
+              set: { proficiencyBonus },
+            })
+            .returning();
+          if (!row) throw new CharacterNotFoundError();
+
+          const skills = await tx
+            .select(SKILL_DETAIL_COLUMNS)
+            .from(characterSkillTable)
+            .innerJoin(
+              skillTable,
+              eq(characterSkillTable.skillId, skillTable.id),
+            )
+            .where(eq(characterSkillTable.characterId, characterId));
+          const limits = command.deriveLimits(toCharacter(locked), skills);
+          if (limits) {
+            await tx
+              .update(characterTable)
+              .set({
+                maxHp: limits.maxHp,
+                maxEffort: limits.maxEffort,
+                currentHp: sql`LEAST(${characterTable.currentHp}, ${limits.maxHp})`,
+                currentEffort: sql`LEAST(${characterTable.currentEffort}, ${limits.maxEffort})`,
+                version: sql`${characterTable.version} + 1`,
+                updatedAt: new Date(),
+              })
+              .where(eq(characterTable.id, characterId));
+          }
+
+          return toSkill(row);
+        });
       } catch (error) {
         if (isForeignKeyViolation(error, CHARACTER_FOREIGN_KEY))
           throw new CharacterNotFoundError();

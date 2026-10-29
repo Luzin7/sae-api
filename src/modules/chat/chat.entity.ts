@@ -104,14 +104,6 @@ export type RealtimeEvent =
       kind: RollKind;
     }
   | {
-      type: 'session.monster-vitals';
-      monsterId: string;
-      currentHp: number;
-      maxHp: number;
-      currentEffort: number;
-      maxEffort: number;
-    }
-  | {
       type: 'session.monster-attacked';
       monsterId: string;
       name: string;
@@ -123,6 +115,13 @@ export type RealtimeEvent =
       kind: RollKind;
       damage: number;
     };
+
+export const INACTIVE_COMBAT_STATE: CombatStatePayload = {
+  active: false,
+  turnIndex: 0,
+  round: 1,
+  entries: [],
+};
 
 export function chatRoom(sessionId: string): string {
   return `session:${sessionId}`;

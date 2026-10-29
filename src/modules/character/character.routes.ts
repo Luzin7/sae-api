@@ -12,26 +12,34 @@ import {
   CharacterParamsSchema,
   CreateCharacterBodySchema,
   CreateItemBodySchema,
+  PreviewCharacterBodySchema,
   UpdateCharacterBodySchema,
   UpdateItemBodySchema,
-  UpdateVitalsBodySchema,
+  ChangeEffortBodySchema,
+  ChangeHpBodySchema,
   UpsertSkillBodySchema,
 } from './character.schemas.js';
+import type { ChangeHpService } from './change-hp/change-hp.service.js';
+import type { ChangeEffortService } from './change-effort/change-effort.service.js';
 import type { CreateCharacterService } from './create-character/create-character.service.js';
 import type { DeleteCharacterService } from './delete-character/delete-character.service.js';
 import type { GetCharacterService } from './get-character/get-character.service.js';
 import type { GetSheetService } from './get-sheet/get-sheet.service.js';
+import { CharacterPreviewPresenter } from './preview-character/preview-character.presenter.js';
+import { previewRateLimit } from './preview-character/preview-character.rate-limit.js';
+import type { PreviewCharacterService } from './preview-character/preview-character.service.js';
 import type { UpsertSkillService } from './skills/upsert-skill/upsert-skill.service.js';
 import type { UpdateCharacterService } from './update-character/update-character.service.js';
-import type { UpdateVitalsService } from './update-vitals/update-vitals.service.js';
 
 export interface CharacterServices {
   createCharacter: CreateCharacterService;
+  previewCharacter: PreviewCharacterService;
   getCharacter: GetCharacterService;
   getSheet: GetSheetService;
   updateCharacter: UpdateCharacterService;
   deleteCharacter: DeleteCharacterService;
-  updateVitals: UpdateVitalsService;
+  changeHp: ChangeHpService;
+  changeEffort: ChangeEffortService;
   addItem: AddItemService;
   updateItem: UpdateItemService;
   deleteItem: DeleteItemService;
@@ -58,6 +66,17 @@ export default async function characterRoutes(
       .status(201)
       .send({ character: CharacterPresenter.toHTTP(character) });
   });
+
+  app.post(
+    '/preview',
+    { preHandler: authenticate, config: { rateLimit: previewRateLimit } },
+    async (request) => {
+      const body = PreviewCharacterBodySchema.parse(request.body);
+      const preview = await opts.services.previewCharacter.execute(body);
+
+      return { preview: CharacterPreviewPresenter.toHTTP(preview) };
+    },
+  );
 
   app.get('/mine', { preHandler: authenticate }, async (request) => {
     const page = CharacterListQuerySchema.parse(request.query);
@@ -110,11 +129,11 @@ export default async function characterRoutes(
 
   app.patch('/:id/hp', { preHandler: authenticate }, async (request) => {
     const { id } = CharacterParamsSchema.parse(request.params);
-    const { currentHp } = UpdateVitalsBodySchema.parse(request.body);
-    const character = await opts.services.updateVitals.execute(
+    const { delta } = ChangeHpBodySchema.parse(request.body);
+    const character = await opts.services.changeHp.execute(
       id,
       request.playerId,
-      { currentHp },
+      delta,
     );
 
     return { character: CharacterPresenter.toHTTP(character) };
@@ -122,11 +141,11 @@ export default async function characterRoutes(
 
   app.patch('/:id/pe', { preHandler: authenticate }, async (request) => {
     const { id } = CharacterParamsSchema.parse(request.params);
-    const { currentEffort } = UpdateVitalsBodySchema.parse(request.body);
-    const character = await opts.services.updateVitals.execute(
+    const { delta } = ChangeEffortBodySchema.parse(request.body);
+    const character = await opts.services.changeEffort.execute(
       id,
       request.playerId,
-      { currentEffort },
+      delta,
     );
 
     return { character: CharacterPresenter.toHTTP(character) };

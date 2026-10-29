@@ -7,6 +7,7 @@ import {
   WS_RATE_WINDOW_MS,
 } from '@infra/ws/config.js';
 import type { InMemoryMessageBus } from './chat.bus.js';
+import { INACTIVE_COMBAT_STATE } from './chat.entity.js';
 import { type InboundFrame } from './chat.schemas.js';
 import {
   parseFrame,
@@ -17,11 +18,16 @@ import {
   sinkFor,
   toWireMessages,
 } from './chat.transport.js';
+import type { AddMonsterService } from './add-monster/add-monster.service.js';
+import type { SetMonsterAfflictionsService } from './set-monster-afflictions/set-monster-afflictions.service.js';
+import type { ChangeHpService } from './change-hp/change-hp.service.js';
+import type { ChangeMonsterHpService } from './change-monster-hp/change-monster-hp.service.js';
+import type { ChangeEffortService } from './change-effort/change-effort.service.js';
+import type { ChangeMonsterEffortService } from './change-monster-effort/change-monster-effort.service.js';
 import type { CloseTestService } from './close-test/close-test.service.js';
 import type { ConnectService } from './connect/connect.service.js';
 import type { DeclareTestService } from './declare-test/declare-test.service.js';
 import type { EndCombatService } from './end-combat/end-combat.service.js';
-import type { ForceHpService } from './force-hp/force-hp.service.js';
 import type { LeaveService } from './leave/leave.service.js';
 import type { MasterBroadcastService } from './master-broadcast/master-broadcast.service.js';
 import type { MonsterAttackService } from './monster-attack/monster-attack.service.js';
@@ -31,15 +37,16 @@ import type { RollInitiativeService } from './roll-initiative/roll-initiative.se
 import type { RollMonsterTestService } from './roll-monster-test/roll-monster-test.service.js';
 import type { SendMessageService } from './send-message/send-message.service.js';
 import type { StartCombatService } from './start-combat/start-combat.service.js';
-import type { UpdateHpService } from './update-hp/update-hp.service.js';
-import type { UpdateMonsterVitalsService } from './update-monster-vitals/update-monster-vitals.service.js';
 
 export interface ChatServices {
   connect: ConnectService;
   sendMessage: SendMessageService;
   rollDice: RollDiceService;
-  updateHp: UpdateHpService;
-  forceHp: ForceHpService;
+  changeHp: ChangeHpService;
+  changeMonsterHp: ChangeMonsterHpService;
+  setMonsterAfflictions: SetMonsterAfflictionsService;
+  changeEffort: ChangeEffortService;
+  changeMonsterEffort: ChangeMonsterEffortService;
   masterBroadcast: MasterBroadcastService;
   leave: LeaveService;
   startCombat: StartCombatService;
@@ -49,8 +56,8 @@ export interface ChatServices {
   declareTest: DeclareTestService;
   closeTest: CloseTestService;
   rollMonsterTest: RollMonsterTestService;
-  updateMonsterVitals: UpdateMonsterVitalsService;
   monsterAttack: MonsterAttackService;
+  addMonster: AddMonsterService;
 }
 
 export interface ChatGatewayOptions {
@@ -199,7 +206,10 @@ async function dispatch(
         messages: toWireMessages(history),
       });
       sendEvent(socket, { type: 'session.test-snapshot', test: openTest });
-      if (combat) sendEvent(socket, { type: 'session.combat', ...combat });
+      sendEvent(socket, {
+        type: 'session.combat',
+        ...(combat ?? INACTIVE_COMBAT_STATE),
+      });
       return;
     }
 
@@ -223,12 +233,22 @@ async function dispatch(
       return;
     }
 
-    if (frame.type === 'character.hp-update') {
-      await opts.services.updateHp.execute({
+    if (frame.type === 'character.hp-change') {
+      await opts.services.changeHp.execute({
         playerId: state.playerId,
         sessionId: frame.sessionId,
         characterId: frame.characterId,
-        newHp: frame.newHp,
+        delta: frame.delta,
+      });
+      return;
+    }
+
+    if (frame.type === 'character.pe-change') {
+      await opts.services.changeEffort.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        characterId: frame.characterId,
+        delta: frame.delta,
       });
       return;
     }
@@ -238,16 +258,6 @@ async function dispatch(
         playerId: state.playerId,
         sessionId: frame.sessionId,
         text: frame.text,
-      });
-      return;
-    }
-
-    if (frame.type === 'master.force-hp-update') {
-      await opts.services.forceHp.execute({
-        playerId: state.playerId,
-        sessionId: frame.sessionId,
-        characterId: frame.characterId,
-        newHp: frame.newHp,
       });
       return;
     }
@@ -274,6 +284,8 @@ async function dispatch(
       await opts.services.nextTurn.execute({
         playerId: state.playerId,
         sessionId: frame.sessionId,
+        expectedTurnIndex: frame.expectedTurnIndex,
+        expectedRound: frame.expectedRound,
       });
       return;
     }
@@ -317,13 +329,41 @@ async function dispatch(
       return;
     }
 
-    if (frame.type === 'master.monster-vitals-update') {
-      await opts.services.updateMonsterVitals.execute({
+    if (frame.type === 'master.monster-hp-change') {
+      await opts.services.changeMonsterHp.execute({
         playerId: state.playerId,
         sessionId: frame.sessionId,
         monsterId: frame.monsterId,
-        currentHp: frame.currentHp,
-        currentEffort: frame.currentEffort,
+        delta: frame.delta,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.monster-afflictions-update') {
+      await opts.services.setMonsterAfflictions.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        monsterId: frame.monsterId,
+        afflictions: frame.afflictions,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.monster-pe-change') {
+      await opts.services.changeMonsterEffort.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        monsterId: frame.monsterId,
+        delta: frame.delta,
+      });
+      return;
+    }
+
+    if (frame.type === 'master.add-monster') {
+      await opts.services.addMonster.execute({
+        playerId: state.playerId,
+        sessionId: frame.sessionId,
+        monsterId: frame.monsterId,
       });
       return;
     }

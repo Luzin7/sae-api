@@ -6,6 +6,7 @@ import {
   makeGameAccess,
   makePlayerDirectory,
 } from '../chat.testkit.js';
+import type { CombatStatePayload } from '@modules/session/session.entity.js';
 import { GameSessionNotifierService } from './game-session-notifier.service.js';
 
 function makeSessions(
@@ -31,11 +32,15 @@ function build() {
     ],
   );
   const bus = new InMemoryMessageBus();
+  const combat = { findState: vi.fn().mockResolvedValue(null) };
+  const logger = { error: vi.fn() };
   const notifier = new GameSessionNotifierService(
     sessions,
     access,
     players,
     bus,
+    combat,
+    logger,
   );
 
   vi.mocked(access.findById).mockResolvedValue({
@@ -46,7 +51,7 @@ function build() {
   join(bus, 'socket-2', 'master');
   join(bus, 'socket-3', 'p2');
 
-  return { sessions, access, players, bus, notifier };
+  return { sessions, access, players, bus, combat, logger, notifier };
 }
 
 describe('GameSessionNotifierService', () => {
@@ -86,6 +91,53 @@ describe('GameSessionNotifierService', () => {
     });
   });
 
+  it('publishes the pe change to the active session', async () => {
+    const { bus, notifier } = build();
+    const publish = vi.spyOn(bus, 'publish');
+
+    await notifier.notifyEffortChanged('game-1', {
+      characterId: 'char-1',
+      oldPe: 5,
+      newPe: 8,
+    });
+
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'character.pe-changed',
+      characterId: 'char-1',
+      oldPe: 5,
+      newPe: 8,
+    });
+  });
+
+  it('publishes the combat state of the active session', async () => {
+    const { bus, combat, notifier } = build();
+    const state: CombatStatePayload = {
+      active: true,
+      turnIndex: 1,
+      round: 2,
+      entries: [],
+    };
+    combat.findState.mockResolvedValue(state);
+    const publish = vi.spyOn(bus, 'publish');
+
+    await notifier.notifyCombatChanged('game-1');
+
+    expect(combat.findState).toHaveBeenCalledWith('session-1');
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'session.combat',
+      state,
+    });
+  });
+
+  it('publishes nothing when the session has no combat', async () => {
+    const { bus, notifier } = build();
+    const publish = vi.spyOn(bus, 'publish');
+
+    await notifier.notifyCombatChanged('game-1');
+
+    expect(publish).not.toHaveBeenCalled();
+  });
+
   it('does nothing when the game has no active session', async () => {
     const { sessions, bus, notifier } = build();
     vi.mocked(sessions.findActiveByGame).mockResolvedValue(null);
@@ -107,10 +159,9 @@ describe('GameSessionNotifierService', () => {
   });
 
   it('resolves without throwing when a dependency fails', async () => {
-    const { sessions, notifier } = build();
-    vi.mocked(sessions.findActiveByGame).mockRejectedValue(
-      new Error('database down'),
-    );
+    const { sessions, logger, notifier } = build();
+    const failure = new Error('database down');
+    vi.mocked(sessions.findActiveByGame).mockRejectedValue(failure);
 
     await expect(
       notifier.notifyRosterChanged('game-1'),
@@ -122,5 +173,13 @@ describe('GameSessionNotifierService', () => {
         newHp: 14,
       }),
     ).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledWith(
+      { step: 'notifyRosterChanged', gameId: 'game-1', err: failure },
+      'game session notify failed',
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      { step: 'publish', gameId: 'game-1', err: failure },
+      'game session notify failed',
+    );
   });
 });

@@ -5,7 +5,6 @@ import {
 } from '../chat.authorization.js';
 import type { InMemoryMessageBus } from '../chat.bus.js';
 import { chatRoom, type RealtimeEvent } from '../chat.entity.js';
-import { CombatStateNotFoundError } from '../chat.errors.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
 import type { CombatRepository } from '../combat.repository.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
@@ -14,6 +13,8 @@ import type { CombatStatePayload } from '@modules/session/session.entity.js';
 export interface NextTurnInput {
   playerId: string;
   sessionId: string;
+  expectedTurnIndex: number;
+  expectedRound: number;
 }
 
 export class NextTurnService {
@@ -33,19 +34,25 @@ export class NextTurnService {
     );
     requireGameMaster(game, input.playerId);
 
-    const state = await this.combat.findState(input.sessionId);
-    if (!state) throw new CombatStateNotFoundError();
-
-    const nextState = await this.combat.advanceTurn({
+    const { state, recovered } = await this.combat.advanceTurn({
       sessionId: input.sessionId,
       playerId: input.playerId,
-      expectedTurnIndex: state.turnIndex,
-      expectedRound: state.round,
+      expectedTurnIndex: input.expectedTurnIndex,
+      expectedRound: input.expectedRound,
     });
 
-    const event: RealtimeEvent = { type: 'session.combat', state: nextState };
-    this.bus.publish(chatRoom(input.sessionId), event);
+    const room = chatRoom(input.sessionId);
+    for (const change of recovered) {
+      this.bus.publish(room, {
+        type: 'character.pe-changed',
+        characterId: change.characterId,
+        oldPe: change.oldEffort,
+        newPe: change.newEffort,
+      });
+    }
+    const event: RealtimeEvent = { type: 'session.combat', state };
+    this.bus.publish(room, event);
 
-    return nextState;
+    return state;
   }
 }

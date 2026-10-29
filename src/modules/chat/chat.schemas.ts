@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { AFFLICTION_KEYS } from '@shared/rules/afflictions.js';
+import { EffortDeltaSchema } from '@shared/rules/effort.js';
+import { HpDeltaSchema } from '@shared/rules/hp.js';
 
 export const MAX_CHAT_BODY_LENGTH = 2000;
 export const CHAT_HISTORY_LIMIT = 50;
@@ -42,13 +45,24 @@ const CombatantWireSchema = z.object({
   name: z.string(),
   initiativeValue: z.number().int().nullable(),
   hasRolled: z.boolean(),
+  currentHp: z.number().int().nullable(),
+  maxHp: z.number().int().nullable(),
+  currentEffort: z.number().int().nullable(),
+  maxEffort: z.number().int().nullable(),
+  afflictions: z.array(z.string()),
+  cognition: z.number().int().nullable(),
+  psyche: z.number().int().nullable(),
+  instinct: z.number().int().nullable(),
+  constitution: z.number().int().nullable(),
+  motricity: z.number().int().nullable(),
+  perception: z.number().int().nullable(),
 });
 
 /**
  * Inbound frames. Validated at the gateway boundary; a malformed frame never
  * reaches a service. `v` is reserved so the protocol can evolve.
  *
- * `dice.roll` and `character.hp-update` carry ids only: attribute value, skill
+ * `dice.roll` and `character.hp-change` carry ids only: attribute value, skill
  * bonus and BExp are resolved server-side from the character.
  */
 export const InboundFrameSchema = z.discriminatedUnion('type', [
@@ -66,21 +80,21 @@ export const InboundFrameSchema = z.discriminatedUnion('type', [
     testId: UuidSchema.optional(),
   }),
   z.object({
-    type: z.literal('character.hp-update'),
+    type: z.literal('character.hp-change'),
     sessionId: UuidSchema,
     characterId: UuidSchema,
-    newHp: NonNegativeIntSchema,
+    delta: HpDeltaSchema,
+  }),
+  z.object({
+    type: z.literal('character.pe-change'),
+    sessionId: UuidSchema,
+    characterId: UuidSchema,
+    delta: EffortDeltaSchema,
   }),
   z.object({
     type: z.literal('master.broadcast'),
     sessionId: UuidSchema,
     text: z.string().min(1).max(MAX_CHAT_BODY_LENGTH),
-  }),
-  z.object({
-    type: z.literal('master.force-hp-update'),
-    sessionId: UuidSchema,
-    characterId: UuidSchema,
-    newHp: NonNegativeIntSchema,
   }),
   z.object({ type: z.literal('master.start-combat'), sessionId: UuidSchema }),
   z.object({
@@ -89,7 +103,12 @@ export const InboundFrameSchema = z.discriminatedUnion('type', [
     kind: z.enum(['character', 'monster']),
     refId: UuidSchema,
   }),
-  z.object({ type: z.literal('master.next-turn'), sessionId: UuidSchema }),
+  z.object({
+    type: z.literal('master.next-turn'),
+    sessionId: UuidSchema,
+    expectedTurnIndex: NonNegativeIntSchema,
+    expectedRound: z.number().int().min(1),
+  }),
   z.object({ type: z.literal('master.end-combat'), sessionId: UuidSchema }),
   z.object({
     type: z.literal('master.roll-monster-test'),
@@ -118,11 +137,22 @@ export const InboundFrameSchema = z.discriminatedUnion('type', [
     testId: UuidSchema,
   }),
   z.object({
-    type: z.literal('master.monster-vitals-update'),
+    type: z.literal('master.monster-hp-change'),
     sessionId: UuidSchema,
     monsterId: UuidSchema,
-    currentHp: NonNegativeIntSchema,
-    currentEffort: NonNegativeIntSchema,
+    delta: HpDeltaSchema,
+  }),
+  z.object({
+    type: z.literal('master.monster-afflictions-update'),
+    sessionId: UuidSchema,
+    monsterId: UuidSchema,
+    afflictions: z.array(z.enum(AFFLICTION_KEYS)),
+  }),
+  z.object({
+    type: z.literal('master.monster-pe-change'),
+    sessionId: UuidSchema,
+    monsterId: UuidSchema,
+    delta: EffortDeltaSchema,
   }),
   z.object({
     type: z.literal('master.monster-attack'),
@@ -131,6 +161,11 @@ export const InboundFrameSchema = z.discriminatedUnion('type', [
     attribute: AttributeSchema,
     targetCharacterId: UuidSchema,
     damage: NonNegativeIntSchema,
+  }),
+  z.object({
+    type: z.literal('master.add-monster'),
+    sessionId: UuidSchema,
+    monsterId: UuidSchema,
   }),
   z.object({ type: z.literal('ping') }),
 ]);
@@ -235,14 +270,6 @@ export const OutboundEventSchema = z.union([
     rolls: z.array(z.number().int()),
     result: z.number().int(),
     kind: z.enum(['best', 'worst', 'single']),
-  }),
-  z.object({
-    type: z.literal('session.monster-vitals'),
-    monsterId: z.string(),
-    currentHp: z.number().int(),
-    maxHp: z.number().int(),
-    currentEffort: z.number().int(),
-    maxEffort: z.number().int(),
   }),
   z.object({
     type: z.literal('session.monster-attacked'),

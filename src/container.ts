@@ -29,6 +29,7 @@ import { DeleteMonsterService } from '@modules/bestiary/delete-monster/delete-mo
 import { MonsterQueryService } from '@modules/bestiary/monster-query.service.js';
 import { UpdateMonsterService } from '@modules/bestiary/update-monster/update-monster.service.js';
 import { CharacterQueryService } from '@modules/character/character-query.service.js';
+import { AddMonsterService } from '@modules/chat/add-monster/add-monster.service.js';
 import { InMemoryMessageBus } from '@modules/chat/chat.bus.js';
 import type { CharacterAccess } from '@modules/chat/character-access.contract.js';
 import type { ChatServices } from '@modules/chat/chat.gateway.js';
@@ -39,7 +40,6 @@ import { CloseTestService } from '@modules/chat/close-test/close-test.service.js
 import { ConnectService } from '@modules/chat/connect/connect.service.js';
 import { DeclareTestService } from '@modules/chat/declare-test/declare-test.service.js';
 import { EndCombatService } from '@modules/chat/end-combat/end-combat.service.js';
-import { ForceHpService } from '@modules/chat/force-hp/force-hp.service.js';
 import { GameSessionNotifierService } from '@modules/chat/game-session-notifier/game-session-notifier.service.js';
 import { LeaveService } from '@modules/chat/leave/leave.service.js';
 import { MasterBroadcastService } from '@modules/chat/master-broadcast/master-broadcast.service.js';
@@ -52,8 +52,11 @@ import { RollInitiativeService } from '@modules/chat/roll-initiative/roll-initia
 import { RollMonsterTestService } from '@modules/chat/roll-monster-test/roll-monster-test.service.js';
 import { SendMessageService } from '@modules/chat/send-message/send-message.service.js';
 import { StartCombatService } from '@modules/chat/start-combat/start-combat.service.js';
-import { UpdateHpService } from '@modules/chat/update-hp/update-hp.service.js';
-import { UpdateMonsterVitalsService } from '@modules/chat/update-monster-vitals/update-monster-vitals.service.js';
+import { SetMonsterAfflictionsService } from '@modules/chat/set-monster-afflictions/set-monster-afflictions.service.js';
+import { ChangeHpService } from '@modules/chat/change-hp/change-hp.service.js';
+import { ChangeMonsterHpService } from '@modules/chat/change-monster-hp/change-monster-hp.service.js';
+import { ChangeEffortService } from '@modules/chat/change-effort/change-effort.service.js';
+import { ChangeMonsterEffortService } from '@modules/chat/change-monster-effort/change-monster-effort.service.js';
 import type { CharacterRepository } from '@modules/character/character.repository.js';
 import type { CharacterServices } from '@modules/character/character.routes.js';
 import { CreateCharacterService } from '@modules/character/create-character/create-character.service.js';
@@ -63,9 +66,12 @@ import { GetSheetService } from '@modules/character/get-sheet/get-sheet.service.
 import { AddItemService } from '@modules/character/items/add-item/add-item.service.js';
 import { DeleteItemService } from '@modules/character/items/delete-item/delete-item.service.js';
 import { UpdateItemService } from '@modules/character/items/update-item/update-item.service.js';
+import { MemoizedSkillDirectory } from '@modules/character/preview-character/memoized-skill-directory.js';
+import { PreviewCharacterService } from '@modules/character/preview-character/preview-character.service.js';
 import { UpsertSkillService } from '@modules/character/skills/upsert-skill/upsert-skill.service.js';
 import { UpdateCharacterService } from '@modules/character/update-character/update-character.service.js';
-import { UpdateVitalsService } from '@modules/character/update-vitals/update-vitals.service.js';
+import { ChangeHpService as ChangeCharacterHpService } from '@modules/character/change-hp/change-hp.service.js';
+import { ChangeEffortService as ChangeCharacterEffortService } from '@modules/character/change-effort/change-effort.service.js';
 import { CreateGameService } from '@modules/game/create-game/create-game.service.js';
 import { DeleteGameService } from '@modules/game/delete-game/delete-game.service.js';
 import { GameQueryService } from '@modules/game/game-query.service.js';
@@ -155,6 +161,8 @@ export function buildContainer(deps: {
     gameAccess,
     playerDirectory,
     bus,
+    combat,
+    deps.app.log,
   );
 
   const signing = {
@@ -259,6 +267,9 @@ export function buildContainer(deps: {
           systemRng,
           sessionNotifier,
         ),
+        previewCharacter: new PreviewCharacterService(
+          new MemoizedSkillDirectory(() => skillCatalog.list()),
+        ),
         getCharacter: new GetCharacterService(characters, gameAccess),
         getSheet: new GetSheetService(characters, gameAccess),
         updateCharacter: new UpdateCharacterService(
@@ -269,9 +280,15 @@ export function buildContainer(deps: {
         ),
         deleteCharacter: new DeleteCharacterService(
           characters,
+          gameAccess,
           sessionNotifier,
         ),
-        updateVitals: new UpdateVitalsService(
+        changeHp: new ChangeCharacterHpService(
+          characters,
+          gameAccess,
+          sessionNotifier,
+        ),
+        changeEffort: new ChangeCharacterEffortService(
           characters,
           gameAccess,
           sessionNotifier,
@@ -306,16 +323,22 @@ export function buildContainer(deps: {
           systemRng,
           combat,
         ),
-        updateHp: new UpdateHpService(
+        changeHp: new ChangeHpService(
           chatMessages,
           gameAccess,
           characterAccess,
           bus,
         ),
-        forceHp: new ForceHpService(
+        changeEffort: new ChangeEffortService(
           chatMessages,
           gameAccess,
           characterAccess,
+          bus,
+        ),
+        changeMonsterEffort: new ChangeMonsterEffortService(
+          chatMessages,
+          gameAccess,
+          combat,
           bus,
         ),
         masterBroadcast: new MasterBroadcastService(
@@ -332,6 +355,7 @@ export function buildContainer(deps: {
           combatants,
           combat,
           bus,
+          systemRng,
         ),
         rollInitiative: new RollInitiativeService(
           chatMessages,
@@ -353,15 +377,19 @@ export function buildContainer(deps: {
         rollMonsterTest: new RollMonsterTestService(
           chatMessages,
           gameAccess,
-          combatants,
           combat,
           bus,
           systemRng,
         ),
-        updateMonsterVitals: new UpdateMonsterVitalsService(
+        setMonsterAfflictions: new SetMonsterAfflictionsService(
           chatMessages,
           gameAccess,
-          combatants,
+          combat,
+          bus,
+        ),
+        changeMonsterHp: new ChangeMonsterHpService(
+          chatMessages,
+          gameAccess,
           combat,
           bus,
         ),
@@ -369,10 +397,16 @@ export function buildContainer(deps: {
           chatMessages,
           gameAccess,
           characterAccess,
-          combatants,
           combat,
           bus,
           systemRng,
+        ),
+        addMonster: new AddMonsterService(
+          chatMessages,
+          gameAccess,
+          combatants,
+          combat,
+          bus,
         ),
       },
     },

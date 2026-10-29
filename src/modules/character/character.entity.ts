@@ -53,9 +53,10 @@ export interface Character extends AttributeScores, ProficiencyScores {
   afflictions: string[];
   socialClass: SocialClassKey | null;
   vaalaques: number;
-  bonds: string | null;
+  bonds: string[];
   personality: string | null;
   posture: string | null;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -84,10 +85,12 @@ export interface UpsertSkillInput {
 }
 
 export interface CreateCharacterInput
-  extends CharacterSheetInput, ProficiencyScores {
+  extends Omit<CharacterSheetInput, 'bonds'>, ProficiencyScores {
   playerId: string;
   gameId: string;
+  clientRequestId: string;
   skills: UpsertSkillInput[];
+  bonds?: string[];
   hairColor: string | null;
   size: string | null;
   vaalaques: number;
@@ -130,14 +133,15 @@ export interface UpdateCharacterInput {
   afflictions?: AfflictionKey[];
   socialClass?: SocialClassKey;
   vaalaques?: number;
-  bonds?: string;
+  bonds?: string[];
   personality?: string;
   posture?: string;
 }
 
-export interface UpdateVitalsInput {
-  currentHp?: number;
-  currentEffort?: number;
+export interface VitalsChangeOutcome {
+  character: Character;
+  oldEffort: number;
+  oldHp: number;
 }
 
 export type ItemType =
@@ -213,6 +217,27 @@ export interface CharacterSkillDetail extends CharacterSkill {
   attribute: AttributeName;
 }
 
+export interface VitalLimits {
+  maxHp: number;
+  maxEffort: number;
+}
+
+/**
+ * Decides, from the locked character and its skills after the upsert, the new
+ * limits; null leaves the limits untouched.
+ */
+export type VitalLimitsDecision = (
+  character: Character,
+  skills: CharacterSkillDetail[],
+) => VitalLimits | null;
+
+export interface UpsertSkillCommand {
+  characterId: string;
+  skillId: string;
+  proficiencyBonus: number;
+  deriveLimits: VitalLimitsDecision;
+}
+
 export interface Page {
   limit: number;
   offset: number;
@@ -223,4 +248,25 @@ export const DEFAULT_CHARACTER_PAGE: Page = { limit: 20, offset: 0 };
 export interface Vitals {
   hp: number;
   effort: number;
+}
+
+export type SheetChanges = Omit<
+  UpdateCharacterInput,
+  'currentHp' | 'currentEffort' | 'maxHp' | 'maxEffort'
+> & { maxHp: number; maxEffort: number };
+
+export type SheetDecision = (
+  current: Character,
+  skills: CharacterSkillDetail[],
+) => SheetChanges;
+
+export interface UpdateSheetCommand {
+  id: string;
+  expectedVersion: number;
+  decide: SheetDecision;
+}
+
+export interface CreateCharacterResult {
+  character: Character;
+  created: boolean;
 }

@@ -19,62 +19,73 @@ export interface AfflictionDefinition {
   trigger: string;
 }
 
-/** 8 optional afflictions; taken at character creation. Transcribed from the rulebook. */
+/** 8 optional afflictions; taken at character creation. Official rulebook text, verbatim. */
 export const AFFLICTIONS: readonly AfflictionDefinition[] = [
   {
     key: 'fobia',
     name: 'Fobia',
-    description: 'Medo intenso e debilitante.',
-    requirement: 'Definir a fonte da fobia.',
-    trigger: 'Ao se deparar diretamente com a fonte.',
+    description: 'Medo intenso e debilitante diante de algo específico.',
+    requirement:
+      'Definir a fonte da fobia (criatura, ambiente, situação, etc.).',
+    trigger:
+      'Quando o personagem se depara diretamente com a fonte da fobia ou algo que a represente claramente.',
   },
   {
     key: 'vicio',
     name: 'Vício',
-    description: 'Dependência física ou psicológica.',
-    requirement: 'Definir objeto e frequência de consumo.',
-    trigger: 'Em abstinência ou impossibilitado de satisfazer o vício.',
+    description: 'Dependência física ou psicológica de substância ou hábito.',
+    requirement: 'Definir o objeto do vício e sua frequência de consumo.',
+    trigger:
+      'Quando o personagem está em abstinência ou em situação onde não pode satisfazer o vício.',
   },
   {
     key: 'juramento',
     name: 'Juramento',
-    description: 'Compromisso rígido que limita ações.',
-    requirement: 'Listar ações proibidas pelo código.',
-    trigger: 'Quando a situação exige violar o juramento para ter sucesso.',
+    description: 'Compromisso rígido que limita ações do personagem.',
+    requirement:
+      'Listar claramente ações proibidas pelo juramento ou código de honra.',
+    trigger:
+      'Quando uma situação exige diretamente que o personagem viole seu juramento para ter sucesso.',
   },
   {
     key: 'trauma',
     name: 'Trauma',
-    description: 'Marca psicológica de evento passado.',
-    requirement: 'Definir evento e gatilhos específicos.',
-    trigger: 'Quando a situação remete ao evento ou ativa um gatilho.',
+    description: 'Marca psicológica causada por evento passado.',
+    requirement: 'Definir o evento traumático e seus gatilhos específicos.',
+    trigger:
+      'Quando a situação remete diretamente ao evento ou ativa um dos gatilhos definidos.',
   },
   {
     key: 'deficiencia',
     name: 'Deficiência',
-    description: 'Limitação física permanente.',
-    requirement: 'Escolher condição (cegueira, surdez, amputação).',
-    trigger: 'Quando a limitação impacta diretamente a ação.',
+    description: 'Limitação física permanente que reduz capacidades.',
+    requirement: 'Escolher uma condição (ex: cegueira, surdez, amputação).',
+    trigger:
+      'Quando a limitação impacta diretamente a ação realizada ou o ambiente exige sua superação.',
   },
   {
     key: 'apego',
     name: 'Apego',
-    description: 'Dependência emocional de pessoa ou objeto.',
-    requirement: 'Definir o alvo do apego.',
-    trigger: 'Quando o alvo está em risco, ausente ou inacessível.',
+    description: 'Dependência emocional de pessoa ou objeto específico.',
+    requirement: 'Definir a pessoa ou objeto ao qual o personagem é apegado.',
+    trigger: 'Quando o alvo do apego está em risco, ausente ou inacessível.',
   },
   {
     key: 'segredo',
     name: 'Segredo',
-    description: 'Informação que precisa ser escondida.',
-    requirement: 'Definir o segredo e suas consequências.',
-    trigger: 'Quando há risco real de descoberta ou exposição.',
+    description:
+      'Informação que o personagem precisa esconder a qualquer custo.',
+    requirement:
+      'Definir o segredo e suas possíveis consequências se revelado.',
+    trigger:
+      'Quando há risco real de descoberta, investigação direta ou exposição iminente.',
   },
   {
     key: 'estigma',
     name: 'Estigma',
-    description: 'Marca social que gera rejeição.',
-    requirement: 'Definir natureza e grupos que o reconhecem.',
-    trigger: 'Quando interage com grupos que reconhecem o estigma.',
+    description: 'Marca social que gera rejeição ou preconceito.',
+    requirement: 'Definir a natureza do estigma e os grupos que o reconhecem.',
+    trigger:
+      'Quando o personagem interage com indivíduos ou grupos que reconhecem ou reagem ao estigma.',
   },
 ];

@@ -18,7 +18,6 @@ const SheetFields = {
   maxHp: z.number().int().positive(),
   maxEffort: z.number().int().positive(),
   currentHp: z.number().int().min(0).optional(),
-  currentEffort: z.number().int().min(0).optional(),
   size: z.string().max(30).nullable().optional(),
   cognition: AttributeSchema.default(-5),
   psyche: AttributeSchema.default(-5),
@@ -31,12 +30,16 @@ const SheetFields = {
   notes: z.string().max(2000).nullable().optional(),
 };
 
-export const CreateMonsterBodySchema = z.object({
-  gameId: z.string().uuid(),
+const MonsterBodySchema = z.object({
+  gameId: z.string().uuid().optional(),
   ...SheetFields,
 });
 
-export const UpdateMonsterBodySchema = CreateMonsterBodySchema.omit({
+export const CreateMonsterBodySchema = MonsterBodySchema.extend({
+  clientRequestId: z.string().uuid(),
+});
+
+export const UpdateMonsterBodySchema = MonsterBodySchema.omit({
   gameId: true,
 }).partial();
 

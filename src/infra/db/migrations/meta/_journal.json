@@ -43,6 +43,34 @@
       "when": 1792693300027,
       "tag": "0005_testes_sessao",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793134568237,
+      "tag": "0006_white_maelstrom",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793236677930,
+      "tag": "0007_wealthy_gamma_corps",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793287569347,
+      "tag": "0008_flowery_paper_doll",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793289719334,
+      "tag": "0009_pontos_de_esforco",
+      "breakpoints": true
     }
   ]
 }

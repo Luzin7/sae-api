@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -17,11 +18,9 @@ export const monster = pgTable(
   'monster',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    gameId: uuid('game_id')
-      .notNull()
-      .references(() => game.id, {
-        onDelete: 'cascade',
-      }),
+    gameId: uuid('game_id').references(() => game.id, {
+      onDelete: 'cascade',
+    }),
     name: varchar('name', {
       length: 150,
     }).notNull(),
@@ -46,13 +45,25 @@ export const monster = pgTable(
       mode: 'number',
     }),
     notes: text('notes'),
-    createdBy: uuid('created_by').references(() => player.id),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => player.id),
+    clientRequestId: uuid('client_request_id'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => [
     index('monster_game_idx').on(t.gameId),
+    index('monster_owner_idx').on(t.createdBy),
+    uniqueIndex('monster_creator_client_request_uq').on(
+      t.createdBy,
+      t.clientRequestId,
+    ),
     check('monster_np_check', sql`${t.np} BETWEEN 1 AND 20`),
+    check(
+      'monster_effort_range_check',
+      sql`${t.currentEffort} >= 0 AND ${t.currentEffort} <= ${t.maxEffort}`,
+    ),
   ],
 );
 

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryMessageBus } from '../chat.bus.js';
 import type { CharacterSnapshot } from '../character-access.contract.js';
-import type { MonsterRef } from '../combatant-source.contract.js';
 import {
   ChatCharacterNotFoundError,
   ChatMonsterNotFoundError,
@@ -13,7 +12,6 @@ import {
   makeCharacterAccess,
   makeChatMessages,
   makeCombat,
-  makeCombatants,
   makeGameAccess,
 } from '../chat.testkit.js';
 import type { CombatStatePayload } from '@modules/session/session.entity.js';
@@ -31,15 +29,11 @@ const STATE: CombatStatePayload = {
       name: 'Goblin',
       initiativeValue: null,
       hasRolled: false,
-    },
-  ],
-};
-
-function makeMonster(overrides: Partial<MonsterRef> = {}): MonsterRef {
-  return {
-    id: 'monster-1',
-    name: 'Goblin',
-    attributes: {
+      currentHp: 20,
+      maxHp: 20,
+      currentEffort: 10,
+      maxEffort: 10,
+      afflictions: [],
       cognition: 2,
       psyche: -2,
       instinct: 0,
@@ -47,13 +41,13 @@ function makeMonster(overrides: Partial<MonsterRef> = {}): MonsterRef {
       motricity: 1,
       perception: 0,
     },
-    currentHp: 20,
-    maxHp: 20,
-    currentEffort: 10,
-    maxEffort: 10,
-    ...overrides,
-  };
-}
+  ],
+};
+
+const SNAPSHOT_STATE: CombatStatePayload = {
+  ...STATE,
+  entries: [{ ...STATE.entries[0]!, cognition: 3 }],
+};
 
 function makeTarget(
   overrides: Partial<CharacterSnapshot> = {},
@@ -84,14 +78,12 @@ function build() {
   const messages = makeChatMessages();
   const access = makeGameAccess();
   const characters = makeCharacterAccess();
-  const combatants = makeCombatants();
   const combat = makeCombat();
   const bus = new InMemoryMessageBus();
   const service = new MonsterAttackService(
     messages,
     access,
     characters,
-    combatants,
     combat,
     bus,
     fixedRng(12),
@@ -107,21 +99,17 @@ function build() {
   });
   vi.mocked(access.isMember).mockResolvedValue(true);
 
-  return { messages, access, characters, combatants, combat, bus, service };
+  return { messages, access, characters, combat, bus, service };
 }
 
 describe('MonsterAttackService', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('rolls, applies damage and broadcasts the attack', async () => {
-    const { messages, characters, combatants, combat, bus, service } = build();
+    const { messages, characters, combat, bus, service } = build();
     vi.mocked(combat.findState).mockResolvedValue(STATE);
-    vi.mocked(combatants.findMonsterInGame).mockResolvedValue(makeMonster());
     vi.mocked(characters.findById).mockResolvedValue(makeTarget());
-    vi.mocked(characters.damageHp).mockResolvedValue({
-      previousHp: 20,
-      character: makeTarget({ currentHp: 15 }),
-    });
+    vi.mocked(characters.changeHp).mockResolvedValue({ oldHp: 20, newHp: 15 });
     const publish = vi.spyOn(bus, 'publish');
 
     const event = await service.execute({
@@ -133,7 +121,10 @@ describe('MonsterAttackService', () => {
       damage: 5,
     });
 
-    expect(characters.damageHp).toHaveBeenCalledWith('char-1', 5);
+    expect(characters.changeHp).toHaveBeenCalledWith('char-1', -5, {
+      sessionId: 'session-1',
+      playerId: 'p1',
+    });
     expect(event).toEqual({
       type: 'session.monster-attacked',
       monsterId: 'monster-1',
@@ -169,22 +160,18 @@ describe('MonsterAttackService', () => {
     expect(
       vi.mocked(messages.appendLog).mock.invocationCallOrder[0],
     ).toBeLessThan(
-      vi.mocked(characters.damageHp).mock.invocationCallOrder[0] ?? 0,
+      vi.mocked(characters.changeHp).mock.invocationCallOrder[0] ?? 0,
     );
     expect(
-      vi.mocked(characters.damageHp).mock.invocationCallOrder[0],
+      vi.mocked(characters.changeHp).mock.invocationCallOrder[0],
     ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
   });
 
   it('broadcasts the HP returned by the repository, not the stale snapshot', async () => {
-    const { characters, combatants, combat, bus, service } = build();
+    const { characters, combat, bus, service } = build();
     vi.mocked(combat.findState).mockResolvedValue(STATE);
-    vi.mocked(combatants.findMonsterInGame).mockResolvedValue(makeMonster());
     vi.mocked(characters.findById).mockResolvedValue(makeTarget());
-    vi.mocked(characters.damageHp).mockResolvedValue({
-      previousHp: 2,
-      character: makeTarget({ currentHp: 0 }),
-    });
+    vi.mocked(characters.changeHp).mockResolvedValue({ oldHp: 2, newHp: 0 });
     const publish = vi.spyOn(bus, 'publish');
 
     await service.execute({
@@ -205,9 +192,8 @@ describe('MonsterAttackService', () => {
   });
 
   it('does not touch HP when there is no damage', async () => {
-    const { characters, combatants, combat, bus, service } = build();
+    const { characters, combat, bus, service } = build();
     vi.mocked(combat.findState).mockResolvedValue(STATE);
-    vi.mocked(combatants.findMonsterInGame).mockResolvedValue(makeMonster());
     vi.mocked(characters.findById).mockResolvedValue(makeTarget());
     const publish = vi.spyOn(bus, 'publish');
 
@@ -220,7 +206,7 @@ describe('MonsterAttackService', () => {
       damage: 0,
     });
 
-    expect(characters.damageHp).not.toHaveBeenCalled();
+    expect(characters.changeHp).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalledWith(
       'session:session-1',
       expect.objectContaining({ type: 'character.hp-changed' }),
@@ -246,7 +232,7 @@ describe('MonsterAttackService', () => {
       }),
     ).rejects.toBeInstanceOf(MasterOnlyError);
     expect(combat.findState).not.toHaveBeenCalled();
-    expect(characters.damageHp).not.toHaveBeenCalled();
+    expect(characters.changeHp).not.toHaveBeenCalled();
   });
 
   it('rejects when there is no active combat', async () => {
@@ -263,13 +249,53 @@ describe('MonsterAttackService', () => {
         damage: 5,
       }),
     ).rejects.toBeInstanceOf(CombatStateNotFoundError);
-    expect(characters.damageHp).not.toHaveBeenCalled();
+    expect(characters.changeHp).not.toHaveBeenCalled();
   });
 
-  it('rejects a monster from another game', async () => {
-    const { characters, combatants, combat, service } = build();
+  it('rolls the attribute snapshotted on the combatant instance', async () => {
+    const { characters, combat, service } = build();
+    vi.mocked(combat.findState).mockResolvedValue(SNAPSHOT_STATE);
+    vi.mocked(characters.findById).mockResolvedValue(makeTarget());
+
+    const event = await service.execute({
+      playerId: 'p1',
+      sessionId: 'session-1',
+      monsterId: 'monster-1',
+      attribute: 'cognition',
+      targetCharacterId: 'char-1',
+      damage: 0,
+    });
+
+    expect(event).toMatchObject({
+      rolls: [12, 12, 12],
+      result: 12,
+      kind: 'best',
+    });
+  });
+
+  it('rejects a combatant without a snapshotted attribute', async () => {
+    const { characters, combat, service } = build();
+    vi.mocked(combat.findState).mockResolvedValue({
+      ...STATE,
+      entries: [{ ...STATE.entries[0]!, cognition: null }],
+    });
+
+    await expect(
+      service.execute({
+        playerId: 'p1',
+        sessionId: 'session-1',
+        monsterId: 'monster-1',
+        attribute: 'cognition',
+        targetCharacterId: 'char-1',
+        damage: 5,
+      }),
+    ).rejects.toBeInstanceOf(ChatMonsterNotFoundError);
+    expect(characters.findById).not.toHaveBeenCalled();
+  });
+
+  it('rejects a monster that is not in the combat', async () => {
+    const { characters, combat, service } = build();
     vi.mocked(combat.findState).mockResolvedValue(STATE);
-    vi.mocked(combatants.findMonsterInGame).mockResolvedValue(null);
 
     await expect(
       service.execute({
@@ -285,9 +311,8 @@ describe('MonsterAttackService', () => {
   });
 
   it('rejects a target from another game', async () => {
-    const { characters, combatants, combat, service } = build();
+    const { characters, combat, service } = build();
     vi.mocked(combat.findState).mockResolvedValue(STATE);
-    vi.mocked(combatants.findMonsterInGame).mockResolvedValue(makeMonster());
     vi.mocked(characters.findById).mockResolvedValue(
       makeTarget({ gameId: 'other-game' }),
     );
@@ -302,6 +327,6 @@ describe('MonsterAttackService', () => {
         damage: 5,
       }),
     ).rejects.toBeInstanceOf(ChatCharacterNotFoundError);
-    expect(characters.damageHp).not.toHaveBeenCalled();
+    expect(characters.changeHp).not.toHaveBeenCalled();
   });
 });

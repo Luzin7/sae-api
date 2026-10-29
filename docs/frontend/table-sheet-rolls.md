@@ -97,7 +97,7 @@ A master joining or leaving emits neither event.
 
 | Actor | Allowed writes |
 | --- | --- |
-| Master | Read any sheet in their game; `PATCH /characters/:id` (general fields and NP); `PATCH /characters/:id/hp`; `PATCH /characters/:id/pe`; `master.force-hp-update` over WS. |
+| Master | Read any sheet in their game; `PATCH /characters/:id` (general fields and NP); `PATCH /characters/:id/hp`; `PATCH /characters/:id/pe`; `character.hp-change` / `character.pe-change` over WS. |
 | Player | Own character's general fields, HP, PE, items and skills; delete their own character. Cannot change NP (`403`, `Apenas o mestre pode alterar o NP.`). |
 
 - Master write access is still owner-only for adding, updating and deleting items, upserting skills and deleting a player's character.
@@ -112,12 +112,45 @@ The master can also read `GET /characters/:id`, `GET /characters/:id/items`, `GE
 - Use the single sheet call when opening a sheet. Do not chain three calls.
 - Refetch after mutations.
 - The backend pushes `character.hp-changed` (`{ "characterId": "uuid", "oldHp": 10, "newHp": 7 }`) when HP changes through REST or the WS force path.
-- `character.pe-changed` is intentionally **not** emitted for now (PE rules will change); the client must refetch the sheet after a PE change.
+- `character.pe-changed` (`{ "characterId": "uuid", "oldPe": 5, "newPe": 8 }`) is pushed whenever PE changes: `character.pe-change` frame, `PATCH /characters/:id/pe`, or per-turn recovery. See section 3.5 (PE) and 3.6 (PS).
 - Items and skills are not pushed; refetch after those mutations.
 
 ### 3.4 Legacy data
 
 Legacy rows may still have `character.heightCm`, `character.weightKg` and `character.size` as `null`. Render them gracefully (placeholder, omit the line, never crash or print `null`).
+
+### 3.5 Pontos de Esforco (PE)
+
+Rules (rulebook, Cap. 2): PE starts at 0 and rises. Limite de Esforco = 20 + proficiency bonus in Condicionamento (`maxEffort`). Exausto means `currentEffort >= maxEffort`; clients compute it, the server never stores it.
+
+- Gain: effort is capped at the limit and each excess point removes 1 PS (floor 0).
+- Recovery (negative delta): effort - r, floor 0, PS untouched.
+- Limit lowered below the current value (skill change): current PE and PS are clamped to the new limit, with no PS loss.
+
+Changing PE:
+
+- WS `{ "type": "character.pe-change", "sessionId": "uuid", "characterId": "uuid", "delta": 3 }`. `delta` is an integer, `delta != 0`, `|delta| <= 100`. Allowed for the character's owner or the game's master; anyone else gets `FORBIDDEN`, a character outside the session's game gets `NOT_FOUND`.
+- REST `PATCH /characters/:id/pe` body `{ "delta": 3 }` (same bounds, same authorization), answers `{ "character": ... }` with the new `currentEffort` / `currentHp` and a bumped `version`. The old body `{ "currentEffort": n }` is rejected with `400`.
+- After commit the server broadcasts `character.pe-changed` and, only when PS moved, `character.hp-changed`. Nothing is broadcast when neither value moved. The WS path writes `pe_change` (and `hp_change`) session log rows; the REST path has no session context and writes none.
+- Master only: `{ "type": "master.monster-pe-change", "sessionId": "uuid", "monsterId": "uuid", "delta": -2 }` (`monsterId` is the bestiary id, as in `master.monster-hp-change`). Same rule on the combat instance's PE and PS; the server broadcasts `session.combat`.
+
+Per-turn recovery: on every successful `master.next-turn`, each combatant with PE > 0 except the one whose turn starts now loses 1 PE (characters and monster instances). The server broadcasts one `character.pe-changed` per recovered character and then `session.combat` (instance PE inside `entries`). A stale or duplicate `master.next-turn` frame recovers nothing. Recovery writes no log row of its own; the `combat_state` row carries the monster PE.
+
+Monsters: bestiary entries only have `maxEffort`. Combat instances (`master.start-combat`, `master.add-monster`) start at `currentEffort = 0`. `currentEffort` was removed from the bestiary create/update bodies and from the monster response. There is no frame that sets a monster's `currentEffort` or `currentHp` to an absolute value; see PS below.
+
+When a Vitalidade or Condicionamento skill is saved, `maxHp` / `maxEffort` are recomputed in the same transaction and current values clamped; refetch the sheet after a skill change.
+
+### 3.6 Pontos de Sangue (PS) are deltas
+
+No client sends an absolute PS. Every PS change is a signed delta applied atomically on the server (row lock): `PS = clamp(current + delta, 0, maxHp)`.
+
+- WS `{ "type": "character.hp-change", "sessionId": "uuid", "characterId": "uuid", "delta": -4 }`. `delta` is an integer, `delta != 0`, `|delta| <= 1000`. Allowed for the character's owner or the game's master (`FORBIDDEN` otherwise, `NOT_FOUND` for a character outside the session's game). Writes an `hp_change` log row (actual delta after clamping), bumps `version`, then broadcasts `character.hp-changed` only if PS moved.
+- REST `PATCH /characters/:id/hp` body `{ "delta": 5 }` (same bounds and authorization), answers `{ "character": ... }`, bumps `version`, pushes `character.hp-changed` if PS moved, writes no session log. The old body `{ "currentHp": n }` is rejected with `400`.
+- WS (Mestre only) `{ "type": "master.monster-hp-change", "sessionId": "uuid", "monsterId": "uuid", "delta": -3 }`: locks the combatant row, clamps PS to 0..`maxHp` of the instance, broadcasts `session.combat`.
+- WS (Mestre only) `{ "type": "master.monster-afflictions-update", "sessionId": "uuid", "monsterId": "uuid", "afflictions": ["fobia", "vicio"] }`: `afflictions` is the full list (replaces the current one; `[]` clears it) and every key must be a known affliction key, otherwise the frame is rejected with a validation error. It locks the combatant row, writes a `combat_state` log row and broadcasts `session.combat`.
+- `master.monster-attack` applies its `damage` through the same locked write (`delta = -damage`) and now also writes an `hp_change` log row.
+
+Removed (an absolute PS is never accepted): WS frames `character.hp-update`, `master.force-hp-update`, `master.monster-vitals-update` (its `afflictions` moved to `master.monster-afflictions-update`), and the outbound event `session.monster-vitals`. The REST `/hp` field `currentHp` is gone.
 
 ## 4. Height and weight (create / update)
 
@@ -255,7 +288,7 @@ WS frame: `{ "type": "error", "error": { "code", "message" } }`.
 4. Consume the pushed `presence` frame; refetch `GET /games/:id/players` on reconnect.
 5. Replace the three sheet requests with `GET /characters/:id/sheet`.
 6. Handle `401` / `403` / `404` on the sheet endpoint; keep mutation checks separate from read access.
-7. Update HP from `character.hp-changed`; refetch after PE, item and skill changes.
+7. Send PS and PE changes as deltas (`character.hp-change`, `character.pe-change`, REST `{ delta }`); update HP from `character.hp-changed` and PE from `character.pe-changed`; refetch after item and skill changes.
 8. The master can change HP, PE and NP; the player cannot change NP.
 9. Render `null` legacy `heightCm`, `weightKg` and `size` gracefully.
 10. Enforce exactly one source per height field and one per weight field in create and update forms.
@@ -271,5 +304,5 @@ WS frame: `{ "type": "error", "error": { "code", "message" } }`.
 - **Legacy nulls:** `heightCm`, `weightKg` and `size` may be `null`; do not assume numeric values.
 - **Roster push is best-effort:** no frame is sent when no active session exists or when the push fails; refetch `GET /games/:id/players` on reconnect.
 - **Master read widening and write scope:** the master can read sheets of characters in their game and can write general fields, NP, HP and PE; items, skills and deleting a player's character remain owner-only.
-- **PE not pushed:** `character.pe-changed` is in the schema but deliberately never emitted for now because PE rules will change; refetch instead.
-- **HP pushed:** `character.hp-changed` is the only pushed character event; handle it independently of sheet refetches.
+- **PE push is best-effort over REST:** `character.pe-changed` from `PATCH /characters/:id/pe` goes through the game-session notifier (no active session, no frame); refetch on reconnect.
+- **HP and PE pushed:** `character.hp-changed` and `character.pe-changed` are pushed character events; handle them independently of sheet refetches.

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { AFFLICTION_KEYS } from '@shared/rules/afflictions.js';
+import { EffortDeltaSchema } from '@shared/rules/effort.js';
+import { HpDeltaSchema } from '@shared/rules/hp.js';
 import { SKILLS } from '@shared/rules/skills.js';
 import {
   HEIGHT_EXACT_MAX,
@@ -77,6 +79,10 @@ export const UpsertSkillBodySchema = z.object({
   proficiencyBonus: z.number().int().min(0),
 });
 
+const SkillAllocationsSchema = z
+  .array(UpsertSkillBodySchema)
+  .max(SKILLS.length);
+
 const CharacterSheetBodySchema = z.object({
   gameId: z.string().uuid(),
   ...SheetFields,
@@ -147,10 +153,10 @@ function refineSizeSources(required: boolean) {
 }
 
 function refineUniqueSkills(
-  input: { skills: { skillId: string }[] },
+  input: { skills?: { skillId: string }[] },
   ctx: z.RefinementCtx,
 ): void {
-  const ids = input.skills.map((skill) => skill.skillId);
+  const ids = (input.skills ?? []).map((skill) => skill.skillId);
   if (new Set(ids).size === ids.length) return;
 
   ctx.addIssue({
@@ -178,7 +184,8 @@ export const CreateCharacterBodySchema = CharacterSheetBodySchema.omit({
   np: true,
 })
   .extend({
-    skills: z.array(UpsertSkillBodySchema).max(SKILLS.length).default([]),
+    clientRequestId: z.string().uuid(),
+    skills: SkillAllocationsSchema.default([]),
   })
   .superRefine(refineSizeSources(true))
   .superRefine(refineUniqueSkills)
@@ -186,23 +193,43 @@ export const CreateCharacterBodySchema = CharacterSheetBodySchema.omit({
 
 const UpdateCharacterSheetBodySchema = CharacterSheetBodySchema.omit({
   gameId: true,
-}).partial();
+})
+  .partial()
+  .extend({ version: z.number().int().min(0) });
 
 export const UpdateCharacterBodySchema =
   UpdateCharacterSheetBodySchema.superRefine(
     refineSizeSources(false),
   ).superRefine(refineUniqueAfflictions);
 
-export const UpdateVitalsBodySchema = z
-  .object({
-    currentHp: z.number().int().min(0).optional(),
-    currentEffort: z.number().int().min(0).optional(),
+export const PreviewCharacterBodySchema = CharacterSheetBodySchema.pick({
+  np: true,
+  cognition: true,
+  psyche: true,
+  instinct: true,
+  constitution: true,
+  motricity: true,
+  perception: true,
+  personality: true,
+  posture: true,
+  heightCm: true,
+  weightKg: true,
+  socialClass: true,
+})
+  .partial()
+  .extend({
+    np: CharacterSheetBodySchema.shape.np,
+    skills: SkillAllocationsSchema.optional(),
   })
-  .refine(
-    (value) =>
-      value.currentHp !== undefined || value.currentEffort !== undefined,
-    { message: 'Informe currentHp ou currentEffort.' },
-  );
+  .superRefine(refineUniqueSkills);
+
+export const ChangeHpBodySchema = z.object({
+  delta: HpDeltaSchema,
+});
+
+export const ChangeEffortBodySchema = z.object({
+  delta: EffortDeltaSchema,
+});
 
 export const CreateItemBodySchema = z.object({
   name: z.string().min(1).max(100),
@@ -256,8 +283,10 @@ export const CharacterListQuerySchema = z.object({
 });
 
 export type CreateCharacterBody = z.infer<typeof CreateCharacterBodySchema>;
+export type PreviewCharacterBody = z.infer<typeof PreviewCharacterBodySchema>;
 export type UpdateCharacterBody = z.infer<typeof UpdateCharacterBodySchema>;
-export type UpdateVitalsBody = z.infer<typeof UpdateVitalsBodySchema>;
+export type ChangeHpBody = z.infer<typeof ChangeHpBodySchema>;
+export type ChangeEffortBody = z.infer<typeof ChangeEffortBodySchema>;
 export type CreateItemBody = z.infer<typeof CreateItemBodySchema>;
 export type UpdateItemBody = z.infer<typeof UpdateItemBodySchema>;
 export type UpsertSkillBody = z.infer<typeof UpsertSkillBodySchema>;

@@ -1,12 +1,11 @@
 export interface Monster {
   id: string;
-  gameId: string;
+  gameId: string | null;
   name: string;
   np: number;
   maxHp: number;
   currentHp: number;
   maxEffort: number;
-  currentEffort: number;
   size: string | null;
   cognition: number;
   psyche: number;
@@ -28,7 +27,6 @@ export interface MonsterSheetInput {
   maxHp: number;
   maxEffort: number;
   currentHp?: number;
-  currentEffort?: number;
   size?: string | null;
   cognition?: number;
   psyche?: number;
@@ -42,8 +40,9 @@ export interface MonsterSheetInput {
 }
 
 export interface CreateMonsterInput extends MonsterSheetInput {
-  gameId: string;
+  gameId?: string | null;
   createdBy: string;
+  clientRequestId: string;
 }
 
 export type UpdateMonsterInput = Partial<MonsterSheetInput>;
