@@ -328,6 +328,41 @@ describe('RollDiceService', () => {
     });
   });
 
+  it.each([
+    { cd: 17, success: false },
+    { cd: 16, success: true },
+    { cd: 15, success: true },
+  ])(
+    'judges total 16 against cd $cd as success=$success',
+    async ({ cd, success }) => {
+      const { messages, service } = build();
+      vi.mocked(messages.findTestById).mockResolvedValue({
+        testId: 'test-1',
+        skillId: 'skill-1',
+        cd,
+        mode: 'open',
+        targetCharacterId: null,
+        targetName: null,
+      });
+
+      const result = await service.execute({
+        playerId: 'p1',
+        sessionId: 'session-1',
+        characterId: 'char-1',
+        skillId: 'skill-1',
+        testId: 'test-1',
+      });
+
+      expect(result.total).toBe(16);
+      expect(result.success).toBe(success);
+      expect(messages.appendLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ cd, success }),
+        }),
+      );
+    },
+  );
+
   it('accepts another skill, records declaredSkillId and judges against the test cd', async () => {
     const { messages, characters, service } = build();
     vi.mocked(messages.findTestById).mockResolvedValue({
