@@ -74,14 +74,14 @@ const frame = (playerId: string, delta = 5) => ({
 describe('ChangeEffortService', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('lets the owner gain effort and publishes pe and hp changes', async () => {
+  it('lets the game master gain effort and publishes pe and hp changes', async () => {
     const { characters, service, publish } = build();
 
-    await service.execute(frame('p1'));
+    await service.execute(frame('master-1'));
 
     expect(characters.changeEffort).toHaveBeenCalledWith('char-1', 5, {
       sessionId: 'session-1',
-      playerId: 'p1',
+      playerId: 'master-1',
     });
     expect(publish).toHaveBeenCalledWith('session:session-1', {
       type: 'character.pe-changed',
@@ -117,7 +117,7 @@ describe('ChangeEffortService', () => {
       newHp: 30,
     });
 
-    await service.execute(frame('p1', -3));
+    await service.execute(frame('master-1', -3));
 
     expect(publish).toHaveBeenCalledTimes(1);
     expect(publish).toHaveBeenCalledWith('session:session-1', {
@@ -137,8 +137,18 @@ describe('ChangeEffortService', () => {
       newHp: 30,
     });
 
-    await service.execute(frame('p1', -3));
+    await service.execute(frame('master-1', -3));
 
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('forbids the character owner and writes nothing', async () => {
+    const { characters, service, publish } = build();
+
+    await expect(service.execute(frame('p1'))).rejects.toBeInstanceOf(
+      ChatForbiddenError,
+    );
+    expect(characters.changeEffort).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
   });
 
@@ -158,7 +168,7 @@ describe('ChangeEffortService', () => {
       makeSnapshot({ gameId: 'game-2' }),
     );
 
-    await expect(service.execute(frame('p1'))).rejects.toBeInstanceOf(
+    await expect(service.execute(frame('master-1'))).rejects.toBeInstanceOf(
       ChatCharacterNotFoundError,
     );
     expect(characters.changeEffort).not.toHaveBeenCalled();
@@ -170,7 +180,7 @@ describe('ChangeEffortService', () => {
       new ChatCharacterNotFoundError(),
     );
 
-    await expect(service.execute(frame('p1'))).rejects.toBeInstanceOf(
+    await expect(service.execute(frame('master-1'))).rejects.toBeInstanceOf(
       ChatCharacterNotFoundError,
     );
     expect(publish).not.toHaveBeenCalled();

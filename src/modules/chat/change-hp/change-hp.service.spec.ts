@@ -69,14 +69,14 @@ const frame = (playerId: string, delta = 5) => ({
 describe('ChangeHpService', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('lets the owner apply a delta and publishes hp-changed', async () => {
+  it('lets the game master apply a delta and publishes hp-changed', async () => {
     const { characters, service, publish } = build();
 
-    await service.execute(frame('p1'));
+    await service.execute(frame('master-1'));
 
     expect(characters.changeHp).toHaveBeenCalledWith('char-1', 5, {
       sessionId: 'session-1',
-      playerId: 'p1',
+      playerId: 'master-1',
     });
     expect(publish).toHaveBeenCalledWith('session:session-1', {
       type: 'character.hp-changed',
@@ -101,8 +101,18 @@ describe('ChangeHpService', () => {
     const { characters, service, publish } = build();
     vi.mocked(characters.changeHp).mockResolvedValue({ oldHp: 0, newHp: 0 });
 
-    await service.execute(frame('p1', -1));
+    await service.execute(frame('master-1', -1));
 
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('forbids the character owner and writes nothing', async () => {
+    const { characters, service, publish } = build();
+
+    await expect(service.execute(frame('p1'))).rejects.toBeInstanceOf(
+      ChatForbiddenError,
+    );
+    expect(characters.changeHp).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
   });
 
@@ -122,7 +132,7 @@ describe('ChangeHpService', () => {
       makeSnapshot({ gameId: 'game-2' }),
     );
 
-    await expect(service.execute(frame('p1'))).rejects.toBeInstanceOf(
+    await expect(service.execute(frame('master-1'))).rejects.toBeInstanceOf(
       ChatCharacterNotFoundError,
     );
     expect(characters.changeHp).not.toHaveBeenCalled();

@@ -453,7 +453,7 @@ describe('chatGateway session state', () => {
       },
     });
     vi.mocked(characters.changeHp).mockResolvedValue({ oldHp: 10, newHp: 15 });
-    const client = collectFrames(`${url}?token=p1`);
+    const client = collectFrames(`${url}?token=master-1`);
     client.send({ type: 'session.join', sessionId: SESSION_ID });
     await client.waitFor(3);
 
@@ -472,7 +472,7 @@ describe('chatGateway session state', () => {
 
     expect(characters.changeHp).toHaveBeenCalledWith(CHARACTER_ID, 5, {
       sessionId: SESSION_ID,
-      playerId: 'p1',
+      playerId: 'master-1',
     });
     expect(
       client.frames.find((frame) => frame.type === 'character.hp-changed'),
@@ -596,7 +596,7 @@ describe('chatGateway session state', () => {
       oldHp: 30,
       newHp: 27,
     });
-    const client = collectFrames(`${url}?token=p1`);
+    const client = collectFrames(`${url}?token=master-1`);
     client.send({ type: 'session.join', sessionId: SESSION_ID });
     await client.waitFor(3);
 
@@ -615,7 +615,7 @@ describe('chatGateway session state', () => {
 
     expect(characters.changeEffort).toHaveBeenCalledWith(CHARACTER_ID, 5, {
       sessionId: SESSION_ID,
-      playerId: 'p1',
+      playerId: 'master-1',
     });
     expect(
       client.frames.find((frame) => frame.type === 'character.pe-changed'),
