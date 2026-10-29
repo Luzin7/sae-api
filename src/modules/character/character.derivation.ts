@@ -17,9 +17,6 @@ import type { SkillAllocationDetail } from './skills/skill-allocation.js';
 
 export type Rng = (min: number, max: number) => number;
 
-export const VITALIDADE = 'Vitalidade';
-export const CONDICIONAMENTO = 'Condicionamento';
-
 /** Derives the six per-attribute proficiency levels from personality + posture. */
 export function deriveProficiencies(
   personality: string,

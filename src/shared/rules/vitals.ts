@@ -1,6 +1,12 @@
+export const VITALIDADE = 'Vitalidade';
+export const CONDICIONAMENTO = 'Condicionamento';
+
+export const MAX_HP_BASE = 20;
+export const MAX_EFFORT_BASE = 20;
+
 export type HitDie = 'd6' | 'd8' | 'd10' | 'd12' | 'd20';
 
-const HIT_DIE_MAX: Record<HitDie, number> = {
+export const HIT_DIE_MAX: Record<HitDie, number> = {
   d6: 6,
   d8: 8,
   d10: 10,
@@ -26,12 +32,12 @@ export function maxHp(
 ): number {
   const { max } = hitDie(constitution);
 
-  return 20 + np * max + profVitalidade;
+  return MAX_HP_BASE + np * max + profVitalidade;
 }
 
 /** 20 + proficiency bonus in Condicionamento. Current effort starts at 0. */
 export function maxEffort(profCondicionamento: number): number {
-  return 20 + profCondicionamento;
+  return MAX_EFFORT_BASE + profCondicionamento;
 }
 
 export function bExp(np: number): number {
