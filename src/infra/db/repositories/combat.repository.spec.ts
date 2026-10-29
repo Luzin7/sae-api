@@ -6,6 +6,7 @@ import {
   assignMonsterRolls,
   orderEntries,
   planCombatants,
+  turnAfterRemoval,
 } from './combat.repository.js';
 
 type Row = typeof combatant.$inferSelect;
@@ -157,13 +158,22 @@ describe('planCombatants', () => {
     expect(plan).toEqual({ remove: [], insert: [], rename: [] });
   });
 
-  it('removes a row missing from the seeds', () => {
+  it('removes a character row missing from the seeds', () => {
     const plan = planCombatants(
       [row({ id: 'r-1', refId: 'char-1', name: 'Ana' })],
       [GOBLIN],
     );
 
     expect(plan.remove).toEqual(['r-1']);
+  });
+
+  it('keeps a monster row missing from the seeds', () => {
+    const plan = planCombatants(
+      [row({ id: 'r-1', kind: 'monster', refId: 'mon-reusable' })],
+      [ANA],
+    );
+
+    expect(plan.remove).toEqual([]);
   });
 
   it('inserts a seed with no matching row', () => {
@@ -186,12 +196,12 @@ describe('planCombatants', () => {
 
   it('matches rows on kind and refId together', () => {
     const plan = planCombatants(
-      [row({ id: 'r-1', kind: 'monster', refId: 'char-1', name: 'Ana' })],
-      [ANA],
+      [row({ id: 'r-1', kind: 'character', refId: 'mon-1', name: 'Goblin' })],
+      [GOBLIN],
     );
 
     expect(plan.remove).toEqual(['r-1']);
-    expect(plan.insert).toEqual([ANA]);
+    expect(plan.insert).toEqual([GOBLIN]);
   });
 });
 
@@ -294,5 +304,42 @@ describe('assignMonsterRolls', () => {
 
     expect(assigned).toEqual([{ id: 'r-m', value: 3 }]);
     expect(calls).toBe(1);
+  });
+});
+
+describe('turnAfterRemoval', () => {
+  it('shifts the turn back when an earlier entry is removed', () => {
+    expect(turnAfterRemoval({ turnIndex: 2, round: 1 }, 0, 3)).toEqual({
+      turnIndex: 1,
+      round: 1,
+    });
+  });
+
+  it('keeps the turn when a later entry is removed', () => {
+    expect(turnAfterRemoval({ turnIndex: 1, round: 1 }, 2, 3)).toEqual({
+      turnIndex: 1,
+      round: 1,
+    });
+  });
+
+  it('passes the turn to the next entry when the current one is removed', () => {
+    expect(turnAfterRemoval({ turnIndex: 1, round: 1 }, 1, 3)).toEqual({
+      turnIndex: 1,
+      round: 1,
+    });
+  });
+
+  it('wraps to the next round when the last current entry is removed', () => {
+    expect(turnAfterRemoval({ turnIndex: 2, round: 1 }, 2, 3)).toEqual({
+      turnIndex: 0,
+      round: 2,
+    });
+  });
+
+  it('resets the turn when nothing remains', () => {
+    expect(turnAfterRemoval({ turnIndex: 0, round: 3 }, 0, 1)).toEqual({
+      turnIndex: 0,
+      round: 3,
+    });
   });
 });

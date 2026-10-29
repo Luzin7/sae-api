@@ -7,6 +7,7 @@ import {
   WS_RATE_WINDOW_MS,
 } from '@infra/ws/config.js';
 import type { InMemoryMessageBus } from './chat.bus.js';
+import { INACTIVE_COMBAT_STATE } from './chat.entity.js';
 import { type InboundFrame } from './chat.schemas.js';
 import {
   parseFrame,
@@ -201,7 +202,10 @@ async function dispatch(
         messages: toWireMessages(history),
       });
       sendEvent(socket, { type: 'session.test-snapshot', test: openTest });
-      if (combat) sendEvent(socket, { type: 'session.combat', ...combat });
+      sendEvent(socket, {
+        type: 'session.combat',
+        ...(combat ?? INACTIVE_COMBAT_STATE),
+      });
       return;
     }
 
@@ -276,6 +280,8 @@ async function dispatch(
       await opts.services.nextTurn.execute({
         playerId: state.playerId,
         sessionId: frame.sessionId,
+        expectedTurnIndex: frame.expectedTurnIndex,
+        expectedRound: frame.expectedRound,
       });
       return;
     }

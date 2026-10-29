@@ -125,6 +125,13 @@ export type RealtimeEvent =
       damage: number;
     };
 
+export const INACTIVE_COMBAT_STATE: CombatStatePayload = {
+  active: false,
+  turnIndex: 0,
+  round: 1,
+  entries: [],
+};
+
 export function chatRoom(sessionId: string): string {
   return `session:${sessionId}`;
 }

@@ -102,5 +102,6 @@ describe('DeleteCharacterService', () => {
 
     expect(characters.delete).toHaveBeenCalledWith('char-1');
     expect(notifier.notifyRosterChanged).toHaveBeenCalledWith('game-1');
+    expect(notifier.notifyCombatChanged).toHaveBeenCalledWith('game-1');
   });
 });

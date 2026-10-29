@@ -19,7 +19,7 @@ import { pickUniqueValue } from '@shared/dice/initiative.js';
 import { systemRng } from '@shared/dice/random.js';
 import { db, type Database } from '../index.js';
 import { combatant, combatState } from '../schema.js';
-import { insertSessionLog } from './session-log.js';
+import { insertSessionLog, type Transaction } from './session-log.js';
 
 const MAX_FACES = 20;
 
@@ -72,7 +72,7 @@ export function planCombatants(
   for (const row of existing) {
     const seed = seedByKey.get(combatantKey(row.kind, row.refId));
     if (!seed) {
-      remove.push(row.id);
+      if (row.kind === 'character') remove.push(row.id);
       continue;
     }
     if (seed.name !== row.name) rename.push({ id: row.id, name: seed.name });
@@ -200,6 +200,70 @@ function nextTurnPosition(
     : { turnIndex: turnIndex + 1, round };
 }
 
+export function turnAfterRemoval(
+  position: { turnIndex: number; round: number },
+  removedAt: number,
+  totalBefore: number,
+): { turnIndex: number; round: number } {
+  const remaining = totalBefore - 1;
+  if (remaining <= 0 || removedAt > position.turnIndex) return position;
+  if (removedAt < position.turnIndex) {
+    return { turnIndex: position.turnIndex - 1, round: position.round };
+  }
+
+  const wrapping = position.turnIndex >= remaining;
+
+  return wrapping ? { turnIndex: 0, round: position.round + 1 } : position;
+}
+
+export async function removeCharacterCombatants(
+  tx: Transaction,
+  characterId: string,
+): Promise<void> {
+  const removed = await tx
+    .select()
+    .from(combatant)
+    .where(
+      and(eq(combatant.kind, 'character'), eq(combatant.refId, characterId)),
+    );
+
+  for (const target of removed) {
+    const [state] = await tx
+      .select()
+      .from(combatState)
+      .where(eq(combatState.sessionId, target.sessionId))
+      .for('update');
+
+    const rows = await tx
+      .select()
+      .from(combatant)
+      .where(eq(combatant.sessionId, target.sessionId));
+    const removedAt = orderEntries(rows).findIndex(
+      (entry) => entry.combatantId === target.id,
+    );
+    await tx.delete(combatant).where(eq(combatant.id, target.id));
+    if (!state) continue;
+
+    const position = turnAfterRemoval(state, removedAt, rows.length);
+    const [updated] = await tx
+      .update(combatState)
+      .set({ ...position, updatedAt: new Date() })
+      .where(eq(combatState.sessionId, target.sessionId))
+      .returning();
+    if (!updated) continue;
+
+    await insertSessionLog(tx, {
+      sessionId: target.sessionId,
+      playerId: null,
+      eventType: 'combat_state',
+      payload: toState(
+        updated,
+        rows.filter((row) => row.id !== target.id),
+      ),
+    });
+  }
+}
+
 function toSeed(sessionId: string, seed: CombatantSeed) {
   return {
     sessionId,
@@ -246,12 +310,7 @@ export function combatRepository(database: Database = db): CombatRepository {
           })
           .onConflictDoUpdate({
             target: combatState.sessionId,
-            set: {
-              active: true,
-              turnIndex: 0,
-              round: 1,
-              updatedAt: new Date(),
-            },
+            set: { active: true, updatedAt: new Date() },
           })
           .returning();
         if (!state) throw new CombatStateNotFoundError();

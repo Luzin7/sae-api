@@ -158,6 +158,8 @@ export function buildContainer(deps: {
     gameAccess,
     playerDirectory,
     bus,
+    combat,
+    deps.app.log,
   );
 
   const signing = {
