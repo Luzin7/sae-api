@@ -8,6 +8,7 @@ import type {
   CreateItemInput,
   VitalsChangeOutcome,
   Page,
+  SkillSpendRow,
   SkillSummary,
   UpdateCharacterInput,
   UpdateSheetCommand,
@@ -34,6 +35,8 @@ export interface CharacterRepository {
   deleteItem(itemId: string): Promise<void>;
   findSkills(characterId: string): Promise<CharacterSkill[]>;
   findSkillDetails(characterId: string): Promise<CharacterSkillDetail[]>;
+  /** One grouped query: proficiency points spent per character and attribute. */
+  findSkillSpend(characterIds: readonly string[]): Promise<SkillSpendRow[]>;
   findSkillById(skillId: string): Promise<SkillSummary | null>;
   findSkillsByIds(ids: readonly string[]): Promise<SkillSummary[]>;
   /**

@@ -1,4 +1,6 @@
+import type { AdvancementBalance } from './character.advancement.js';
 import type { Character } from './character.entity.js';
+import type { CharacterView } from './character-view.js';
 
 export interface CharacterResponse {
   id: string;
@@ -42,7 +44,15 @@ export interface CharacterResponse {
   updatedAt: string;
 }
 
+export interface CharacterReadResponse extends CharacterResponse {
+  advancement: AdvancementBalance;
+}
+
 export const CharacterPresenter = {
+  toReadHTTP({ character, advancement }: CharacterView): CharacterReadResponse {
+    return { ...CharacterPresenter.toHTTP(character), advancement };
+  },
+
   toHTTP(character: Character): CharacterResponse {
     return {
       id: character.id,

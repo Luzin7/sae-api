@@ -1350,3 +1350,38 @@ describe('character write integrity contract', () => {
     expect(res.json().character.id).toBe('first-char');
   });
 });
+
+describe('character advancement on reads', () => {
+  it('exposes advancement on the four read endpoints', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.findByPlayer).mockResolvedValue([makeCharacter()]);
+    vi.mocked(characters.findByGame).mockResolvedValue([makeCharacter()]);
+    vi.mocked(characters.findItems).mockResolvedValue([]);
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+    const membership = makeMembership();
+    vi.mocked(membership.isMember).mockResolvedValue(true);
+    const app = await buildTestApp(makeServices(characters, membership));
+    const headers = { cookie: `token=${makeToken(app)}` };
+    const get = (url: string) => app.inject({ method: 'GET', url, headers });
+
+    const mine = await get('/characters/mine');
+    const byGame = await get('/characters/game/game-1');
+    const one = await get('/characters/char-1');
+    const sheet = await get('/characters/char-1/sheet');
+
+    const expected = { budget: 20, spent: 0, remaining: 20 };
+    expect(mine.json().characters[0].advancement.attributePoints).toEqual(
+      expected,
+    );
+    expect(byGame.json().characters[0].advancement.attributePoints).toEqual(
+      expected,
+    );
+    expect(one.json().character.advancement.attributePoints).toEqual(expected);
+    expect(sheet.json().character.advancement.skillPoints.cognition).toEqual({
+      budget: 2,
+      spent: 0,
+      remaining: 2,
+    });
+  });
+});

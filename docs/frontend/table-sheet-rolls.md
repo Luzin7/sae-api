@@ -89,6 +89,28 @@ A master joining or leaving emits neither event.
 
 `attribute` is one of `cognition | psyche | instinct | constitution | motricity | perception`.
 
+### 3.1.1 Advancement balance (`advancement`)
+
+Read responses carry a derived `advancement` object: `GET /characters/mine`, `GET /characters/game/:gameId`, `GET /characters/:id` and `GET /characters/:id/sheet` (inside `character`). Write responses (`POST`, `PATCH`) do not include it; refetch to update it. Nothing is stored: unspent points are the budget for the character's NP minus what the sheet already spends.
+
+```json
+"advancement": {
+  "attributePoints": { "budget": 22, "spent": 20, "remaining": 2 },
+  "skillPoints": {
+    "cognition": { "budget": 20, "spent": 10, "remaining": 10 },
+    "psyche": { "budget": 4, "spent": 0, "remaining": 4 },
+    "instinct": { "budget": 4, "spent": 0, "remaining": 4 },
+    "constitution": { "budget": 4, "spent": 0, "remaining": 4 },
+    "motricity": { "budget": 4, "spent": 0, "remaining": 4 },
+    "perception": { "budget": 4, "spent": 0, "remaining": 4 }
+  }
+}
+```
+
+- `attributePoints.budget` is the attribute budget for the NP; `spent` is the sum of the attribute costs.
+- `skillPoints.<attribute>.budget` is the proficiency pool of that attribute (level pool x tiers earned at the NP); `spent` is the sum of `proficiencyBonus` of the skills of that attribute.
+- `remaining = budget - spent`; leveling is add-only, so it is never negative for a valid sheet.
+
 ### 3.2 Access and status
 
 - The `GET /characters/:id/sheet` endpoint itself is read-only. Access is allowed for the character owner **or** the master of that character's game; write access is defined in the matrix below.

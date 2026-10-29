@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql, sum } from 'drizzle-orm';
 import type {
   Character,
   CharacterItem,
@@ -9,6 +9,7 @@ import type {
   CreateItemInput,
   VitalsChangeOutcome,
   Page,
+  SkillSpendRow,
   SkillSummary,
   UpdateCharacterInput,
   UpdateItemInput,
@@ -337,6 +338,25 @@ export function characterRepository(): CharacterRepository {
         .from(characterSkillTable)
         .innerJoin(skillTable, eq(characterSkillTable.skillId, skillTable.id))
         .where(eq(characterSkillTable.characterId, characterId));
+
+      return rows;
+    },
+
+    async findSkillSpend(
+      characterIds: readonly string[],
+    ): Promise<SkillSpendRow[]> {
+      if (characterIds.length === 0) return [];
+
+      const rows = await db
+        .select({
+          characterId: characterSkillTable.characterId,
+          attribute: skillTable.attribute,
+          spent: sum(characterSkillTable.proficiencyBonus).mapWith(Number),
+        })
+        .from(characterSkillTable)
+        .innerJoin(skillTable, eq(characterSkillTable.skillId, skillTable.id))
+        .where(inArray(characterSkillTable.characterId, [...characterIds]))
+        .groupBy(characterSkillTable.characterId, skillTable.attribute);
 
       return rows;
     },

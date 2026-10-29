@@ -55,6 +55,7 @@ describe('GetSheetService', () => {
     ).execute('char-1', 'player-1');
 
     expect(result.character.id).toBe('char-1');
+    expect(result.character.advancement.attributePoints.remaining).toBe(20);
     expect(result.items).toHaveLength(1);
     expect(result.skills[0]?.skillName).toBe('Vitalidade');
     expect(result.skills[0]?.attribute).toBe('constitution');
