@@ -29,6 +29,7 @@ import { DeleteMonsterService } from '@modules/bestiary/delete-monster/delete-mo
 import { MonsterQueryService } from '@modules/bestiary/monster-query.service.js';
 import { UpdateMonsterService } from '@modules/bestiary/update-monster/update-monster.service.js';
 import { CharacterQueryService } from '@modules/character/character-query.service.js';
+import { AddMonsterService } from '@modules/chat/add-monster/add-monster.service.js';
 import { InMemoryMessageBus } from '@modules/chat/chat.bus.js';
 import type { CharacterAccess } from '@modules/chat/character-access.contract.js';
 import type { ChatServices } from '@modules/chat/chat.gateway.js';
@@ -353,7 +354,6 @@ export function buildContainer(deps: {
         rollMonsterTest: new RollMonsterTestService(
           chatMessages,
           gameAccess,
-          combatants,
           combat,
           bus,
           systemRng,
@@ -361,7 +361,6 @@ export function buildContainer(deps: {
         updateMonsterVitals: new UpdateMonsterVitalsService(
           chatMessages,
           gameAccess,
-          combatants,
           combat,
           bus,
         ),
@@ -369,10 +368,16 @@ export function buildContainer(deps: {
           chatMessages,
           gameAccess,
           characterAccess,
-          combatants,
           combat,
           bus,
           systemRng,
+        ),
+        addMonster: new AddMonsterService(
+          chatMessages,
+          gameAccess,
+          combatants,
+          combat,
+          bus,
         ),
       },
     },

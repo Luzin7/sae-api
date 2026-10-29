@@ -110,6 +110,7 @@ export type RealtimeEvent =
       maxHp: number;
       currentEffort: number;
       maxEffort: number;
+      afflictions: string[];
     }
   | {
       type: 'session.monster-attacked';

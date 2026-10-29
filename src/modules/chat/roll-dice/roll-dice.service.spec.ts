@@ -78,6 +78,17 @@ function makeEntry(
     name: 'Hero',
     initiativeValue: 10,
     hasRolled: true,
+    currentHp: null,
+    maxHp: null,
+    currentEffort: null,
+    maxEffort: null,
+    afflictions: [],
+    cognition: null,
+    psyche: null,
+    instinct: null,
+    constitution: null,
+    motricity: null,
+    perception: null,
     ...overrides,
   };
 }

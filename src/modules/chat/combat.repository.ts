@@ -5,6 +5,17 @@ export interface CombatantSeed {
   kind: CombatantKind;
   refId: string;
   name: string;
+  currentHp: number | null;
+  maxHp: number | null;
+  currentEffort: number | null;
+  maxEffort: number | null;
+  afflictions: string[];
+  cognition: number | null;
+  psyche: number | null;
+  instinct: number | null;
+  constitution: number | null;
+  motricity: number | null;
+  perception: number | null;
 }
 
 /**
@@ -16,6 +27,12 @@ export interface AdvanceTurnInput {
   playerId: string | null;
   expectedTurnIndex: number;
   expectedRound: number;
+}
+
+export interface InstanceVitalsPatch {
+  currentHp: number;
+  currentEffort: number;
+  afflictions?: string[];
 }
 
 /**
@@ -30,6 +47,11 @@ export interface CombatRepository {
     combatants: CombatantSeed[],
     playerId: string | null,
   ): Promise<CombatStatePayload>;
+  addCombatant(
+    sessionId: string,
+    seed: CombatantSeed,
+    playerId: string | null,
+  ): Promise<CombatStatePayload>;
   rollInitiative(
     sessionId: string,
     kind: CombatantKind,
@@ -38,5 +60,11 @@ export interface CombatRepository {
     playerId: string | null,
   ): Promise<CombatStatePayload>;
   advanceTurn(input: AdvanceTurnInput): Promise<CombatStatePayload>;
+  saveInstanceVitals(
+    sessionId: string,
+    monsterId: string,
+    patch: InstanceVitalsPatch,
+    playerId: string,
+  ): Promise<void>;
   end(sessionId: string, playerId: string | null): Promise<CombatStatePayload>;
 }

@@ -32,7 +32,7 @@ const SheetFields = {
 };
 
 export const CreateMonsterBodySchema = z.object({
-  gameId: z.string().uuid(),
+  gameId: z.string().uuid().optional(),
   ...SheetFields,
 });
 

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type {
   CreateMonsterInput,
   Monster,
@@ -18,7 +18,7 @@ export function monsterRepository(): MonsterRepository {
       const [row] = await db
         .insert(monsterTable)
         .values({
-          gameId: input.gameId,
+          gameId: input.gameId ?? null,
           name: input.name,
           np: input.np,
           maxHp: input.maxHp,
@@ -58,6 +58,17 @@ export function monsterRepository(): MonsterRepository {
         .select()
         .from(monsterTable)
         .where(eq(monsterTable.gameId, gameId));
+
+      return rows.map(toMonster);
+    },
+
+    async findReusableByOwner(ownerId: string): Promise<Monster[]> {
+      const rows = await db
+        .select()
+        .from(monsterTable)
+        .where(
+          and(isNull(monsterTable.gameId), eq(monsterTable.createdBy, ownerId)),
+        );
 
       return rows.map(toMonster);
     },

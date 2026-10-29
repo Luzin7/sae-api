@@ -132,6 +132,7 @@ export function makeMembership(): GameAccess {
   return {
     findById: vi.fn().mockResolvedValue({ id: 'game-1', masterId: 'master-1' }),
     isMember: vi.fn(),
+    mastersAnyGame: vi.fn(),
   };
 }
 

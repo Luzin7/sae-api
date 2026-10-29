@@ -26,7 +26,7 @@ export function toMonster(row: MonsterRow): Monster {
     heightCm: row.heightCm,
     weightKg: row.weightKg,
     notes: row.notes,
-    createdBy: row.createdBy ?? '',
+    createdBy: row.createdBy,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

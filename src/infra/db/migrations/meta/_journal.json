@@ -43,6 +43,13 @@
       "when": 1792693300027,
       "tag": "0005_testes_sessao",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793218542642,
+      "tag": "0006_perfect_puck",
+      "breakpoints": true
     }
   ]
 }

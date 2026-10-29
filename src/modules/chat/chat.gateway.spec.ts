@@ -12,6 +12,7 @@ import {
   makeGameAccess,
   makePlayerDirectory,
 } from './chat.testkit.js';
+import { AddMonsterService } from './add-monster/add-monster.service.js';
 import { CloseTestService } from './close-test/close-test.service.js';
 import { ConnectService } from './connect/connect.service.js';
 import { DeclareTestService } from './declare-test/declare-test.service.js';
@@ -28,9 +29,58 @@ import { SendMessageService } from './send-message/send-message.service.js';
 import { StartCombatService } from './start-combat/start-combat.service.js';
 import { UpdateHpService } from './update-hp/update-hp.service.js';
 import { UpdateMonsterVitalsService } from './update-monster-vitals/update-monster-vitals.service.js';
+import type { CombatStatePayload } from '@modules/session/session.entity.js';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 const TEST_ID = '22222222-2222-4222-8222-222222222222';
+const MONSTER_ID = '33333333-3333-4333-8333-333333333333';
+
+const GOBLIN = {
+  id: MONSTER_ID,
+  name: 'Goblin',
+  attributes: {
+    cognition: 2,
+    psyche: -2,
+    instinct: 0,
+    constitution: 3,
+    motricity: 1,
+    perception: 0,
+  },
+  currentHp: 20,
+  maxHp: 20,
+  currentEffort: 10,
+  maxEffort: 10,
+  afflictions: [] as string[],
+};
+
+function monsterState(afflictions: string[]): CombatStatePayload {
+  return {
+    active: true,
+    turnIndex: 0,
+    round: 1,
+    entries: [
+      {
+        combatantId: 'c-1',
+        kind: 'monster',
+        refId: MONSTER_ID,
+        name: 'Goblin',
+        initiativeValue: 7,
+        hasRolled: true,
+        currentHp: 20,
+        maxHp: 20,
+        currentEffort: 10,
+        maxEffort: 10,
+        afflictions,
+        cognition: null,
+        psyche: null,
+        instinct: null,
+        constitution: null,
+        motricity: null,
+        perception: null,
+      },
+    ],
+  };
+}
 
 function buildServices(bus: InMemoryMessageBus) {
   const messages = makeChatMessages();
@@ -85,7 +135,6 @@ function buildServices(bus: InMemoryMessageBus) {
     rollMonsterTest: new RollMonsterTestService(
       messages,
       access,
-      combatants,
       combat,
       bus,
       fixedRng(10),
@@ -93,7 +142,6 @@ function buildServices(bus: InMemoryMessageBus) {
     updateMonsterVitals: new UpdateMonsterVitalsService(
       messages,
       access,
-      combatants,
       combat,
       bus,
     ),
@@ -101,14 +149,20 @@ function buildServices(bus: InMemoryMessageBus) {
       messages,
       access,
       characters,
-      combatants,
       combat,
       bus,
       fixedRng(10),
     ),
+    addMonster: new AddMonsterService(
+      messages,
+      access,
+      combatants,
+      combat,
+      bus,
+    ),
   };
 
-  return { services, messages, access, combat };
+  return { services, messages, access, combatants, combat };
 }
 
 async function buildTestApp(): Promise<FastifyInstance> {
@@ -334,5 +388,153 @@ describe('chatGateway session state', () => {
     expect(messages.appendLog).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'test_closed' }),
     );
+  });
+
+  it('dispatches master.add-monster and broadcasts the combat state', async () => {
+    const { url, combatants, combat } = await buildJoinedApp();
+    vi.mocked(combatants.findMonsterInGame).mockResolvedValue({
+      id: MONSTER_ID,
+      name: 'Goblin',
+      attributes: {
+        cognition: 2,
+        psyche: -2,
+        instinct: 0,
+        constitution: 3,
+        motricity: 1,
+        perception: 0,
+      },
+      currentHp: 20,
+      maxHp: 20,
+      currentEffort: 10,
+      maxEffort: 10,
+      afflictions: ['fobia'],
+    });
+    vi.mocked(combat.addCombatant).mockResolvedValue({
+      active: true,
+      turnIndex: 0,
+      round: 1,
+      entries: [
+        {
+          combatantId: 'c-1',
+          kind: 'monster',
+          refId: MONSTER_ID,
+          name: 'Goblin',
+          initiativeValue: 7,
+          hasRolled: true,
+          currentHp: 20,
+          maxHp: 20,
+          currentEffort: 10,
+          maxEffort: 10,
+          afflictions: ['fobia'],
+          cognition: 2,
+          psyche: -2,
+          instinct: 0,
+          constitution: 3,
+          motricity: 1,
+          perception: 0,
+        },
+      ],
+    });
+    const client = collectFrames(`${url}?token=master-1`);
+    client.send({ type: 'session.join', sessionId: SESSION_ID });
+    await client.waitFor(2);
+    vi.mocked(combat.findState).mockResolvedValue({
+      active: true,
+      turnIndex: 0,
+      round: 1,
+      entries: [],
+    });
+
+    client.send({
+      type: 'master.add-monster',
+      sessionId: SESSION_ID,
+      monsterId: MONSTER_ID,
+    });
+    await vi.waitFor(() => {
+      const broadcast = client.frames.some(
+        (frame) => frame.type === 'session.combat',
+      );
+      if (!broadcast) throw new Error('not broadcast yet');
+    });
+    client.close();
+
+    expect(combat.addCombatant).toHaveBeenCalledWith(
+      SESSION_ID,
+      expect.objectContaining({ kind: 'monster', refId: MONSTER_ID }),
+      'master-1',
+    );
+  });
+
+  it('persists and broadcasts the afflictions sent with master.monster-vitals-update', async () => {
+    const { url, combat, combatants } = await buildJoinedApp();
+    vi.mocked(combatants.findMonsterInGame).mockResolvedValue(GOBLIN);
+    const client = collectFrames(`${url}?token=master-1`);
+    client.send({ type: 'session.join', sessionId: SESSION_ID });
+    await client.waitFor(2);
+    vi.mocked(combat.findState).mockResolvedValue(monsterState([]));
+
+    client.send({
+      type: 'master.monster-vitals-update',
+      sessionId: SESSION_ID,
+      monsterId: MONSTER_ID,
+      currentHp: 15,
+      currentEffort: 8,
+      afflictions: ['fobia', 'vicio'],
+    });
+    await vi.waitFor(() => {
+      const published = client.frames.some(
+        (frame) => frame.type === 'session.monster-vitals',
+      );
+      if (!published) throw new Error('not published yet');
+    });
+    client.close();
+
+    expect(combat.saveInstanceVitals).toHaveBeenCalledWith(
+      SESSION_ID,
+      MONSTER_ID,
+      {
+        currentHp: 15,
+        currentEffort: 8,
+        afflictions: ['fobia', 'vicio'],
+      },
+      'master-1',
+    );
+    expect(
+      client.frames.find((frame) => frame.type === 'session.monster-vitals'),
+    ).toMatchObject({ afflictions: ['fobia', 'vicio'] });
+  });
+
+  it('keeps the instance afflictions when master.monster-vitals-update omits them', async () => {
+    const { url, combat, combatants } = await buildJoinedApp();
+    vi.mocked(combatants.findMonsterInGame).mockResolvedValue(GOBLIN);
+    const client = collectFrames(`${url}?token=master-1`);
+    client.send({ type: 'session.join', sessionId: SESSION_ID });
+    await client.waitFor(2);
+    vi.mocked(combat.findState).mockResolvedValue(monsterState(['fobia']));
+
+    client.send({
+      type: 'master.monster-vitals-update',
+      sessionId: SESSION_ID,
+      monsterId: MONSTER_ID,
+      currentHp: 15,
+      currentEffort: 8,
+    });
+    await vi.waitFor(() => {
+      const published = client.frames.some(
+        (frame) => frame.type === 'session.monster-vitals',
+      );
+      if (!published) throw new Error('not published yet');
+    });
+    client.close();
+
+    expect(combat.saveInstanceVitals).toHaveBeenCalledWith(
+      SESSION_ID,
+      MONSTER_ID,
+      { currentHp: 15, currentEffort: 8 },
+      'master-1',
+    );
+    expect(
+      client.frames.find((frame) => frame.type === 'session.monster-vitals'),
+    ).toMatchObject({ afflictions: ['fobia'] });
   });
 });
