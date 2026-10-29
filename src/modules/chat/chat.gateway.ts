@@ -9,6 +9,7 @@ import {
 import type { InMemoryMessageBus } from './chat.bus.js';
 import { INACTIVE_COMBAT_STATE } from './chat.entity.js';
 import { type InboundFrame } from './chat.schemas.js';
+import type { NotifierLogger } from './game-session-notifier/game-session-notifier.service.js';
 import {
   parseFrame,
   rawByteLength,
@@ -64,6 +65,7 @@ export interface ChatGatewayOptions {
   services: ChatServices;
   bus: InMemoryMessageBus;
   verifyWsToken: (token: string) => string | null;
+  logger: NotifierLogger;
 }
 
 interface SocketState {
@@ -379,7 +381,17 @@ async function dispatch(
       });
     }
   } catch (error) {
-    sendDomainError(socket, error);
+    sendDomainError(socket, error, (unexpected) =>
+      opts.logger.error(
+        {
+          step: frame.type,
+          sessionId: 'sessionId' in frame ? frame.sessionId : undefined,
+          playerId: state.playerId,
+          err: unexpected,
+        },
+        'unexpected websocket handler error',
+      ),
+    );
   }
 }
 
