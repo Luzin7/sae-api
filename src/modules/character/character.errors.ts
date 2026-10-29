@@ -97,6 +97,15 @@ export class SkillPoolExceededError extends DomainError {
   }
 }
 
+export class NpReductionBlockedError extends DomainError {
+  readonly code: DomainErrorCode = 'VALIDATION';
+  readonly httpStatus = 400;
+
+  constructor(overruns: readonly string[]) {
+    super(`Não dá para descer: ${overruns.join(' ')}`);
+  }
+}
+
 export class SkillBonusCapExceededError extends DomainError {
   readonly code: DomainErrorCode = 'VALIDATION';
   readonly httpStatus = 400;
