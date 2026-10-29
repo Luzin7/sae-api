@@ -60,6 +60,10 @@ export const monster = pgTable(
       t.clientRequestId,
     ),
     check('monster_np_check', sql`${t.np} BETWEEN 1 AND 20`),
+    check(
+      'monster_effort_range_check',
+      sql`${t.currentEffort} >= 0 AND ${t.currentEffort} <= ${t.maxEffort}`,
+    ),
   ],
 );
 

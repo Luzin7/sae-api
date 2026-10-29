@@ -100,3 +100,41 @@ describe('0008_flowery_paper_doll', () => {
     expect(sql).toContain('("created_by","client_request_id")');
   });
 });
+
+describe('0009_pontos_de_esforco', () => {
+  const sql = migration('./0009_pontos_de_esforco.sql');
+
+  it('sets a lock timeout before touching any table', () => {
+    expect(sql.startsWith("SET LOCAL lock_timeout = '5s';")).toBe(true);
+  });
+
+  it('aborts on a negative max_effort before adding the checks', () => {
+    const guard = sql.indexOf('RAISE EXCEPTION');
+    const firstCheck = sql.indexOf('ADD CONSTRAINT');
+
+    expect(guard).toBeGreaterThanOrEqual(0);
+    expect(guard).toBeLessThan(firstCheck);
+    expect(sql).toContain('"max_effort" < 0');
+  });
+
+  it('resets effort only together with adding its check', () => {
+    const blocks = sql.split('--> statement-breakpoint').slice(2);
+
+    expect(blocks).toHaveLength(3);
+    for (const block of blocks) {
+      expect(block).toContain('IF NOT EXISTS (SELECT 1 FROM pg_constraint');
+      expect(block.indexOf('"current_effort" = 0')).toBeLessThan(
+        block.indexOf('ADD CONSTRAINT'),
+      );
+    }
+  });
+
+  it('adds the range check to character, monster and combatant', () => {
+    expect(sql).toContain('"character_effort_range_check"');
+    expect(sql).toContain('"monster_effort_range_check"');
+    expect(sql).toContain('"combatant_effort_range_check"');
+    expect(sql).toContain(
+      '"combatant"."current_effort" IS NULL OR "combatant"."max_effort" IS NULL',
+    );
+  });
+});

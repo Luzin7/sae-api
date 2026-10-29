@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   pgTable,
@@ -60,6 +62,10 @@ export const combatant = pgTable(
       t.refId,
     ),
     index('combatant_session_idx').on(t.sessionId),
+    check(
+      'combatant_effort_range_check',
+      sql`${t.currentEffort} IS NULL OR ${t.maxEffort} IS NULL OR (${t.currentEffort} >= 0 AND ${t.currentEffort} <= ${t.maxEffort})`,
+    ),
   ],
 );
 

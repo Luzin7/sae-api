@@ -132,6 +132,10 @@ export const character = pgTable(
     ),
     index('character_game_idx').on(t.gameId),
     check('character_np_check', sql`${t.np} BETWEEN 1 AND 20`),
+    check(
+      'character_effort_range_check',
+      sql`${t.currentEffort} >= 0 AND ${t.currentEffort} <= ${t.maxEffort}`,
+    ),
   ],
 );
 
