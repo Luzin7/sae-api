@@ -311,5 +311,4 @@ export type ChangeHpBody = z.infer<typeof ChangeHpBodySchema>;
 export type ChangeEffortBody = z.infer<typeof ChangeEffortBodySchema>;
 export type CreateItemBody = z.infer<typeof CreateItemBodySchema>;
 export type UpdateItemBody = z.infer<typeof UpdateItemBodySchema>;
-export type UpsertSkillBody = z.infer<typeof UpsertSkillBodySchema>;
 export type CharacterListQuery = z.infer<typeof CharacterListQuerySchema>;

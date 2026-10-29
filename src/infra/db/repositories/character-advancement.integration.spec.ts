@@ -124,6 +124,44 @@ describe.skipIf(!integrationEnabled)('character advancement (real DB)', () => {
     expect(final.maxHp).toBe(20 + 2 * 6 + 2);
   });
 
+  it('Mestre lowering Constituição clamps current PS to the new max in SQL', async () => {
+    const row = await seedCharacter(table, {
+      np: 2,
+      constitution: 1,
+      maxHp: 40,
+      currentHp: 40,
+    });
+
+    await update.execute(row.id, table.master.id, {
+      version: 0,
+      constitution: -4,
+    });
+
+    const final = await readCharacter(row.id);
+    expect(final.maxHp).toBe(32);
+    expect(final.currentHp).toBe(32);
+  });
+
+  it('advancing Condicionamento raises maxEffort and keeps current PE', async () => {
+    const skillId = await skillIdByName('Condicionamento');
+    const row = await seedCharacter(table, {
+      np: 2,
+      constitutionProficiency: 'competente',
+      maxEffort: 20,
+      currentEffort: 7,
+    });
+
+    await advance.execute(row.id, table.member.id, {
+      version: 0,
+      attributes: {},
+      skills: [{ skillId, proficiencyBonus: 2 }],
+    });
+
+    const final = await readCharacter(row.id);
+    expect(final.maxEffort).toBe(22);
+    expect(final.currentEffort).toBe(7);
+  });
+
   it('a Mestre who does not own the sheet cannot advance it', async () => {
     const row = await seedCharacter(table, SPENT_20_AT_NP2);
 
