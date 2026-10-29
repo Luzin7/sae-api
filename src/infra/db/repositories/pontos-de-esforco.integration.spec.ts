@@ -536,6 +536,32 @@ describe.skipIf(!integrationEnabled)('pontos de esforco (real DB)', () => {
       }
     });
 
+    it('concurrent next-turn and pe-change on one character never deadlock and match a serial order (x20)', async () => {
+      const serialResults = [
+        { effort: 20, hp: 25 },
+        { effort: 19, hp: 24 },
+      ];
+
+      for (let round = 0; round < ROUNDS; round++) {
+        table = await seedTable();
+        const ids = await seedCombat({ a: 3, b: 2, c: 20, m1: 0, m2: 0 });
+
+        await Promise.all([
+          advance(0),
+          access.changeEffort(ids.c.id, 2, {
+            sessionId: table.sessionId,
+            playerId: table.member.id,
+          }),
+        ]);
+
+        const after = await readCharacter(ids.c.id);
+        expect(serialResults).toContainEqual({
+          effort: after.currentEffort,
+          hp: after.currentHp,
+        });
+      }
+    });
+
     it('a stale frame changes nothing', async () => {
       const ids = await seedCombat({ a: 3, b: 2, c: 0, m1: 3, m2: 0 });
       await advance(0);
