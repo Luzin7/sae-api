@@ -1,5 +1,5 @@
 import {
-  requireCharacterWriter,
+  requireCharacterVitalsMaster,
   requireChatMember,
   requireChatSession,
 } from '../chat.authorization.js';
@@ -19,7 +19,7 @@ export interface ChangeEffortInput {
   delta: number;
 }
 
-/** The character's owner or the game's master may change its PE. */
+/** Only the game's master may change its PE. */
 export class ChangeEffortService {
   constructor(
     private readonly messages: ChatMessageRepository,
@@ -35,7 +35,7 @@ export class ChangeEffortService {
       session.gameId,
       input.playerId,
     );
-    const character = await requireCharacterWriter(
+    const character = await requireCharacterVitalsMaster(
       this.characters,
       game,
       input.playerId,

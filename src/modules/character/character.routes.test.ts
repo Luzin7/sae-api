@@ -238,12 +238,28 @@ describe('character routes', () => {
       method: 'PATCH',
       url: '/characters/char-1/hp',
       payload: { delta: 5 },
-      headers: { cookie: `token=${makeToken(app)}` },
+      headers: { cookie: `token=${makeToken(app, 'master-1')}` },
     });
 
     expect(res.statusCode).toBe(200);
     expect(characters.changeHp).toHaveBeenCalledWith('char-1', 5);
     expect(res.json().character.currentHp).toBe(15);
+  });
+
+  it('answers 403 to the character owner changing PS and writes nothing', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/characters/char-1/hp',
+      payload: { delta: 5 },
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(characters.changeHp).not.toHaveBeenCalled();
   });
 
   it.each([{ delta: 0 }, { delta: 1001 }, { delta: 1.5 }, { currentHp: 10 }])(
@@ -997,11 +1013,25 @@ describe('character write access', () => {
       'pe',
       { delta: 3 },
       characters,
-      makeMembership(),
+      masterMembership(),
     );
 
     expect(res.statusCode).toBe(200);
     expect(res.json().character.currentEffort).toBe(8);
+  });
+
+  it('answers 403 to the character owner changing PE and writes nothing', async () => {
+    const characters = makeEffortRepository(8);
+
+    const res = await patchVitals(
+      'pe',
+      { delta: 3 },
+      characters,
+      makeMembership(),
+    );
+
+    expect(res.statusCode).toBe(403);
+    expect(characters.changeEffort).not.toHaveBeenCalled();
   });
 
   it.each([0, 101, -101, 1.5])('rejects delta %s', async (delta) => {

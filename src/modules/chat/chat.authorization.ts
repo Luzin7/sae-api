@@ -70,8 +70,8 @@ export async function requireCharacterInGame(
   return character;
 }
 
-/** The character's owner or the game's master may change its vitals. */
-export async function requireCharacterWriter(
+/** Only the game's master may change a character's vitals by hand. */
+export async function requireCharacterVitalsMaster(
   characters: CharacterAccess,
   game: GameRef,
   playerId: string,
@@ -82,8 +82,7 @@ export async function requireCharacterWriter(
     game.id,
     characterId,
   );
-  const isOwner = character.playerId === playerId;
-  if (!isOwner && game.masterId !== playerId) throw new ChatForbiddenError();
+  if (game.masterId !== playerId) throw new ChatForbiddenError();
 
   return character;
 }

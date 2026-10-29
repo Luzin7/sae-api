@@ -1,6 +1,6 @@
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import type { GameSessionNotifier } from '@shared/game-session/game-session-notifier.contract.js';
-import { requireEditableCharacter } from '../character.authorization.js';
+import { requireMasterCharacter } from '../character.authorization.js';
 import type { Character } from '../character.entity.js';
 import type { CharacterRepository } from '../character.repository.js';
 
@@ -16,12 +16,7 @@ export class ChangeEffortService {
     requesterId: string,
     delta: number,
   ): Promise<Character> {
-    await requireEditableCharacter(
-      this.characters,
-      this.access,
-      id,
-      requesterId,
-    );
+    await requireMasterCharacter(this.characters, this.access, id, requesterId);
 
     const { character, oldEffort, oldHp } = await this.characters.changeEffort(
       id,

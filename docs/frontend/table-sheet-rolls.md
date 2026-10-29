@@ -98,7 +98,7 @@ A master joining or leaving emits neither event.
 | Actor | Allowed writes |
 | --- | --- |
 | Master | Read any sheet in their game; `PATCH /characters/:id` (general fields and NP); `PATCH /characters/:id/hp`; `PATCH /characters/:id/pe`; `character.hp-change` / `character.pe-change` over WS. |
-| Player | Own character's general fields, HP, PE, items and skills; delete their own character. Cannot change NP (`403`, `Apenas o mestre pode alterar o NP.`). |
+| Player | Own character's general fields, items and skills (never HP or PE: only the Mestre changes them, `403` otherwise); delete their own character. Cannot change NP (`403`, `Apenas o mestre pode alterar o NP.`). |
 
 - Master write access is still owner-only for adding, updating and deleting items, upserting skills and deleting a player's character.
 - The master read widening below does not extend any write beyond the table above.
@@ -129,8 +129,8 @@ Rules (rulebook, Cap. 2): PE starts at 0 and rises. Limite de Esforco = 20 + pro
 
 Changing PE:
 
-- WS `{ "type": "character.pe-change", "sessionId": "uuid", "characterId": "uuid", "delta": 3 }`. `delta` is an integer, `delta != 0`, `|delta| <= 100`. Allowed for the character's owner or the game's master; anyone else gets `FORBIDDEN`, a character outside the session's game gets `NOT_FOUND`.
-- REST `PATCH /characters/:id/pe` body `{ "delta": 3 }` (same bounds, same authorization), answers `{ "character": ... }` with the new `currentEffort` / `currentHp` and a bumped `version`. The old body `{ "currentEffort": n }` is rejected with `400`.
+- WS `{ "type": "character.pe-change", "sessionId": "uuid", "characterId": "uuid", "delta": 3 }`. `delta` is an integer, `delta != 0`, `|delta| <= 100`. Mestre only; anyone else, including the character's owner, gets `FORBIDDEN`, a character outside the session's game gets `NOT_FOUND`.
+- REST `PATCH /characters/:id/pe` body `{ "delta": 3 }` (same bounds, Mestre only; the owner gets `403`), answers `{ "character": ... }` with the new `currentEffort` / `currentHp` and a bumped `version`. The old body `{ "currentEffort": n }` is rejected with `400`.
 - After commit the server broadcasts `character.pe-changed` and, only when PS moved, `character.hp-changed`. Nothing is broadcast when neither value moved. The WS path writes `pe_change` (and `hp_change`) session log rows; the REST path has no session context and writes none.
 - Master only: `{ "type": "master.monster-pe-change", "sessionId": "uuid", "monsterId": "uuid", "delta": -2 }` (`monsterId` is the bestiary id, as in `master.monster-hp-change`). Same rule on the combat instance's PE and PS; the server broadcasts `session.combat`.
 
@@ -144,8 +144,8 @@ When a Vitalidade or Condicionamento skill is saved, `maxHp` / `maxEffort` are r
 
 No client sends an absolute PS. Every PS change is a signed delta applied atomically on the server (row lock): `PS = clamp(current + delta, 0, maxHp)`.
 
-- WS `{ "type": "character.hp-change", "sessionId": "uuid", "characterId": "uuid", "delta": -4 }`. `delta` is an integer, `delta != 0`, `|delta| <= 1000`. Allowed for the character's owner or the game's master (`FORBIDDEN` otherwise, `NOT_FOUND` for a character outside the session's game). Writes an `hp_change` log row (actual delta after clamping), bumps `version`, then broadcasts `character.hp-changed` only if PS moved.
-- REST `PATCH /characters/:id/hp` body `{ "delta": 5 }` (same bounds and authorization), answers `{ "character": ... }`, bumps `version`, pushes `character.hp-changed` if PS moved, writes no session log. The old body `{ "currentHp": n }` is rejected with `400`.
+- WS `{ "type": "character.hp-change", "sessionId": "uuid", "characterId": "uuid", "delta": -4 }`. `delta` is an integer, `delta != 0`, `|delta| <= 1000`. Mestre only (`FORBIDDEN` for anyone else, including the character's owner; `NOT_FOUND` for a character outside the session's game). Writes an `hp_change` log row (actual delta after clamping), bumps `version`, then broadcasts `character.hp-changed` only if PS moved.
+- REST `PATCH /characters/:id/hp` body `{ "delta": 5 }` (same bounds, Mestre only; the owner gets `403`), answers `{ "character": ... }`, bumps `version`, pushes `character.hp-changed` if PS moved, writes no session log. The old body `{ "currentHp": n }` is rejected with `400`.
 - WS (Mestre only) `{ "type": "master.monster-hp-change", "sessionId": "uuid", "monsterId": "uuid", "delta": -3 }`: locks the combatant row, clamps PS to 0..`maxHp` of the instance, broadcasts `session.combat`.
 - WS (Mestre only) `{ "type": "master.monster-afflictions-update", "sessionId": "uuid", "monsterId": "uuid", "afflictions": ["fobia", "vicio"] }`: `afflictions` is the full list (replaces the current one; `[]` clears it) and every key must be a known affliction key, otherwise the frame is rejected with a validation error. It locks the combatant row, writes a `combat_state` log row and broadcasts `session.combat`.
 - `master.monster-attack` applies its `damage` through the same locked write (`delta = -damage`) and now also writes an `hp_change` log row.
