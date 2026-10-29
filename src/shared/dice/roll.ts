@@ -1,3 +1,5 @@
+import { ATTRIBUTE_DIE_SIDES, attributeDiceRule } from './attribute-dice.js';
+
 export type RollKind = 'best' | 'worst' | 'single';
 
 export interface AttributeRoll {
@@ -13,13 +15,15 @@ export function rollDie(sides: number, rng: Rng): number {
 }
 
 export function rollAttribute(attrValue: number, rng: Rng): AttributeRoll {
-  const qty = attrValue === 0 ? 1 : Math.abs(attrValue);
-  const rolls = Array.from({ length: qty }, () => rollDie(20, rng));
+  const { dice, keep } = attributeDiceRule(attrValue);
+  const rolls = Array.from({ length: dice }, () =>
+    rollDie(ATTRIBUTE_DIE_SIDES, rng),
+  );
 
-  if (attrValue > 0) return { rolls, result: Math.max(...rolls), kind: 'best' };
-  if (attrValue < 0)
-    return { rolls, result: Math.min(...rolls), kind: 'worst' };
-  return { rolls, result: rolls[0]!, kind: 'single' };
+  if (keep === 'best') return { rolls, result: Math.max(...rolls), kind: keep };
+  if (keep === 'worst')
+    return { rolls, result: Math.min(...rolls), kind: keep };
+  return { rolls, result: rolls[0]!, kind: keep };
 }
 
 export function rollWithModifiers(
