@@ -33,7 +33,7 @@ describe('ChangeHpService', () => {
   it('delta +5 from 10 returns the character at 15 and pushes hp-changed', async () => {
     const { characters, notifier, service } = build();
 
-    const result = await service.execute('char-1', 'player-1', 5);
+    const result = await service.execute('char-1', 'master-1', 5);
 
     expect(characters.changeHp).toHaveBeenCalledWith('char-1', 5);
     expect(result.currentHp).toBe(15);
@@ -52,7 +52,7 @@ describe('ChangeHpService', () => {
       oldHp: 0,
     });
 
-    await service.execute('char-1', 'player-1', -1);
+    await service.execute('char-1', 'master-1', -1);
 
     expect(notifier.notifyHpChanged).not.toHaveBeenCalled();
   });
@@ -63,6 +63,16 @@ describe('ChangeHpService', () => {
     await service.execute('char-1', 'master-1', -3);
 
     expect(characters.changeHp).toHaveBeenCalledWith('char-1', -3);
+  });
+
+  it('forbids the character owner before writing or notifying', async () => {
+    const { characters, notifier, service } = build();
+
+    await expect(
+      service.execute('char-1', 'player-1', 3),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(characters.changeHp).not.toHaveBeenCalled();
+    expect(notifier.notifyHpChanged).not.toHaveBeenCalled();
   });
 
   it('forbids an unrelated player before writing or notifying', async () => {

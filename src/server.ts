@@ -63,6 +63,7 @@ export async function buildApp() {
     services: container.services.chat,
     bus: container.bus,
     verifyWsToken: container.verifyWsToken,
+    logger: app.log,
   });
 
   await app.register(apiReference, {

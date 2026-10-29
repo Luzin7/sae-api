@@ -1,8 +1,9 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ForbiddenError } from '@shared/errors/http-errors.js';
 import websocketPlugin from '../../plugins/websocket.plugin.js';
 import { InMemoryMessageBus } from './chat.bus.js';
-import chatGateway from './chat.gateway.js';
+import chatGateway, { type ChatServices } from './chat.gateway.js';
 import {
   fixedRng,
   makeCharacterAccess,
@@ -138,6 +139,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
     services: buildServices(bus).services,
     bus,
     verifyWsToken: () => null,
+    logger: { error: vi.fn() },
   });
 
   return app;
@@ -240,7 +242,7 @@ describe('chatGateway session state', () => {
     await Promise.all(apps.splice(0).map((app) => app.close()));
   });
 
-  async function buildJoinedApp() {
+  async function buildJoinedApp(logger = { error: vi.fn() }) {
     const app = Fastify();
     await app.register(websocketPlugin);
     const bus = new InMemoryMessageBus();
@@ -250,6 +252,7 @@ describe('chatGateway session state', () => {
       services: built.services,
       bus,
       verifyWsToken: (token) => token,
+      logger,
     });
 
     vi.mocked(built.messages.findSession).mockResolvedValue({
@@ -453,7 +456,7 @@ describe('chatGateway session state', () => {
       },
     });
     vi.mocked(characters.changeHp).mockResolvedValue({ oldHp: 10, newHp: 15 });
-    const client = collectFrames(`${url}?token=p1`);
+    const client = collectFrames(`${url}?token=master-1`);
     client.send({ type: 'session.join', sessionId: SESSION_ID });
     await client.waitFor(3);
 
@@ -472,7 +475,7 @@ describe('chatGateway session state', () => {
 
     expect(characters.changeHp).toHaveBeenCalledWith(CHARACTER_ID, 5, {
       sessionId: SESSION_ID,
-      playerId: 'p1',
+      playerId: 'master-1',
     });
     expect(
       client.frames.find((frame) => frame.type === 'character.hp-changed'),
@@ -596,7 +599,7 @@ describe('chatGateway session state', () => {
       oldHp: 30,
       newHp: 27,
     });
-    const client = collectFrames(`${url}?token=p1`);
+    const client = collectFrames(`${url}?token=master-1`);
     client.send({ type: 'session.join', sessionId: SESSION_ID });
     await client.waitFor(3);
 
@@ -615,7 +618,7 @@ describe('chatGateway session state', () => {
 
     expect(characters.changeEffort).toHaveBeenCalledWith(CHARACTER_ID, 5, {
       sessionId: SESSION_ID,
-      playerId: 'p1',
+      playerId: 'master-1',
     });
     expect(
       client.frames.find((frame) => frame.type === 'character.pe-changed'),
@@ -681,5 +684,79 @@ describe('chatGateway session state', () => {
       delta: 2,
       playerId: 'master-1',
     });
+  });
+});
+
+describe('chatGateway unexpected errors', () => {
+  const apps: FastifyInstance[] = [];
+
+  afterEach(async () => {
+    await Promise.all(apps.splice(0).map((app) => app.close()));
+  });
+
+  async function buildApp(execute: () => Promise<never>) {
+    const logger = { error: vi.fn() };
+    const app = Fastify();
+    await app.register(websocketPlugin);
+    const bus = new InMemoryMessageBus();
+    const { services } = buildServices(bus);
+    apps.push(app);
+    await app.register(chatGateway, {
+      services: {
+        ...services,
+        changeEffort: { execute },
+      } as unknown as ChatServices,
+      bus,
+      verifyWsToken: (token) => token,
+      logger,
+    });
+    const port = await listen(app);
+
+    return { logger, url: `ws://127.0.0.1:${port}/ws?token=p1` };
+  }
+
+  const peChange = {
+    type: 'character.pe-change',
+    sessionId: SESSION_ID,
+    characterId: CHARACTER_ID,
+    delta: 1,
+  };
+
+  it('logs a plain error with its context and answers INTERNAL', async () => {
+    const boom = new Error('boom');
+    const { logger, url } = await buildApp(() => Promise.reject(boom));
+    const client = collectFrames(url);
+
+    client.send(peChange);
+    await client.waitFor(1);
+    client.close();
+
+    expect(logger.error).toHaveBeenCalledWith(
+      {
+        step: 'character.pe-change',
+        sessionId: SESSION_ID,
+        playerId: 'p1',
+        err: boom,
+      },
+      expect.any(String),
+    );
+    expect(client.frames[0]).toMatchObject({
+      type: 'error',
+      error: { code: 'INTERNAL' },
+    });
+  });
+
+  it('does not log a domain error', async () => {
+    const { logger, url } = await buildApp(() =>
+      Promise.reject(new ForbiddenError('sem acesso')),
+    );
+    const client = collectFrames(url);
+
+    client.send(peChange);
+    await client.waitFor(1);
+    client.close();
+
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(client.frames[0]).toMatchObject({ type: 'error' });
   });
 });

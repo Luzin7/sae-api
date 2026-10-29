@@ -47,7 +47,11 @@ export function sendError(
   sendEvent(socket, { type: 'error', error: { code, message } });
 }
 
-export function sendDomainError(socket: WebSocket, error: unknown): void {
+export function sendDomainError(
+  socket: WebSocket,
+  error: unknown,
+  onUnexpected: (error: unknown) => void,
+): void {
   if (error instanceof DomainError) {
     sendError(socket, error.code, error.message);
     return;
@@ -58,6 +62,7 @@ export function sendDomainError(socket: WebSocket, error: unknown): void {
     return;
   }
 
+  onUnexpected(error);
   sendError(socket, 'INTERNAL', 'Erro interno do servidor.');
 }
 
