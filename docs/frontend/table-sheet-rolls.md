@@ -197,7 +197,7 @@ UI rule: never submit the form without one source per field; offer manual value 
 | Player | Test roll: `testId` sent, the declared test is `open` **or** `targetCharacterId` equals their character, the test is not closed, and that character has not already rolled that `testId`. |
 | Player | Turn roll: no `testId`, combat is active, and the current combatant is their character (`entries[turnIndex].kind === 'character'` and `entries[turnIndex].refId === characterId`). |
 
-`dice.roll` frame fields: `sessionId`, `characterId`, `skillId` (all required) and `testId` (optional; send it for test rolls, omit it for turn rolls). The rolled `skillId` may differ from the test's skill; the roll is still judged against the test's `cd`.
+`dice.roll` frame fields: `sessionId`, `characterId`, `skillId` (all required) and `testId` (optional; send it for test rolls, omit it for turn rolls). The rolled `skillId` may differ from the test's skill; the roll is still judged against the test's `cd`: `success` is `total >= cd`, so a total equal to the `cd` is a success.
 
 Dice count is `|attribute|` d20 (an attribute of 0 rolls one die): positive keeps the best, negative keeps the worst.
 
