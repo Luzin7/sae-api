@@ -85,6 +85,18 @@ export class NpMasterOnlyError extends ForbiddenError {
   }
 }
 
+export class SheetPointsMasterOnlyError extends ForbiddenError {
+  constructor() {
+    super('Use Evoluir personagem para distribuir pontos.');
+  }
+}
+
+export class ArchetypeMasterOnlyError extends ForbiddenError {
+  constructor() {
+    super('Só o Mestre muda personalidade e postura.');
+  }
+}
+
 export class SkillPoolExceededError extends DomainError {
   readonly code: DomainErrorCode = 'VALIDATION';
   readonly httpStatus = 400;

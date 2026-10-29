@@ -119,8 +119,8 @@ Read responses carry a derived `advancement` object: `GET /characters/mine`, `GE
 
 | Actor | Allowed writes |
 | --- | --- |
-| Master | Read any sheet in their game; `PATCH /characters/:id` (general fields and NP); `PATCH /characters/:id/hp`; `PATCH /characters/:id/pe`; `character.hp-change` / `character.pe-change` over WS. |
-| Player | Own character's general fields, items and skills (never HP or PE: only the Mestre changes them, `403` otherwise); delete their own character. Cannot change NP (`403`, `Apenas o mestre pode alterar o NP.`). |
+| Master | Read any sheet in their game; `PATCH /characters/:id` (general fields, NP, attributes, personality and posture); `PATCH /characters/:id/hp`; `PATCH /characters/:id/pe`; `character.hp-change` / `character.pe-change` over WS. |
+| Player | Own character's narrative fields and items (never HP or PE: only the Mestre changes them, `403` otherwise); points only through `POST /characters/:id/advancement`; delete their own character. Cannot change NP (`403`, `Apenas o mestre pode alterar o NP.`). Cannot send any attribute through `PATCH /characters/:id` (`403`, `Use Evoluir personagem para distribuir pontos.`) nor `personality`/`posture` (`403`, `Só o Mestre muda personalidade e postura.`). |
 
 - Master write access is still owner-only for adding, updating and deleting items, upserting skills and deleting a player's character.
 - The master read widening below does not extend any write beyond the table above.

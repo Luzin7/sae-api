@@ -869,7 +869,10 @@ describe('character sheet creation contract', () => {
     return { res, characters };
   }
 
-  async function patchCharacter(payload: Record<string, unknown>) {
+  async function patchCharacter(
+    payload: Record<string, unknown>,
+    requesterId = 'player-1',
+  ) {
     const characters = makeCharacterRepository();
     const current = makeCharacter({ afflictions: ['medo de altura'] });
     vi.mocked(characters.findById).mockResolvedValue(current);
@@ -880,7 +883,7 @@ describe('character sheet creation contract', () => {
       method: 'PATCH',
       url: '/characters/char-1',
       payload: { version: 0, ...payload },
-      headers: { cookie: `token=${makeToken(app)}` },
+      headers: { cookie: `token=${makeToken(app, requesterId)}` },
     });
   }
 
@@ -957,6 +960,36 @@ describe('character sheet creation contract', () => {
     const res = await patchCharacter({ afflictions: ['medo de altura'] });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  it('forbids a player from patching an attribute', async () => {
+    const res = await patchCharacter({ cognition: -4 });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.message).toBe(
+      'Use Evoluir personagem para distribuir pontos.',
+    );
+  });
+
+  it('forbids a player from patching the personality', async () => {
+    const res = await patchCharacter({ personality: 'Altruísta' });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('lets the master patch an attribute', async () => {
+    const res = await patchCharacter({ cognition: -4 }, 'master-1');
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('lets the master patch the personality', async () => {
+    const res = await patchCharacter(
+      { personality: 'Erudito', posture: 'Abrutalhado' },
+      'master-1',
+    );
+
+    expect(res.statusCode).toBe(200);
   });
 
   it('updates a legacy character without revalidating its afflictions', async () => {

@@ -7,6 +7,7 @@ import type {
   SheetChanges,
 } from '../character.entity.js';
 import {
+  ArchetypeMasterOnlyError,
   AttributeBudgetExceededError,
   CharacterVersionConflictError,
   InvalidAttributeError,
@@ -14,6 +15,7 @@ import {
   InvalidWeightError,
   NpMasterOnlyError,
   NpReductionBlockedError,
+  SheetPointsMasterOnlyError,
 } from '../character.errors.js';
 import {
   makeCharacter,
@@ -141,15 +143,16 @@ describe('UpdateCharacterService', () => {
   it('rejects a sheet whose attributes exceed the np budget', async () => {
     await expect(
       decide({
+        requester: 'master-1',
         input: { cognition: 5, psyche: 5, instinct: 5, motricity: 5 },
       }),
     ).rejects.toBeInstanceOf(AttributeBudgetExceededError);
   });
 
   it('rejects -1/0 as attribute values', async () => {
-    await expect(decide({ input: { perception: 0 } })).rejects.toBeInstanceOf(
-      InvalidAttributeError,
-    );
+    await expect(
+      decide({ requester: 'master-1', input: { perception: 0 } }),
+    ).rejects.toBeInstanceOf(InvalidAttributeError);
   });
 
   it('recomputes maxHp, maxEffort and bExp on a sheet change', async () => {
@@ -205,6 +208,7 @@ describe('UpdateCharacterService', () => {
 
   it('re-derives proficiency levels when the archetype changes', async () => {
     const changes = await decide({
+      requester: 'master-1',
       input: { personality: 'Erudito', posture: 'Abrutalhado' },
     });
 
@@ -281,6 +285,52 @@ describe('UpdateCharacterService', () => {
       InvalidWeightError,
     );
   });
+
+  it.each([
+    'cognition',
+    'psyche',
+    'instinct',
+    'constitution',
+    'motricity',
+    'perception',
+  ] as const)('forbids a player from sending %s', async (attribute) => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+
+    const execution = new UpdateCharacterService(
+      characters,
+      makeMembership(),
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('char-1', 'player-1', { version: 0, [attribute]: -4 });
+
+    await expect(execution).rejects.toBeInstanceOf(SheetPointsMasterOnlyError);
+    await expect(execution).rejects.toThrow(
+      'Use Evoluir personagem para distribuir pontos.',
+    );
+    expect(characters.updateSheet).not.toHaveBeenCalled();
+  });
+
+  it.each(['personality', 'posture'] as const)(
+    'forbids a player from sending %s',
+    async (field) => {
+      const characters = makeCharacterRepository();
+      vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+
+      const execution = new UpdateCharacterService(
+        characters,
+        makeMembership(),
+        fixedRng(1),
+        makeNotifier(),
+      ).execute('char-1', 'player-1', { version: 0, [field]: 'Altruísta' });
+
+      await expect(execution).rejects.toBeInstanceOf(ArchetypeMasterOnlyError);
+      await expect(execution).rejects.toThrow(
+        'Só o Mestre muda personalidade e postura.',
+      );
+      expect(characters.updateSheet).not.toHaveBeenCalled();
+    },
+  );
 
   it('forbids the owner from changing np', async () => {
     const characters = makeCharacterRepository();

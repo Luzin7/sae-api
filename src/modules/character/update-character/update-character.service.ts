@@ -27,7 +27,11 @@ import {
   type SheetChanges,
   type UpdateCharacterInput,
 } from '../character.entity.js';
-import { NpMasterOnlyError } from '../character.errors.js';
+import {
+  ArchetypeMasterOnlyError,
+  NpMasterOnlyError,
+  SheetPointsMasterOnlyError,
+} from '../character.errors.js';
 import type { CharacterRepository } from '../character.repository.js';
 import { assertSkillPools } from '../skills/skill-allocation.js';
 
@@ -39,6 +43,24 @@ type SheetRequest = Omit<
 };
 
 export type UpdateCharacterCommand = SheetRequest & { version: number };
+
+const ATTRIBUTE_FIELDS = [
+  'cognition',
+  'psyche',
+  'instinct',
+  'constitution',
+  'motricity',
+  'perception',
+] as const;
+
+function assertPlayerSheetFields(input: SheetRequest): void {
+  if (ATTRIBUTE_FIELDS.some((field) => input[field] !== undefined)) {
+    throw new SheetPointsMasterOnlyError();
+  }
+  if (input.personality !== undefined || input.posture !== undefined) {
+    throw new ArchetypeMasterOnlyError();
+  }
+}
 
 function mergeAttributes(
   character: Character,
@@ -137,6 +159,7 @@ export class UpdateCharacterService {
       requesterId,
     );
     if (input.np !== undefined && !isMaster) throw new NpMasterOnlyError();
+    if (!isMaster) assertPlayerSheetFields(input);
 
     const { version, ...request } = input;
     let oldNp: number | undefined;
