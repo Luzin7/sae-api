@@ -106,14 +106,14 @@ const SIZE_SOURCE_RULES: readonly SizeSourceRule[] = [
   {
     exact: 'heightCm',
     roll: 'heightRoll',
-    missingMessage: 'Informe a altura ou escolha rolar.',
-    conflictMessage: 'Informe a altura ou a rolagem, não as duas.',
+    missingMessage: 'Informe a altura ou deixe para o destino.',
+    conflictMessage: 'Escolha a altura ou deixe para o destino, não os dois.',
   },
   {
     exact: 'weightKg',
     roll: 'weightRoll',
-    missingMessage: 'Informe o peso ou escolha rolar.',
-    conflictMessage: 'Informe o peso ou a rolagem, não as duas.',
+    missingMessage: 'Informe o peso ou deixe para o destino.',
+    conflictMessage: 'Escolha o peso ou deixe para o destino, não os dois.',
   },
 ];
 
