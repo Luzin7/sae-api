@@ -3,6 +3,7 @@ import type { GameSessionNotifier } from '@shared/game-session/game-session-noti
 import { resolveHeight, resolveWeight } from '../character.appearance.js';
 import { assertAttributeBudget } from '../character.attributes.js';
 import { requireEditableCharacter } from '../character.authorization.js';
+import { bondsPatch } from '../character.bonds.js';
 import {
   CONDICIONAMENTO,
   deriveProficiencies,
@@ -23,9 +24,13 @@ import type { CharacterRepository } from '../character.repository.js';
 import { bExp, maxEffort, maxHp } from '../character.stats.js';
 import { assertSkillPools } from '../skills/skill-allocation.js';
 
+export type UpdateCharacterCommand = Omit<UpdateCharacterInput, 'bonds'> & {
+  bonds?: string;
+};
+
 function mergeAttributes(
   character: Character,
-  input: UpdateCharacterInput,
+  input: UpdateCharacterCommand,
 ): AttributeScores {
   return {
     cognition: input.cognition ?? character.cognition,
@@ -39,7 +44,7 @@ function mergeAttributes(
 
 function resolveProficiencies(
   character: Character,
-  input: UpdateCharacterInput,
+  input: UpdateCharacterCommand,
 ): ProficiencyScores {
   if (input.personality === undefined && input.posture === undefined) {
     return {
@@ -60,7 +65,7 @@ function resolveProficiencies(
 
 function resolveAppearance(
   character: Character,
-  input: UpdateCharacterInput,
+  input: UpdateCharacterCommand,
   rng: Rng,
 ): { heightCm: number | null; weightKg: number | null } {
   const hasHeight =
@@ -87,7 +92,7 @@ function resolveSize(
 
 function resolveVaalaques(
   character: Character,
-  input: UpdateCharacterInput,
+  input: UpdateCharacterCommand,
   rng: Rng,
 ): number {
   if (
@@ -111,7 +116,7 @@ export class UpdateCharacterService {
   async execute(
     id: string,
     requesterId: string,
-    input: UpdateCharacterInput,
+    input: UpdateCharacterCommand,
   ): Promise<Character> {
     const { character, isMaster } = await requireEditableCharacter(
       this.characters,
@@ -137,8 +142,10 @@ export class UpdateCharacterService {
     const effort = maxEffort(proficiencyBonus(skills, CONDICIONAMENTO));
     const appearance = resolveAppearance(character, input, this.rng);
 
+    const { bonds, ...patch } = input;
     const updated = await this.characters.save(id, {
-      ...input,
+      ...patch,
+      ...bondsPatch(bonds),
       np,
       ...attributes,
       ...proficiencies,

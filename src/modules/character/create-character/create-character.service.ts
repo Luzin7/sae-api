@@ -4,6 +4,7 @@ import { hairColorForRoll } from '@shared/rules/hair-color.js';
 import { resolveHeight, resolveWeight } from '../character.appearance.js';
 import { assertAttributeBudget } from '../character.attributes.js';
 import { requireMembership } from '../character.authorization.js';
+import { bondsPatch } from '../character.bonds.js';
 import {
   CONDICIONAMENTO,
   deriveProficiencies,
@@ -65,8 +66,10 @@ export class CreateCharacterService {
     const weightKg = resolveWeight(input, this.rng);
     const hairColor = hairColorForRoll(this.rng(1, 20));
 
+    const { bonds, ...sheet } = input;
     const character = await this.characters.create({
-      ...input,
+      ...sheet,
+      ...bondsPatch(bonds),
       np: STARTING_NP,
       playerId,
       ...proficiencies,

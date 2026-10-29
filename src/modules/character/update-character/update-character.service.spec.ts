@@ -359,6 +359,46 @@ describe('UpdateCharacterService', () => {
     ).rejects.toBeInstanceOf(SkillPoolExceededError);
   });
 
+  it('normalizes bonds before saving them', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+
+    await new UpdateCharacterService(
+      characters,
+      makeMembership(),
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('char-1', 'player-1', { bonds: ' a , A , b ' });
+
+    expect(characters.save).toHaveBeenCalledWith(
+      'char-1',
+      expect.objectContaining({ bonds: ['A', 'B'] }),
+    );
+  });
+
+  it('keeps the stored bonds when the patch omits them', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ bonds: ['Aliado'] }),
+    );
+    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
+    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+
+    await new UpdateCharacterService(
+      characters,
+      makeMembership(),
+      fixedRng(1),
+      makeNotifier(),
+    ).execute('char-1', 'player-1', { nickname: 'Renamed' });
+
+    expect(characters.save).toHaveBeenCalledWith(
+      'char-1',
+      expect.not.objectContaining({ bonds: expect.anything() }),
+    );
+  });
+
   it('keeps legacy free-text afflictions when the patch omits them', async () => {
     const characters = makeCharacterRepository();
     vi.mocked(characters.findById).mockResolvedValue(
