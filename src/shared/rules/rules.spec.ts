@@ -7,6 +7,7 @@ import {
   attributeDisplayName,
 } from './attributes.js';
 import { AFFLICTION_KEYS, AFFLICTIONS } from './afflictions.js';
+import { MOTIVATIONS } from './motivations.js';
 import { OFICIOS, oficioCdReduction } from './oficios.js';
 import { SKILLS } from './skills.js';
 import { deriveProficiency } from './archetypes.js';
@@ -184,5 +185,30 @@ describe('ofícios', () => {
 describe('affliction keys', () => {
   it('match the affliction definitions', () => {
     expect(AFFLICTIONS.map((entry) => entry.key)).toEqual([...AFFLICTION_KEYS]);
+  });
+});
+
+describe('official motivation and affliction text', () => {
+  it('keeps the first motivation verbatim', () => {
+    expect(MOTIVATIONS[0]).toEqual({
+      key: 'reconhecimento',
+      name: 'Reconhecimento',
+      description:
+        'Busca por validação e prestígio. Internamente, o personagem precisa ser visto e reconhecido; fisicamente, se esforça para se destacar em momentos decisivos; socialmente, busca aprovação e status.',
+      trigger:
+        'Quando o personagem está sob observação direta de uma audiência relevante ou em uma situação onde sua reputação está sendo julgada ou pode ser significativamente afetada.',
+    });
+  });
+
+  it('keeps the last affliction verbatim', () => {
+    expect(AFFLICTIONS[7]).toEqual({
+      key: 'estigma',
+      name: 'Estigma',
+      description: 'Marca social que gera rejeição ou preconceito.',
+      requirement:
+        'Definir a natureza do estigma e os grupos que o reconhecem.',
+      trigger:
+        'Quando o personagem interage com indivíduos ou grupos que reconhecem ou reagem ao estigma.',
+    });
   });
 });
