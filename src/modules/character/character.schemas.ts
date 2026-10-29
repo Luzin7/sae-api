@@ -77,6 +77,10 @@ export const UpsertSkillBodySchema = z.object({
   proficiencyBonus: z.number().int().min(0),
 });
 
+const SkillAllocationsSchema = z
+  .array(UpsertSkillBodySchema)
+  .max(SKILLS.length);
+
 const CharacterSheetBodySchema = z.object({
   gameId: z.string().uuid(),
   ...SheetFields,
@@ -147,10 +151,10 @@ function refineSizeSources(required: boolean) {
 }
 
 function refineUniqueSkills(
-  input: { skills: { skillId: string }[] },
+  input: { skills?: { skillId: string }[] },
   ctx: z.RefinementCtx,
 ): void {
-  const ids = input.skills.map((skill) => skill.skillId);
+  const ids = (input.skills ?? []).map((skill) => skill.skillId);
   if (new Set(ids).size === ids.length) return;
 
   ctx.addIssue({
@@ -178,7 +182,7 @@ export const CreateCharacterBodySchema = CharacterSheetBodySchema.omit({
   np: true,
 })
   .extend({
-    skills: z.array(UpsertSkillBodySchema).max(SKILLS.length).default([]),
+    skills: SkillAllocationsSchema.default([]),
   })
   .superRefine(refineSizeSources(true))
   .superRefine(refineUniqueSkills)
@@ -192,6 +196,27 @@ export const UpdateCharacterBodySchema =
   UpdateCharacterSheetBodySchema.superRefine(
     refineSizeSources(false),
   ).superRefine(refineUniqueAfflictions);
+
+export const PreviewCharacterBodySchema = CharacterSheetBodySchema.pick({
+  np: true,
+  cognition: true,
+  psyche: true,
+  instinct: true,
+  constitution: true,
+  motricity: true,
+  perception: true,
+  personality: true,
+  posture: true,
+  heightCm: true,
+  weightKg: true,
+  socialClass: true,
+})
+  .partial()
+  .extend({
+    np: CharacterSheetBodySchema.shape.np,
+    skills: SkillAllocationsSchema.optional(),
+  })
+  .superRefine(refineUniqueSkills);
 
 export const UpdateVitalsBodySchema = z
   .object({
@@ -256,6 +281,7 @@ export const CharacterListQuerySchema = z.object({
 });
 
 export type CreateCharacterBody = z.infer<typeof CreateCharacterBodySchema>;
+export type PreviewCharacterBody = z.infer<typeof PreviewCharacterBodySchema>;
 export type UpdateCharacterBody = z.infer<typeof UpdateCharacterBodySchema>;
 export type UpdateVitalsBody = z.infer<typeof UpdateVitalsBodySchema>;
 export type CreateItemBody = z.infer<typeof CreateItemBodySchema>;

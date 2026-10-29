@@ -64,6 +64,7 @@ import { GetSheetService } from '@modules/character/get-sheet/get-sheet.service.
 import { AddItemService } from '@modules/character/items/add-item/add-item.service.js';
 import { DeleteItemService } from '@modules/character/items/delete-item/delete-item.service.js';
 import { UpdateItemService } from '@modules/character/items/update-item/update-item.service.js';
+import { PreviewCharacterService } from '@modules/character/preview-character/preview-character.service.js';
 import { UpsertSkillService } from '@modules/character/skills/upsert-skill/upsert-skill.service.js';
 import { UpdateCharacterService } from '@modules/character/update-character/update-character.service.js';
 import { UpdateVitalsService } from '@modules/character/update-vitals/update-vitals.service.js';
@@ -260,6 +261,7 @@ export function buildContainer(deps: {
           systemRng,
           sessionNotifier,
         ),
+        previewCharacter: new PreviewCharacterService(characters),
         getCharacter: new GetCharacterService(characters, gameAccess),
         getSheet: new GetSheetService(characters, gameAccess),
         updateCharacter: new UpdateCharacterService(

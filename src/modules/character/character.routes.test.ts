@@ -23,6 +23,7 @@ import { GetSheetService } from './get-sheet/get-sheet.service.js';
 import { AddItemService } from './items/add-item/add-item.service.js';
 import { DeleteItemService } from './items/delete-item/delete-item.service.js';
 import { UpdateItemService } from './items/update-item/update-item.service.js';
+import { PreviewCharacterService } from './preview-character/preview-character.service.js';
 import { UpsertSkillService } from './skills/upsert-skill/upsert-skill.service.js';
 import { UpdateCharacterService } from './update-character/update-character.service.js';
 import { UpdateVitalsService } from './update-vitals/update-vitals.service.js';
@@ -49,6 +50,7 @@ function makeServices(
       fixedRng,
       notifier,
     ),
+    previewCharacter: new PreviewCharacterService(characters),
     getCharacter: new GetCharacterService(characters, membership),
     getSheet: new GetSheetService(characters, membership),
     updateCharacter: new UpdateCharacterService(
@@ -1037,5 +1039,57 @@ describe('character write access', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('character preview contract', () => {
+  async function postPreview(payload: Record<string, unknown>, auth = true) {
+    const characters = makeCharacterRepository();
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters/preview',
+      payload,
+      headers: auth ? { cookie: `token=${makeToken(app)}` } : {},
+    });
+
+    return { res, characters };
+  }
+
+  it('returns 401 without authentication', async () => {
+    const { res } = await postPreview({}, false);
+
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('accepts an empty body', async () => {
+    const { res } = await postPreview({});
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().preview.hitDie).toBeNull();
+  });
+
+  it('returns derived values for a half-filled form', async () => {
+    const { res, characters } = await postPreview({
+      np: 1,
+      constitution: 1,
+      socialClass: 'plebeu',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().preview).toMatchObject({
+      hitDie: 'd10',
+      maxHp: 30,
+      startingWealth: { min: 80, max: 320 },
+    });
+    expect(characters.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid attribute value', async () => {
+    const { res } = await postPreview({ constitution: 0 });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION');
   });
 });

@@ -12,6 +12,7 @@ import {
   CharacterParamsSchema,
   CreateCharacterBodySchema,
   CreateItemBodySchema,
+  PreviewCharacterBodySchema,
   UpdateCharacterBodySchema,
   UpdateItemBodySchema,
   UpdateVitalsBodySchema,
@@ -21,12 +22,15 @@ import type { CreateCharacterService } from './create-character/create-character
 import type { DeleteCharacterService } from './delete-character/delete-character.service.js';
 import type { GetCharacterService } from './get-character/get-character.service.js';
 import type { GetSheetService } from './get-sheet/get-sheet.service.js';
+import { CharacterPreviewPresenter } from './preview-character/preview-character.presenter.js';
+import type { PreviewCharacterService } from './preview-character/preview-character.service.js';
 import type { UpsertSkillService } from './skills/upsert-skill/upsert-skill.service.js';
 import type { UpdateCharacterService } from './update-character/update-character.service.js';
 import type { UpdateVitalsService } from './update-vitals/update-vitals.service.js';
 
 export interface CharacterServices {
   createCharacter: CreateCharacterService;
+  previewCharacter: PreviewCharacterService;
   getCharacter: GetCharacterService;
   getSheet: GetSheetService;
   updateCharacter: UpdateCharacterService;
@@ -57,6 +61,13 @@ export default async function characterRoutes(
     return reply
       .status(201)
       .send({ character: CharacterPresenter.toHTTP(character) });
+  });
+
+  app.post('/preview', { preHandler: authenticate }, async (request) => {
+    const body = PreviewCharacterBodySchema.parse(request.body);
+    const preview = await opts.services.previewCharacter.execute(body);
+
+    return { preview: CharacterPreviewPresenter.toHTTP(preview) };
   });
 
   app.get('/mine', { preHandler: authenticate }, async (request) => {
