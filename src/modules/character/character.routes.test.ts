@@ -20,6 +20,7 @@ import {
   makeSkillSummary,
   stubUpdateSheet,
 } from './character.testkit.js';
+import { AdvanceCharacterService } from './advance-character/advance-character.service.js';
 import { CreateCharacterService } from './create-character/create-character.service.js';
 import { DeleteCharacterService } from './delete-character/delete-character.service.js';
 import { GetCharacterService } from './get-character/get-character.service.js';
@@ -65,6 +66,7 @@ function makeServices(
       fixedRng,
       notifier,
     ),
+    advanceCharacter: new AdvanceCharacterService(characters, notifier),
     deleteCharacter: new DeleteCharacterService(
       characters,
       membership,
@@ -244,6 +246,62 @@ describe('character routes', () => {
     expect(res.statusCode).toBe(200);
     expect(characters.changeHp).toHaveBeenCalledWith('char-1', 5);
     expect(res.json().character.currentHp).toBe(15);
+  });
+
+  it('answers 200 to the owner advancing, with the advancement balance', async () => {
+    const characters = makeCharacterRepository();
+    const owned = makeCharacter({ np: 2, version: 0 });
+    vi.mocked(characters.findById).mockResolvedValue(owned);
+    stubUpdateSheet(characters, owned);
+    vi.mocked(characters.updateSheet).mockResolvedValue(
+      makeCharacter({ np: 2, cognition: -4, version: 1 }),
+    );
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters/char-1/advancement',
+      payload: { version: 0, attributes: { cognition: -4 } },
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().character.version).toBe(1);
+    expect(res.json().character.advancement.attributePoints.budget).toBe(22);
+  });
+
+  it('answers 403 to the Mestre advancing a character he does not own', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters/char-1/advancement',
+      payload: { version: 0, attributes: { cognition: -4 } },
+      headers: { cookie: `token=${makeToken(app, 'master-1')}` },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(characters.updateSheet).not.toHaveBeenCalled();
+  });
+
+  it('answers 409 to an advancement with a stale version', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.updateSheet).mockRejectedValue(
+      new CharacterVersionConflictError(),
+    );
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/characters/char-1/advancement',
+      payload: { version: 0, attributes: { cognition: -4 } },
+      headers: { cookie: `token=${makeToken(app)}` },
+    });
+
+    expect(res.statusCode).toBe(409);
   });
 
   it('answers 403 to the character owner changing PS and writes nothing', async () => {

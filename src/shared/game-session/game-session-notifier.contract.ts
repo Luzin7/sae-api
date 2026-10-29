@@ -16,6 +16,10 @@ export interface NpChanged {
   newNp: number;
 }
 
+export interface CharacterAdvanced {
+  characterId: string;
+}
+
 /**
  * Cross-domain seam the character slice uses to refresh a live table. The
  * chat slice implements it; character never imports chat.
@@ -25,5 +29,9 @@ export interface GameSessionNotifier {
   notifyHpChanged(gameId: string, change: HpChanged): Promise<void>;
   notifyEffortChanged(gameId: string, change: EffortChanged): Promise<void>;
   notifyNpChanged(gameId: string, change: NpChanged): Promise<void>;
+  notifyCharacterAdvanced(
+    gameId: string,
+    change: CharacterAdvanced,
+  ): Promise<void>;
   notifyCombatChanged(gameId: string): Promise<void>;
 }

@@ -59,6 +59,7 @@ import { ChangeEffortService } from '@modules/chat/change-effort/change-effort.s
 import { ChangeMonsterEffortService } from '@modules/chat/change-monster-effort/change-monster-effort.service.js';
 import type { CharacterRepository } from '@modules/character/character.repository.js';
 import type { CharacterServices } from '@modules/character/character.routes.js';
+import { AdvanceCharacterService } from '@modules/character/advance-character/advance-character.service.js';
 import { CreateCharacterService } from '@modules/character/create-character/create-character.service.js';
 import { DeleteCharacterService } from '@modules/character/delete-character/delete-character.service.js';
 import { GetCharacterService } from '@modules/character/get-character/get-character.service.js';
@@ -276,6 +277,10 @@ export function buildContainer(deps: {
           characters,
           gameAccess,
           systemRng,
+          sessionNotifier,
+        ),
+        advanceCharacter: new AdvanceCharacterService(
+          characters,
           sessionNotifier,
         ),
         deleteCharacter: new DeleteCharacterService(

@@ -207,6 +207,22 @@ export function characterRepository(): CharacterRepository {
           .for('update', { of: characterSkillTable });
 
         const changes = command.decide(toCharacter(locked), skills);
+        for (const { skillId, proficiencyBonus } of changes.skills ?? []) {
+          await tx
+            .insert(characterSkillTable)
+            .values({
+              characterId: command.id,
+              skillId,
+              proficiencyBonus,
+            })
+            .onConflictDoUpdate({
+              target: [
+                characterSkillTable.characterId,
+                characterSkillTable.skillId,
+              ],
+              set: { proficiencyBonus },
+            });
+        }
         const [row] = await tx
           .update(characterTable)
           .set({
