@@ -23,6 +23,7 @@ import type { DeleteCharacterService } from './delete-character/delete-character
 import type { GetCharacterService } from './get-character/get-character.service.js';
 import type { GetSheetService } from './get-sheet/get-sheet.service.js';
 import { CharacterPreviewPresenter } from './preview-character/preview-character.presenter.js';
+import { previewRateLimit } from './preview-character/preview-character.rate-limit.js';
 import type { PreviewCharacterService } from './preview-character/preview-character.service.js';
 import type { UpsertSkillService } from './skills/upsert-skill/upsert-skill.service.js';
 import type { UpdateCharacterService } from './update-character/update-character.service.js';
@@ -63,12 +64,16 @@ export default async function characterRoutes(
       .send({ character: CharacterPresenter.toHTTP(character) });
   });
 
-  app.post('/preview', { preHandler: authenticate }, async (request) => {
-    const body = PreviewCharacterBodySchema.parse(request.body);
-    const preview = await opts.services.previewCharacter.execute(body);
+  app.post(
+    '/preview',
+    { preHandler: authenticate, config: { rateLimit: previewRateLimit } },
+    async (request) => {
+      const body = PreviewCharacterBodySchema.parse(request.body);
+      const preview = await opts.services.previewCharacter.execute(body);
 
-    return { preview: CharacterPreviewPresenter.toHTTP(preview) };
-  });
+      return { preview: CharacterPreviewPresenter.toHTTP(preview) };
+    },
+  );
 
   app.get('/mine', { preHandler: authenticate }, async (request) => {
     const page = CharacterListQuerySchema.parse(request.query);
