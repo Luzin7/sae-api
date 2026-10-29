@@ -131,7 +131,6 @@ export function makeCharacterRepository(): CharacterRepository {
     findSkillSpend: vi.fn().mockResolvedValue([]),
     findSkillById: vi.fn(),
     findSkillsByIds: vi.fn(),
-    upsertSkill: vi.fn(),
   };
 }
 

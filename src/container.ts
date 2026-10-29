@@ -69,7 +69,6 @@ import { DeleteItemService } from '@modules/character/items/delete-item/delete-i
 import { UpdateItemService } from '@modules/character/items/update-item/update-item.service.js';
 import { MemoizedSkillDirectory } from '@modules/character/preview-character/memoized-skill-directory.js';
 import { PreviewCharacterService } from '@modules/character/preview-character/preview-character.service.js';
-import { UpsertSkillService } from '@modules/character/skills/upsert-skill/upsert-skill.service.js';
 import { UpdateCharacterService } from '@modules/character/update-character/update-character.service.js';
 import { ChangeHpService as ChangeCharacterHpService } from '@modules/character/change-hp/change-hp.service.js';
 import { ChangeEffortService as ChangeCharacterEffortService } from '@modules/character/change-effort/change-effort.service.js';
@@ -301,7 +300,6 @@ export function buildContainer(deps: {
         addItem: new AddItemService(characters),
         updateItem: new UpdateItemService(characters),
         deleteItem: new DeleteItemService(characters),
-        upsertSkill: new UpsertSkillService(characters),
         query: new CharacterQueryService(characters, gameAccess),
       },
       bestiary: {

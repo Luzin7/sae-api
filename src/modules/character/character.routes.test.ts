@@ -15,7 +15,6 @@ import {
   makeItem,
   makeMembership,
   makeNotifier,
-  makeSkill,
   makeSkillDetail,
   makeSkillSummary,
   stubUpdateSheet,
@@ -29,7 +28,6 @@ import { AddItemService } from './items/add-item/add-item.service.js';
 import { DeleteItemService } from './items/delete-item/delete-item.service.js';
 import { UpdateItemService } from './items/update-item/update-item.service.js';
 import { PreviewCharacterService } from './preview-character/preview-character.service.js';
-import { UpsertSkillService } from './skills/upsert-skill/upsert-skill.service.js';
 import { UpdateCharacterService } from './update-character/update-character.service.js';
 import { ChangeEffortService } from './change-effort/change-effort.service.js';
 import { ChangeHpService } from './change-hp/change-hp.service.js';
@@ -77,7 +75,6 @@ function makeServices(
     addItem: new AddItemService(characters),
     updateItem: new UpdateItemService(characters),
     deleteItem: new DeleteItemService(characters),
-    upsertSkill: new UpsertSkillService(characters),
     query: new CharacterQueryService(characters, membership),
   };
 }
@@ -400,14 +397,8 @@ describe('character routes', () => {
     expect(listed.json().items).toHaveLength(1);
   });
 
-  it('upserts a skill using skillId and proficiencyBonus', async () => {
+  it('answers 404 to the removed skills upsert route', async () => {
     const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ constitutionProficiency: 'especialista' }),
-    );
-    vi.mocked(characters.findSkillById).mockResolvedValue(makeSkillSummary());
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    vi.mocked(characters.upsertSkill).mockResolvedValue(makeSkill());
     const app = await buildTestApp(makeServices(characters, makeMembership()));
 
     const res = await app.inject({
@@ -417,13 +408,7 @@ describe('character routes', () => {
       headers: { cookie: `token=${makeToken(app)}` },
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(characters.upsertSkill).toHaveBeenCalledWith({
-      characterId: 'char-1',
-      skillId: SKILL_ID,
-      proficiencyBonus: 3,
-      deriveLimits: expect.any(Function),
-    });
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -996,28 +981,6 @@ describe('character sheet creation contract', () => {
     const res = await patchCharacter({ nickname: 'Renamed' });
 
     expect(res.statusCode).toBe(200);
-  });
-
-  it('rejects a skill bonus above the cap', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ np: 20, constitutionProficiency: 'versado' }),
-    );
-    vi.mocked(characters.findSkillById).mockResolvedValue(makeSkillSummary());
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([]);
-    const app = await buildTestApp(makeServices(characters, makeMembership()));
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/characters/char-1/skills',
-      payload: { skillId: SKILL_ID, proficiencyBonus: 21 },
-      headers: { cookie: `token=${makeToken(app)}` },
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.message).toBe(
-      'Bônus de Vitalidade acima do limite de +20.',
-    );
   });
 });
 

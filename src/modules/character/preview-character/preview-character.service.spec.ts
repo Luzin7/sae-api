@@ -239,6 +239,5 @@ describe('PreviewCharacterService', () => {
 
     expect(characters.create).not.toHaveBeenCalled();
     expect(characters.save).not.toHaveBeenCalled();
-    expect(characters.upsertSkill).not.toHaveBeenCalled();
   });
 });

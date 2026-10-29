@@ -122,7 +122,7 @@ Read responses carry a derived `advancement` object: `GET /characters/mine`, `GE
 | Master | Read any sheet in their game; `PATCH /characters/:id` (general fields, NP, attributes, personality and posture); `PATCH /characters/:id/hp`; `PATCH /characters/:id/pe`; `character.hp-change` / `character.pe-change` over WS. |
 | Player | Own character's narrative fields and items (never HP or PE: only the Mestre changes them, `403` otherwise); points only through `POST /characters/:id/advancement`; delete their own character. Cannot change NP (`403`, `Apenas o mestre pode alterar o NP.`). Cannot send any attribute through `PATCH /characters/:id` (`403`, `Use Evoluir personagem para distribuir pontos.`) nor `personality`/`posture` (`403`, `Só o Mestre muda personalidade e postura.`). |
 
-- Master write access is still owner-only for adding, updating and deleting items, upserting skills and deleting a player's character.
+- Master write access is still owner-only for adding, updating and deleting items and deleting a player's character.
 - The master read widening below does not extend any write beyond the table above.
 
 The master can also read `GET /characters/:id`, `GET /characters/:id/items`, `GET /characters/:id/skills` and `GET /characters/:id/sheet` for characters in their game.
@@ -138,7 +138,7 @@ The master can also read `GET /characters/:id`, `GET /characters/:id/items`, `GE
 - `character.np-changed` (`{ "characterId": "uuid", "oldNp": 3, "newNp": 4 }`) is pushed to the game room after `PATCH /characters/:id` changes NP (Mestre only). Nothing is pushed when NP is unchanged or the save fails (including a `409` version conflict). Refetch the sheet on receipt: `maxHp`, `bExp` and the attribute and skill pools change with NP. Best-effort: no active session, no frame.
 - Lowering NP below what is already spent answers `400 VALIDATION` (never `409`) with a message naming each item, e.g. `Não dá para descer: Perícias de Cognição usam 14 de 10. Pontos de Atributo usam 22 de 20.`; nothing is written.
 - `character.advanced` (`{ "characterId": "uuid" }`) is pushed to the game room after `POST /characters/:id/advancement` succeeds. Refetch the sheet on receipt. Nothing is pushed when the request fails (including `409`). Best-effort: no active session, no frame.
-- Items and skills are not pushed; refetch after those mutations.
+- Items are not pushed; refetch after those mutations.
 
 ### 3.3.1 Advancement (add-only spend)
 
@@ -154,6 +154,8 @@ The master can also read `GET /characters/:id`, `GET /characters/:id/items`, `GE
 - `maxHp` is recomputed from Constituição and Vitalidade, `maxEffort` from Condicionamento. Current PS and PE are kept, only clamped down if the new limit is lower. NP and `bExp` are untouched.
 - `version` is the sheet version the client read; a stale one answers `409`, so a replay of the same body also answers `409`.
 - Answers `200 { "character": { ... } }` with the same shape as `GET /characters/:id`, including `advancement` and the bumped `version`.
+
+`POST /characters/:id/skills` was removed (`404`); skill points are spent only here.
 
 ### 3.4 Legacy data
 
@@ -343,6 +345,6 @@ WS frame: `{ "type": "error", "error": { "code", "message" } }`.
 - **Multiple characters per player:** `characterIds` can hold several ids; choose or default to the oldest, and keep the choice consistent.
 - **Legacy nulls:** `heightCm`, `weightKg` and `size` may be `null`; do not assume numeric values.
 - **Roster push is best-effort:** no frame is sent when no active session exists or when the push fails; refetch `GET /games/:id/players` on reconnect.
-- **Master read widening and write scope:** the master can read sheets of characters in their game and can write general fields, NP, HP and PE; items, skills and deleting a player's character remain owner-only.
+- **Master read widening and write scope:** the master can read sheets of characters in their game and can write general fields, NP, HP and PE; items and deleting a player's character remain owner-only.
 - **PE push is best-effort over REST:** `character.pe-changed` from `PATCH /characters/:id/pe` goes through the game-session notifier (no active session, no frame); refetch on reconnect.
 - **HP and PE pushed:** `character.hp-changed` and `character.pe-changed` are pushed character events; handle them independently of sheet refetches.

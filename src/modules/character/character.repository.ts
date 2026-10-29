@@ -13,7 +13,6 @@ import type {
   UpdateCharacterInput,
   UpdateSheetCommand,
   UpdateItemInput,
-  UpsertSkillCommand,
 } from './character.entity.js';
 
 export interface CharacterRepository {
@@ -39,9 +38,4 @@ export interface CharacterRepository {
   findSkillSpend(characterIds: readonly string[]): Promise<SkillSpendRow[]>;
   findSkillById(skillId: string): Promise<SkillSummary | null>;
   findSkillsByIds(ids: readonly string[]): Promise<SkillSummary[]>;
-  /**
-   * Upserts the skill and, in the same transaction, applies the limits the
-   * command derives, clamping current HP and PE to them.
-   */
-  upsertSkill(command: UpsertSkillCommand): Promise<CharacterSkill>;
 }

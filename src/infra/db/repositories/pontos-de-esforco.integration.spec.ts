@@ -2,18 +2,9 @@ import { readFileSync } from 'node:fs';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { integrationEnabled } from '@test/integration-env.js';
-import {
-  createSeed,
-  skillIdByName,
-  type SeededTable,
-} from '@test/integration-db.js';
+import { createSeed, type SeededTable } from '@test/integration-db.js';
 import { db } from '@infra/db/index.js';
-import {
-  character,
-  characterSkill,
-  combatant,
-  sessionLog,
-} from '@infra/db/schema.js';
+import { character, combatant, sessionLog } from '@infra/db/schema.js';
 import { InMemoryMessageBus } from '@modules/chat/chat.bus.js';
 import { NextTurnService } from '@modules/chat/next-turn/next-turn.service.js';
 import { StartCombatService } from '@modules/chat/start-combat/start-combat.service.js';
@@ -569,66 +560,6 @@ describe.skipIf(!integrationEnabled)('pontos de esforco (real DB)', () => {
       await advance(0);
 
       expect(await efforts(ids)).toEqual({ a: 2, b: 2, c: 0, m1: 2, m2: 0 });
-    });
-  });
-
-  describe('skill limits', () => {
-    it('Condicionamento +7 raises maxEffort to 27 and clamps nothing', async () => {
-      const row = await seedCharacter(table, { currentEffort: 4 });
-      const skillId = await skillIdByName('Condicionamento');
-
-      await characters.upsertSkill({
-        characterId: row.id,
-        skillId,
-        proficiencyBonus: 7,
-        deriveLimits: () => ({ maxHp: row.maxHp, maxEffort: 27 }),
-      });
-
-      const after = await readCharacter(row.id);
-      expect(after.maxEffort).toBe(27);
-      expect(after.currentEffort).toBe(4);
-      expect(after.version).toBe(1);
-    });
-
-    it('lowering the limit clamps current PE and PS in SQL without PS loss', async () => {
-      const row = await seedCharacter(table, {
-        currentEffort: 25,
-        maxEffort: 27,
-        currentHp: 26,
-      });
-      const skillId = await skillIdByName('Condicionamento');
-
-      await characters.upsertSkill({
-        characterId: row.id,
-        skillId,
-        proficiencyBonus: 2,
-        deriveLimits: () => ({ maxHp: 20, maxEffort: 22 }),
-      });
-
-      const after = await readCharacter(row.id);
-      expect(after.maxEffort).toBe(22);
-      expect(after.currentEffort).toBe(22);
-      expect(after.currentHp).toBe(20);
-    });
-
-    it('a skill that does not move the limits leaves the row untouched', async () => {
-      const row = await seedCharacter(table);
-      const skillId = await skillIdByName('Condicionamento');
-
-      await characters.upsertSkill({
-        characterId: row.id,
-        skillId,
-        proficiencyBonus: 1,
-        deriveLimits: () => null,
-      });
-
-      const after = await readCharacter(row.id);
-      expect(after.version).toBe(0);
-      const [skillRow] = await db
-        .select()
-        .from(characterSkill)
-        .where(eq(characterSkill.characterId, row.id));
-      expect(skillRow?.proficiencyBonus).toBe(1);
     });
   });
 
