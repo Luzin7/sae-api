@@ -10,6 +10,7 @@ import {
 import { resolveHeight, resolveWeight } from '../character.appearance.js';
 import { assertAttributeBudget } from '../character.attributes.js';
 import { requireEditableCharacter } from '../character.authorization.js';
+import { assertNpReductionFits } from '../character.np-reduction.js';
 import { bondsPatch } from '../character.bonds.js';
 import {
   deriveProficiencies,
@@ -138,13 +139,25 @@ export class UpdateCharacterService {
     if (input.np !== undefined && !isMaster) throw new NpMasterOnlyError();
 
     const { version, ...request } = input;
+    let oldNp: number | undefined;
     const updated = await this.characters.updateSheet({
       id,
       expectedVersion: version,
-      decide: (current, skills) => this.decide(current, skills, request),
+      decide: (current, skills) => {
+        oldNp = current.np;
+
+        return this.decide(current, skills, request);
+      },
     });
 
     await this.notifier.notifyRosterChanged(updated.gameId);
+    if (oldNp === undefined || oldNp === updated.np) return updated;
+
+    await this.notifier.notifyNpChanged(updated.gameId, {
+      characterId: updated.id,
+      oldNp,
+      newNp: updated.np,
+    });
 
     return updated;
   }
@@ -156,9 +169,15 @@ export class UpdateCharacterService {
   ): SheetChanges {
     const attributes = mergeAttributes(character, input);
     const np = input.np ?? character.np;
-    assertAttributeBudget(np, attributes);
-
     const proficiencies = resolveProficiencies(character, input);
+    assertNpReductionFits({
+      oldNp: character.np,
+      newNp: np,
+      attributes,
+      proficiencies,
+      skills,
+    });
+    assertAttributeBudget(np, attributes);
     assertSkillPools(proficiencies, np, skills);
 
     const appearance = resolveAppearance(character, input, this.rng);

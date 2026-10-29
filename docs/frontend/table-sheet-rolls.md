@@ -113,6 +113,8 @@ The master can also read `GET /characters/:id`, `GET /characters/:id/items`, `GE
 - Refetch after mutations.
 - The backend pushes `character.hp-changed` (`{ "characterId": "uuid", "oldHp": 10, "newHp": 7 }`) when HP changes through REST or the WS force path.
 - `character.pe-changed` (`{ "characterId": "uuid", "oldPe": 5, "newPe": 8 }`) is pushed whenever PE changes: `character.pe-change` frame, `PATCH /characters/:id/pe`, or per-turn recovery. See section 3.5 (PE) and 3.6 (PS).
+- `character.np-changed` (`{ "characterId": "uuid", "oldNp": 3, "newNp": 4 }`) is pushed to the game room after `PATCH /characters/:id` changes NP (Mestre only). Nothing is pushed when NP is unchanged or the save fails (including a `409` version conflict). Refetch the sheet on receipt: `maxHp`, `bExp` and the attribute and skill pools change with NP. Best-effort: no active session, no frame.
+- Lowering NP below what is already spent answers `400 VALIDATION` (never `409`) with a message naming each item, e.g. `Não dá para descer: Perícias de Cognição usam 14 de 10. Pontos de Atributo usam 22 de 20.`; nothing is written.
 - Items and skills are not pushed; refetch after those mutations.
 
 ### 3.4 Legacy data

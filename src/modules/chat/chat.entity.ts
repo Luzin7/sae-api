@@ -85,6 +85,12 @@ export type RealtimeEvent =
       newPe: number;
     }
   | {
+      type: 'character.np-changed';
+      characterId: string;
+      oldNp: number;
+      newNp: number;
+    }
+  | {
       type: 'master.narration';
       playerId: string;
       playerName: string;

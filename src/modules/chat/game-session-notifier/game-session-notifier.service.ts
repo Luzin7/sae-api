@@ -2,6 +2,7 @@ import type {
   EffortChanged,
   GameSessionNotifier,
   HpChanged,
+  NpChanged,
 } from '@shared/game-session/game-session-notifier.contract.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
@@ -69,6 +70,15 @@ export class GameSessionNotifierService implements GameSessionNotifier {
       characterId: change.characterId,
       oldPe: change.oldPe,
       newPe: change.newPe,
+    });
+  }
+
+  async notifyNpChanged(gameId: string, change: NpChanged): Promise<void> {
+    await this.publish(gameId, {
+      type: 'character.np-changed',
+      characterId: change.characterId,
+      oldNp: change.oldNp,
+      newNp: change.newNp,
     });
   }
 
