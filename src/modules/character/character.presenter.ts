@@ -34,7 +34,7 @@ export interface CharacterResponse {
   afflictions: string[];
   socialClass: string | null;
   vaalaques: number;
-  bonds: string | null;
+  bonds: string[];
   personality: string | null;
   posture: string | null;
   createdAt: string;

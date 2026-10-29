@@ -47,7 +47,7 @@ export function makeCharacter(overrides: Partial<Character> = {}): Character {
     afflictions: [],
     socialClass: 'plebeu',
     vaalaques: 0,
-    bonds: null,
+    bonds: [],
     personality: null,
     posture: null,
     createdAt: new Date('2024-01-01T00:00:00.000Z'),

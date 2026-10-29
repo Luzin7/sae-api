@@ -1,5 +1,5 @@
 {
-  "id": "c12bfae0-fb05-4a27-aecc-1895769f4f6b",
+  "id": "7dd0e787-c979-444c-bb07-b88ffc029539",
   "prevId": "c14f1892-1c48-4b39-8e07-273f43d3c18c",
   "version": "7",
   "dialect": "postgresql",
@@ -871,7 +871,7 @@
         },
         "bonds": {
           "name": "bonds",
-          "type": "text",
+          "type": "text[]",
           "primaryKey": false,
           "notNull": false
         },
@@ -1182,7 +1182,7 @@
           "name": "game_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "name": {
           "name": "name",
@@ -1295,7 +1295,7 @@
           "name": "created_by",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -1318,21 +1318,6 @@
           "columns": [
             {
               "expression": "game_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "monster_owner_idx": {
-          "name": "monster_owner_idx",
-          "columns": [
-            {
-              "expression": "created_by",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1492,72 +1477,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
-        },
-        "current_hp": {
-          "name": "current_hp",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "max_hp": {
-          "name": "max_hp",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "current_effort": {
-          "name": "current_effort",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "max_effort": {
-          "name": "max_effort",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "afflictions": {
-          "name": "afflictions",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cognition": {
-          "name": "cognition",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "psyche": {
-          "name": "psyche",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "instinct": {
-          "name": "instinct",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "constitution": {
-          "name": "constitution",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "motricity": {
-          "name": "motricity",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "perception": {
-          "name": "perception",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",

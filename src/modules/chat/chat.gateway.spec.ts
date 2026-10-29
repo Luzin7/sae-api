@@ -119,6 +119,7 @@ function buildServices(bus: InMemoryMessageBus) {
       combatants,
       combat,
       bus,
+      fixedRng(10),
     ),
     rollInitiative: new RollInitiativeService(
       messages,

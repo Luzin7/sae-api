@@ -75,7 +75,7 @@ export function characterRepository(): CharacterRepository {
             afflictions: input.afflictions ?? [],
             socialClass: input.socialClass,
             vaalaques: input.vaalaques,
-            bonds: input.bonds ?? null,
+            bonds: input.bonds ?? [],
             personality: input.personality,
             posture: input.posture,
           })

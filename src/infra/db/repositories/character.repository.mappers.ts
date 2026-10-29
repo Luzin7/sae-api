@@ -53,7 +53,7 @@ export function toCharacter(row: CharacterRow): Character {
     afflictions: row.afflictions ?? [],
     socialClass: row.socialClass,
     vaalaques: row.vaalaques,
-    bonds: row.bonds,
+    bonds: row.bonds ?? [],
     personality: row.personality,
     posture: row.posture,
     createdAt: row.createdAt,

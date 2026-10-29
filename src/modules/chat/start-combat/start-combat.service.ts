@@ -12,6 +12,7 @@ import type {
   CombatantSource,
 } from '../combatant-source.contract.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
+import type { Rng } from '@shared/dice/roll.js';
 import type { CombatStatePayload } from '@modules/session/session.entity.js';
 
 export interface StartCombatInput {
@@ -69,6 +70,7 @@ export class StartCombatService {
     private readonly combatants: CombatantSource,
     private readonly combat: CombatRepository,
     private readonly bus: InMemoryMessageBus,
+    private readonly rng: Rng,
   ) {}
 
   async execute(input: StartCombatInput): Promise<CombatStatePayload> {
@@ -85,6 +87,7 @@ export class StartCombatService {
     const state = await this.combat.start(
       input.sessionId,
       seeds,
+      () => this.rng(1, 20),
       input.playerId,
     );
 

@@ -270,6 +270,7 @@ export function buildContainer(deps: {
         ),
         deleteCharacter: new DeleteCharacterService(
           characters,
+          gameAccess,
           sessionNotifier,
         ),
         updateVitals: new UpdateVitalsService(
@@ -333,6 +334,7 @@ export function buildContainer(deps: {
           combatants,
           combat,
           bus,
+          systemRng,
         ),
         rollInitiative: new RollInitiativeService(
           chatMessages,

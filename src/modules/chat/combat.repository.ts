@@ -45,6 +45,7 @@ export interface CombatRepository {
   start(
     sessionId: string,
     combatants: CombatantSeed[],
+    roll: () => number,
     playerId: string | null,
   ): Promise<CombatStatePayload>;
   addCombatant(

@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type {
   CombatStatePayload,
   CombatantPayload,
@@ -15,15 +15,16 @@ import type {
   CombatantSeed,
   InstanceVitalsPatch,
 } from '@modules/chat/combat.repository.js';
+import { pickUniqueValue } from '@shared/dice/initiative.js';
 import { systemRng } from '@shared/dice/random.js';
 import { db, type Database } from '../index.js';
 import { combatant, combatState } from '../schema.js';
 import { insertSessionLog } from './session-log.js';
 
+const MAX_FACES = 20;
+
 type CombatStateRow = typeof combatState.$inferSelect;
 type CombatantRow = typeof combatant.$inferSelect;
-
-const MAX_FACES = 20;
 
 function toEntry(row: CombatantRow): CombatantPayload {
   return {
@@ -47,16 +48,67 @@ function toEntry(row: CombatantRow): CombatantPayload {
   };
 }
 
-export function pickUniqueValue(taken: number[], roll: () => number): number {
-  for (let attempt = 0; attempt < MAX_FACES; attempt++) {
-    const value = roll();
-    if (!taken.includes(value)) return value;
-  }
-  for (let value = 1; value <= MAX_FACES; value++) {
-    if (!taken.includes(value)) return value;
+function combatantKey(kind: CombatantKind, refId: string): string {
+  return `${kind}:${refId}`;
+}
+
+export function planCombatants(
+  existing: CombatantRow[],
+  seeds: CombatantSeed[],
+): {
+  remove: string[];
+  insert: CombatantSeed[];
+  rename: { id: string; name: string }[];
+} {
+  const seedByKey = new Map(
+    seeds.map((seed) => [combatantKey(seed.kind, seed.refId), seed]),
+  );
+  const existingKeys = new Set(
+    existing.map((row) => combatantKey(row.kind, row.refId)),
+  );
+
+  const remove: string[] = [];
+  const rename: { id: string; name: string }[] = [];
+  for (const row of existing) {
+    const seed = seedByKey.get(combatantKey(row.kind, row.refId));
+    if (!seed) {
+      remove.push(row.id);
+      continue;
+    }
+    if (seed.name !== row.name) rename.push({ id: row.id, name: seed.name });
   }
 
-  return roll();
+  const insert = seeds.filter(
+    (seed) => !existingKeys.has(combatantKey(seed.kind, seed.refId)),
+  );
+
+  return { remove, insert, rename };
+}
+
+export function assignMonsterRolls(
+  rows: CombatantRow[],
+  seeds: CombatantSeed[],
+  roll: () => number,
+): { id: string; value: number }[] {
+  const rowByKey = new Map(
+    rows.map((row) => [combatantKey(row.kind, row.refId), row]),
+  );
+  const taken = rows
+    .filter((row) => row.hasRolled && row.initiativeValue !== null)
+    .map((row) => row.initiativeValue as number);
+
+  const assigned: { id: string; value: number }[] = [];
+  for (const seed of seeds) {
+    if (seed.kind !== 'monster') continue;
+    const row = rowByKey.get(combatantKey(seed.kind, seed.refId));
+    if (!row || row.hasRolled) continue;
+
+    const value = pickUniqueValue(taken, roll);
+    taken.push(value);
+    assigned.push({ id: row.id, value });
+  }
+
+  return assigned;
 }
 
 export function orderEntries(rows: CombatantRow[]): CombatantPayload[] {
@@ -179,6 +231,7 @@ export function combatRepository(database: Database = db): CombatRepository {
     async start(
       sessionId: string,
       seeds: CombatantSeed[],
+      roll: () => number,
       playerId: string | null,
     ): Promise<CombatStatePayload> {
       return database.transaction(async (tx) => {
@@ -209,11 +262,25 @@ export function combatRepository(database: Database = db): CombatRepository {
           .where(eq(combatState.sessionId, sessionId))
           .for('update');
 
-        await tx.delete(combatant).where(eq(combatant.sessionId, sessionId));
-        if (seeds.length > 0) {
+        const existing = await tx
+          .select()
+          .from(combatant)
+          .where(eq(combatant.sessionId, sessionId));
+        const plan = planCombatants(existing, seeds);
+
+        if (plan.remove.length > 0) {
+          await tx.delete(combatant).where(inArray(combatant.id, plan.remove));
+        }
+        for (const change of plan.rename) {
+          await tx
+            .update(combatant)
+            .set({ name: change.name })
+            .where(eq(combatant.id, change.id));
+        }
+        if (plan.insert.length > 0) {
           await tx
             .insert(combatant)
-            .values(seeds.map((seed) => toSeed(sessionId, seed)));
+            .values(plan.insert.map((seed) => toSeed(sessionId, seed)));
         }
 
         const rows = await tx
@@ -221,7 +288,20 @@ export function combatRepository(database: Database = db): CombatRepository {
           .from(combatant)
           .where(eq(combatant.sessionId, sessionId));
 
-        const next = toState(state, rows);
+        const assignments = assignMonsterRolls(rows, seeds, roll);
+        for (const assignment of assignments) {
+          await tx
+            .update(combatant)
+            .set({ initiativeValue: assignment.value, hasRolled: true })
+            .where(eq(combatant.id, assignment.id));
+        }
+
+        const persisted = await tx
+          .select()
+          .from(combatant)
+          .where(eq(combatant.sessionId, sessionId));
+
+        const next = toState(state, persisted);
         await insertSessionLog(tx, {
           sessionId,
           playerId,
@@ -320,13 +400,12 @@ export function combatRepository(database: Database = db): CombatRepository {
           .returning();
         if (!updated) throw new CombatantNotFoundError();
 
-        const fresh = rows.map((row) =>
-          row.id === target.id
-            ? { ...row, initiativeValue: value, hasRolled: true }
-            : row,
-        );
+        const persisted = await tx
+          .select()
+          .from(combatant)
+          .where(eq(combatant.sessionId, sessionId));
 
-        const next = toState(state, fresh);
+        const next = toState(state, persisted);
         await insertSessionLog(tx, {
           sessionId,
           playerId,

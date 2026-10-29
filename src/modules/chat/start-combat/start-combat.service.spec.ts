@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryMessageBus } from '../chat.bus.js';
 import { MasterOnlyError } from '../chat.errors.js';
 import {
+  fixedRng,
   makeChatMessages,
   makeCombat,
   makeCombatants,
   makeGameAccess,
 } from '../chat.testkit.js';
+import type { Rng } from '@shared/dice/roll.js';
 import type { CombatStatePayload } from '@modules/session/session.entity.js';
 import { StartCombatService } from './start-combat.service.js';
 
@@ -37,7 +39,7 @@ const STATE: CombatStatePayload = {
   ],
 };
 
-function build() {
+function build(rng: Rng = fixedRng(7)) {
   const messages = makeChatMessages();
   const access = makeGameAccess();
   const combatants = makeCombatants();
@@ -49,6 +51,7 @@ function build() {
     combatants,
     combat,
     bus,
+    rng,
   );
 
   vi.mocked(messages.findSession).mockResolvedValue({
@@ -97,6 +100,7 @@ describe('StartCombatService', () => {
           perception: null,
         },
       ],
+      expect.any(Function),
       'p1',
     );
     expect(vi.mocked(combat.start).mock.invocationCallOrder[0]).toBeLessThan(
@@ -176,8 +180,45 @@ describe('StartCombatService', () => {
           perception: 0,
         },
       ],
+      expect.any(Function),
       'p1',
     );
+  });
+
+  it('passes a plain d20 thunk to combat.start and never rolls initiative itself', async () => {
+    const rng = vi.fn(() => 7);
+    const { combatants, combat, service } = build(rng);
+    vi.mocked(combatants.listByGame).mockResolvedValue([
+      { kind: 'monster', refId: 'mon-1', name: 'Goblin', ownerPlayerId: null },
+    ]);
+    vi.mocked(combat.start).mockResolvedValue(STATE);
+
+    await service.execute({ playerId: 'p1', sessionId: 'session-1' });
+
+    const call = vi.mocked(combat.start).mock.calls[0];
+    expect(call?.[0]).toBe('session-1');
+    expect(call?.[1]).toEqual([
+      {
+        kind: 'monster',
+        refId: 'mon-1',
+        name: 'Goblin',
+        currentHp: null,
+        maxHp: null,
+        currentEffort: null,
+        maxEffort: null,
+        afflictions: [],
+        cognition: null,
+        psyche: null,
+        instinct: null,
+        constitution: null,
+        motricity: null,
+        perception: null,
+      },
+    ]);
+    expect(call?.[2]?.()).toBe(7);
+    expect(call?.[3]).toBe('p1');
+    expect(rng).toHaveBeenCalledWith(1, 20);
+    expect(combat.rollInitiative).not.toHaveBeenCalled();
   });
 
   it('forbids a non-master', async () => {

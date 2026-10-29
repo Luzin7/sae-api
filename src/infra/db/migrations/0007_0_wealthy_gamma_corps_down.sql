@@ -1,4 +1,4 @@
--- Reverses 0006_perfect_puck. Refuses while reusable entries (game_id IS NULL)
+-- Reverses 0007_wealthy_gamma_corps. Refuses while reusable entries (game_id IS NULL)
 -- exist, naming their count.
 DO $$ DECLARE reusable_count integer; BEGIN
   SELECT count(*) INTO reusable_count FROM "monster" WHERE "game_id" IS NULL;

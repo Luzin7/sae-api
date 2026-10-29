@@ -51,7 +51,7 @@ describe('0005_testes_sessao', () => {
 });
 
 describe('reusable bestiary entries migration', () => {
-  const sql = migration('./0006_perfect_puck.sql');
+  const sql = migration('./0007_wealthy_gamma_corps.sql');
 
   it('backfills created_by before enforcing NOT NULL', () => {
     const backfilled = sql.search(/UPDATE "monster"[\s\S]*?SET "created_by"/);
