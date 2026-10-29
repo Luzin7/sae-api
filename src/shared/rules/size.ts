@@ -3,22 +3,25 @@ export const HEIGHT_EXACT_MAX = 250;
 export const WEIGHT_EXACT_MIN = 50;
 export const WEIGHT_EXACT_MAX = 150;
 
+export const BELOW_EXACT_DIE_SIDES = 10;
+export const ABOVE_EXACT_DIE_SIDES = 20;
+
 export type SizeExtremeBand = 'min' | 'max';
 
 export function rollHeight(
   band: SizeExtremeBand,
   rng: (min: number, max: number) => number,
 ): number {
-  if (band === 'min') return HEIGHT_EXACT_MIN - rng(1, 10);
-  return HEIGHT_EXACT_MAX + rng(1, 20);
+  if (band === 'min') return HEIGHT_EXACT_MIN - rng(1, BELOW_EXACT_DIE_SIDES);
+  return HEIGHT_EXACT_MAX + rng(1, ABOVE_EXACT_DIE_SIDES);
 }
 
 export function rollWeight(
   band: SizeExtremeBand,
   rng: (min: number, max: number) => number,
 ): number {
-  if (band === 'min') return WEIGHT_EXACT_MIN - rng(1, 10);
-  return WEIGHT_EXACT_MAX + rng(1, 20);
+  if (band === 'min') return WEIGHT_EXACT_MIN - rng(1, BELOW_EXACT_DIE_SIDES);
+  return WEIGHT_EXACT_MAX + rng(1, ABOVE_EXACT_DIE_SIDES);
 }
 
 export interface SizeFactorBand {

@@ -10,7 +10,7 @@ import {
   makeCharacterRepository,
   makeSkillSummary,
 } from '../character.testkit.js';
-import { bExp, hitDie, maxEffort, maxHp } from '../character.stats.js';
+import { bExp, hitDie, maxEffort, maxHp } from '@shared/rules/vitals.js';
 import type { PreviewCharacterBody } from '../character.schemas.js';
 import { PreviewCharacterService } from './preview-character.service.js';
 

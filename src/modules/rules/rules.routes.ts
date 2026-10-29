@@ -22,10 +22,11 @@ import {
   SOCIAL_DISTANCE_MODIFIERS,
   WEIGHT_FACTORS,
 } from '@shared/rules/index.js';
+import { derivationTables, MAX_NP } from '@shared/rules/derivation-tables.js';
 import { startingWealthRange } from '@shared/rules/social-classes.js';
 import type { SkillCatalog } from './skill-catalog.contract.js';
 
-const MAX_NP = 20;
+const DERIVATION_TABLES = derivationTables();
 /** Index 0 is unused; index NP holds the attribute budget for that NP. */
 const ATTRIBUTE_BUDGET_BY_NP: readonly number[] = [
   0,
@@ -73,5 +74,6 @@ export default async function rulesRoutes(
     hairColorBands: HAIR_COLOR_BANDS,
     motivations: MOTIVATIONS,
     afflictions: AFFLICTIONS,
+    ...DERIVATION_TABLES,
   }));
 }

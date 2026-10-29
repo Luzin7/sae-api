@@ -101,4 +101,66 @@ describe('GET /rules', () => {
       ['miseravel', { min: 40, max: 160 }],
     ]);
   });
+
+  it('serves the derivation tables with exact values', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/rules',
+      headers: { authorization: `Bearer ${token()}` },
+    });
+
+    const body = response.json();
+    expect(body.bodyDimensions.height).toEqual({
+      unit: 'cm',
+      exact: { min: 150, max: 250 },
+      below: { min: 140, max: 149 },
+      above: { min: 251, max: 270 },
+    });
+    expect(body.bodyDimensions.weight).toEqual({
+      unit: 'kg',
+      exact: { min: 50, max: 150 },
+      below: { min: 40, max: 49 },
+      above: { min: 151, max: 170 },
+    });
+    expect(body.hitDieByConstitution).toEqual({
+      '-5': { die: 'd6', max: 6 },
+      '-4': { die: 'd6', max: 6 },
+      '-3': { die: 'd8', max: 8 },
+      '-2': { die: 'd8', max: 8 },
+      '1': { die: 'd10', max: 10 },
+      '2': { die: 'd10', max: 10 },
+      '3': { die: 'd12', max: 12 },
+      '4': { die: 'd12', max: 12 },
+      '5': { die: 'd20', max: 20 },
+    });
+    expect(body.attributeDice).toEqual({
+      '-5': { dice: 5, keep: 'worst' },
+      '-4': { dice: 4, keep: 'worst' },
+      '-3': { dice: 3, keep: 'worst' },
+      '-2': { dice: 2, keep: 'worst' },
+      '1': { dice: 1, keep: 'best' },
+      '2': { dice: 2, keep: 'best' },
+      '3': { dice: 3, keep: 'best' },
+      '4': { dice: 4, keep: 'best' },
+      '5': { dice: 5, keep: 'best' },
+    });
+    const pools = body.proficiencyPoolByNp;
+    expect([1, 20].map((np) => pools.imperito[np])).toEqual([2, 20]);
+    expect([1, 20].map((np) => pools.competente[np])).toEqual([6, 60]);
+    expect([1, 20].map((np) => pools.versado[np])).toEqual([10, 100]);
+    expect([1, 20].map((np) => pools.especialista[np])).toEqual([14, 140]);
+    expect(pools.especialista[3]).toBe(28);
+    expect(body.skillCapByLevel).toEqual({
+      imperito: 20,
+      competente: 20,
+      versado: 20,
+      especialista: 30,
+    });
+    expect(body.bExpByNp).toHaveLength(21);
+    expect([1, 2, 20].map((np) => body.bExpByNp[np])).toEqual([0, 1, 10]);
+    expect(body.vitalFormulas).toEqual({
+      maxHp: { base: 20, skill: 'Vitalidade' },
+      maxEffort: { base: 20, skill: 'Condicionamento' },
+    });
+  });
 });

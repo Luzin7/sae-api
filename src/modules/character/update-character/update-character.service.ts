@@ -1,17 +1,22 @@
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import type { GameSessionNotifier } from '@shared/game-session/game-session-notifier.contract.js';
+import {
+  bExp,
+  CONDICIONAMENTO,
+  maxEffort,
+  maxHp,
+  VITALIDADE,
+} from '@shared/rules/vitals.js';
 import { resolveHeight, resolveWeight } from '../character.appearance.js';
 import { assertAttributeBudget } from '../character.attributes.js';
 import { requireEditableCharacter } from '../character.authorization.js';
 import { bondsPatch } from '../character.bonds.js';
 import {
-  CONDICIONAMENTO,
   deriveProficiencies,
   deriveSize,
   deriveVaalaques,
   proficiencyBonus,
   type Rng,
-  VITALIDADE,
 } from '../character.derivation.js';
 import {
   type AttributeScores,
@@ -23,7 +28,6 @@ import {
 } from '../character.entity.js';
 import { NpMasterOnlyError } from '../character.errors.js';
 import type { CharacterRepository } from '../character.repository.js';
-import { bExp, maxEffort, maxHp } from '../character.stats.js';
 import { assertSkillPools } from '../skills/skill-allocation.js';
 
 type SheetRequest = Omit<

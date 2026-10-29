@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bExp, hitDie, maxEffort, maxHp } from './character.stats.js';
+import { bExp, hitDie, maxEffort, maxHp } from './vitals.js';
 
 describe('hitDie', () => {
   it('returns d6 for constitution -5..-4', () => {

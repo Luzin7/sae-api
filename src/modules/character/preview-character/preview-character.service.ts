@@ -8,29 +8,29 @@ import {
   proficiencyPool,
   type ProficiencyLevel,
 } from '@shared/rules/proficiency.js';
-import { attributePointsSpent } from '../character.attributes.js';
-import type { PreviewCharacterBody } from '../character.schemas.js';
 import {
+  bExp,
   CONDICIONAMENTO,
-  deriveProficiencies,
-  deriveSizeDetail,
-  proficiencyBonus,
-  type SizeDetail,
+  hitDie,
+  type HitDie,
+  maxEffort,
+  maxHp,
   VITALIDADE,
-} from '../character.derivation.js';
+} from '@shared/rules/vitals.js';
 import {
   startingWealthRange,
   type WealthRange,
 } from '@shared/rules/social-classes.js';
+import { attributePointsSpent } from '../character.attributes.js';
+import type { PreviewCharacterBody } from '../character.schemas.js';
+import {
+  deriveProficiencies,
+  deriveSizeDetail,
+  proficiencyBonus,
+  type SizeDetail,
+} from '../character.derivation.js';
 import type { AttributeScores } from '../character.entity.js';
 import type { CharacterRepository } from '../character.repository.js';
-import {
-  bExp,
-  hitDie,
-  maxEffort,
-  maxHp,
-  type HitDie,
-} from '../character.stats.js';
 import { proficiencyLevelFor } from '../skills/proficiency-field.js';
 import { resolveSkillAllocations } from '../skills/skill-allocation.js';
 

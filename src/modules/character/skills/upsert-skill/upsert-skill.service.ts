@@ -1,10 +1,11 @@
 import {
   CONDICIONAMENTO,
-  proficiencyBonus,
+  maxEffort,
+  maxHp,
   VITALIDADE,
-} from '../../character.derivation.js';
-import { maxEffort, maxHp } from '../../character.stats.js';
+} from '@shared/rules/vitals.js';
 import { proficiencyPool } from '@shared/rules/proficiency.js';
+import { proficiencyBonus } from '../../character.derivation.js';
 import { requireOwnedCharacter } from '../../character.authorization.js';
 import type {
   AttributeName,
