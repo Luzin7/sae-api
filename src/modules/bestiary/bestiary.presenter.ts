@@ -1,3 +1,4 @@
+import type { SizeCategoryKey } from '@shared/rules/size.js';
 import type { Monster } from './bestiary.entity.js';
 
 export interface MonsterResponse {
@@ -8,7 +9,7 @@ export interface MonsterResponse {
   maxHp: number;
   currentHp: number;
   maxEffort: number;
-  size: string | null;
+  size: SizeCategoryKey | null;
   cognition: number;
   psyche: number;
   instinct: number;

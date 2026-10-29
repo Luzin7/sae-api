@@ -50,8 +50,15 @@ export const WEIGHT_FACTORS: readonly SizeFactorBand[] = [
   { min: 151, max: null, factor: 5 },
 ];
 
-export type SizeCategoryKey =
-  'miudo' | 'pequeno' | 'medio' | 'grande' | 'enorme';
+export const SIZE_CATEGORY_KEYS = [
+  'miudo',
+  'pequeno',
+  'medio',
+  'grande',
+  'enorme',
+] as const;
+
+export type SizeCategoryKey = (typeof SIZE_CATEGORY_KEYS)[number];
 
 export interface SizeCategoryDefinition {
   key: SizeCategoryKey;
