@@ -1,9 +1,16 @@
+import {
+  CONDICIONAMENTO,
+  proficiencyBonus,
+  VITALIDADE,
+} from '../../character.derivation.js';
+import { maxEffort, maxHp } from '../../character.stats.js';
 import { proficiencyPool } from '@shared/rules/proficiency.js';
 import { requireOwnedCharacter } from '../../character.authorization.js';
 import type {
   AttributeName,
   CharacterSkill,
   UpsertSkillInput,
+  VitalLimitsDecision,
 } from '../../character.entity.js';
 import {
   SkillNotFoundError,
@@ -12,6 +19,23 @@ import {
 import type { CharacterRepository } from '../../character.repository.js';
 import { proficiencyLevelFor } from '../proficiency-field.js';
 import { assertSkillBonusCaps } from '../skill-allocation.js';
+
+const LIMIT_SKILLS: readonly string[] = [VITALIDADE, CONDICIONAMENTO];
+
+function limitsAfter(skillName: string): VitalLimitsDecision {
+  return (character, skills) => {
+    if (!LIMIT_SKILLS.includes(skillName)) return null;
+
+    return {
+      maxHp: maxHp(
+        character.np,
+        character.constitution,
+        proficiencyBonus(skills, VITALIDADE),
+      ),
+      maxEffort: maxEffort(proficiencyBonus(skills, CONDICIONAMENTO)),
+    };
+  };
+}
 
 export class UpsertSkillService {
   constructor(private readonly characters: CharacterRepository) {}
@@ -54,11 +78,12 @@ export class UpsertSkillService {
       );
     }
 
-    return this.characters.upsertSkill(
+    return this.characters.upsertSkill({
       characterId,
-      input.skillId,
-      input.proficiencyBonus,
-    );
+      skillId: input.skillId,
+      proficiencyBonus: input.proficiencyBonus,
+      deriveLimits: limitsAfter(skill.name),
+    });
   }
 
   private async spentOnAttribute(

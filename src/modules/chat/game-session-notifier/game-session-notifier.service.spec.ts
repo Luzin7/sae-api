@@ -91,6 +91,24 @@ describe('GameSessionNotifierService', () => {
     });
   });
 
+  it('publishes the pe change to the active session', async () => {
+    const { bus, notifier } = build();
+    const publish = vi.spyOn(bus, 'publish');
+
+    await notifier.notifyEffortChanged('game-1', {
+      characterId: 'char-1',
+      oldPe: 5,
+      newPe: 8,
+    });
+
+    expect(publish).toHaveBeenCalledWith('session:session-1', {
+      type: 'character.pe-changed',
+      characterId: 'char-1',
+      oldPe: 5,
+      newPe: 8,
+    });
+  });
+
   it('publishes the combat state of the active session', async () => {
     const { bus, combat, notifier } = build();
     const state: CombatStatePayload = {

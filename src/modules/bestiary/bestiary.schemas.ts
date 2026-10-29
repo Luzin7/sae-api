@@ -18,7 +18,6 @@ const SheetFields = {
   maxHp: z.number().int().positive(),
   maxEffort: z.number().int().positive(),
   currentHp: z.number().int().min(0).optional(),
-  currentEffort: z.number().int().min(0).optional(),
   size: z.string().max(30).nullable().optional(),
   cognition: AttributeSchema.default(-5),
   psyche: AttributeSchema.default(-5),

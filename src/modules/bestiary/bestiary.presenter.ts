@@ -8,7 +8,6 @@ export interface MonsterResponse {
   maxHp: number;
   currentHp: number;
   maxEffort: number;
-  currentEffort: number;
   size: string | null;
   cognition: number;
   psyche: number;
@@ -36,7 +35,6 @@ export const BestiaryPresenter = {
       maxHp: monster.maxHp,
       currentHp: monster.currentHp,
       maxEffort: monster.maxEffort,
-      currentEffort: monster.currentEffort,
       size: monster.size,
       cognition: monster.cognition,
       psyche: monster.psyche,

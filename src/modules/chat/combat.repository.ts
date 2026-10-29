@@ -1,4 +1,5 @@
 import type { CombatStatePayload } from '@modules/session/session.entity.js';
+import type { AfflictionKey } from '@shared/rules/afflictions.js';
 import type { CombatantKind } from './combatant-source.contract.js';
 
 export interface CombatantSeed {
@@ -29,10 +30,51 @@ export interface AdvanceTurnInput {
   expectedRound: number;
 }
 
-export interface InstanceVitalsPatch {
-  currentHp: number;
-  currentEffort: number;
-  afflictions?: string[];
+export interface CharacterEffortRecovery {
+  characterId: string;
+  oldEffort: number;
+  newEffort: number;
+}
+
+/** `recovered` lists only characters whose PE dropped; empty for a stale frame. */
+export interface AdvanceTurnResult {
+  state: CombatStatePayload;
+  recovered: CharacterEffortRecovery[];
+}
+
+export interface ChangeInstanceEffortInput {
+  sessionId: string;
+  monsterId: string;
+  delta: number;
+  playerId: string;
+}
+
+export interface InstanceEffortChange {
+  state: CombatStatePayload;
+  oldEffort: number;
+  newEffort: number;
+  oldHp: number;
+  newHp: number;
+}
+
+export interface ChangeInstanceHpInput {
+  sessionId: string;
+  monsterId: string;
+  delta: number;
+  playerId: string;
+}
+
+export interface SetInstanceAfflictionsInput {
+  sessionId: string;
+  monsterId: string;
+  afflictions: AfflictionKey[];
+  playerId: string;
+}
+
+export interface InstanceHpChange {
+  state: CombatStatePayload;
+  oldHp: number;
+  newHp: number;
 }
 
 /**
@@ -60,12 +102,20 @@ export interface CombatRepository {
     roll: () => number,
     playerId: string | null,
   ): Promise<CombatStatePayload>;
-  advanceTurn(input: AdvanceTurnInput): Promise<CombatStatePayload>;
-  saveInstanceVitals(
-    sessionId: string,
-    monsterId: string,
-    patch: InstanceVitalsPatch,
-    playerId: string,
-  ): Promise<void>;
+  /**
+   * On an actual advance, every combatant with PE except the one whose turn
+   * starts loses 1 PE inside the same transaction.
+   */
+  advanceTurn(input: AdvanceTurnInput): Promise<AdvanceTurnResult>;
+  /** Locks the instance row and applies the PE rule to its effort and HP. */
+  changeInstanceEffort(
+    input: ChangeInstanceEffortInput,
+  ): Promise<InstanceEffortChange>;
+  /** Locks the instance row and clamps its PS to 0..maxHp after the delta. */
+  changeInstanceHp(input: ChangeInstanceHpInput): Promise<InstanceHpChange>;
+  /** Replaces the afflictions list of the locked monster instance row. */
+  setInstanceAfflictions(
+    input: SetInstanceAfflictionsInput,
+  ): Promise<{ state: CombatStatePayload }>;
   end(sessionId: string, playerId: string | null): Promise<CombatStatePayload>;
 }

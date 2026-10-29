@@ -24,6 +24,8 @@ export interface AddMonsterInput {
   monsterId: string;
 }
 
+const STARTING_EFFORT = 0;
+
 function toMonsterSeed(monsterId: string, monster: MonsterRef): CombatantSeed {
   return {
     kind: 'monster',
@@ -31,7 +33,7 @@ function toMonsterSeed(monsterId: string, monster: MonsterRef): CombatantSeed {
     name: monster.name,
     currentHp: monster.currentHp,
     maxHp: monster.maxHp,
-    currentEffort: monster.currentEffort,
+    currentEffort: STARTING_EFFORT,
     maxEffort: monster.maxEffort,
     afflictions: [...monster.afflictions],
     cognition: monster.attributes.cognition,

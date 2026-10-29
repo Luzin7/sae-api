@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { AFFLICTION_KEYS } from '@shared/rules/afflictions.js';
+import { EffortDeltaSchema } from '@shared/rules/effort.js';
+import { HpDeltaSchema } from '@shared/rules/hp.js';
 
 export const MAX_CHAT_BODY_LENGTH = 2000;
 export const CHAT_HISTORY_LIMIT = 50;
@@ -60,7 +62,7 @@ const CombatantWireSchema = z.object({
  * Inbound frames. Validated at the gateway boundary; a malformed frame never
  * reaches a service. `v` is reserved so the protocol can evolve.
  *
- * `dice.roll` and `character.hp-update` carry ids only: attribute value, skill
+ * `dice.roll` and `character.hp-change` carry ids only: attribute value, skill
  * bonus and BExp are resolved server-side from the character.
  */
 export const InboundFrameSchema = z.discriminatedUnion('type', [
@@ -78,21 +80,21 @@ export const InboundFrameSchema = z.discriminatedUnion('type', [
     testId: UuidSchema.optional(),
   }),
   z.object({
-    type: z.literal('character.hp-update'),
+    type: z.literal('character.hp-change'),
     sessionId: UuidSchema,
     characterId: UuidSchema,
-    newHp: NonNegativeIntSchema,
+    delta: HpDeltaSchema,
+  }),
+  z.object({
+    type: z.literal('character.pe-change'),
+    sessionId: UuidSchema,
+    characterId: UuidSchema,
+    delta: EffortDeltaSchema,
   }),
   z.object({
     type: z.literal('master.broadcast'),
     sessionId: UuidSchema,
     text: z.string().min(1).max(MAX_CHAT_BODY_LENGTH),
-  }),
-  z.object({
-    type: z.literal('master.force-hp-update'),
-    sessionId: UuidSchema,
-    characterId: UuidSchema,
-    newHp: NonNegativeIntSchema,
   }),
   z.object({ type: z.literal('master.start-combat'), sessionId: UuidSchema }),
   z.object({
@@ -135,12 +137,22 @@ export const InboundFrameSchema = z.discriminatedUnion('type', [
     testId: UuidSchema,
   }),
   z.object({
-    type: z.literal('master.monster-vitals-update'),
+    type: z.literal('master.monster-hp-change'),
     sessionId: UuidSchema,
     monsterId: UuidSchema,
-    currentHp: NonNegativeIntSchema,
-    currentEffort: NonNegativeIntSchema,
-    afflictions: z.array(z.enum(AFFLICTION_KEYS)).optional(),
+    delta: HpDeltaSchema,
+  }),
+  z.object({
+    type: z.literal('master.monster-afflictions-update'),
+    sessionId: UuidSchema,
+    monsterId: UuidSchema,
+    afflictions: z.array(z.enum(AFFLICTION_KEYS)),
+  }),
+  z.object({
+    type: z.literal('master.monster-pe-change'),
+    sessionId: UuidSchema,
+    monsterId: UuidSchema,
+    delta: EffortDeltaSchema,
   }),
   z.object({
     type: z.literal('master.monster-attack'),
@@ -258,15 +270,6 @@ export const OutboundEventSchema = z.union([
     rolls: z.array(z.number().int()),
     result: z.number().int(),
     kind: z.enum(['best', 'worst', 'single']),
-  }),
-  z.object({
-    type: z.literal('session.monster-vitals'),
-    monsterId: z.string(),
-    currentHp: z.number().int(),
-    maxHp: z.number().int(),
-    currentEffort: z.number().int(),
-    maxEffort: z.number().int(),
-    afflictions: z.array(z.string()),
   }),
   z.object({
     type: z.literal('session.monster-attacked'),

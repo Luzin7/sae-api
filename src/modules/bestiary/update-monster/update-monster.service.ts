@@ -22,15 +22,9 @@ export class UpdateMonsterService {
     );
 
     const maxHp = input.maxHp ?? monster.maxHp;
-    const maxEffort = input.maxEffort ?? monster.maxEffort;
-
     return this.monsters.save(id, {
       ...input,
       currentHp: Math.min(input.currentHp ?? monster.currentHp, maxHp),
-      currentEffort: Math.min(
-        input.currentEffort ?? monster.currentEffort,
-        maxEffort,
-      ),
     });
   }
 }

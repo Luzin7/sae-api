@@ -64,6 +64,13 @@
       "when": 1793287569347,
       "tag": "0008_flowery_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793289719334,
+      "tag": "0009_pontos_de_esforco",
+      "breakpoints": true
     }
   ]
 }

@@ -118,6 +118,8 @@ export function makeCharacterRepository(): CharacterRepository {
     findByGame: vi.fn(),
     save: vi.fn(),
     updateSheet: vi.fn(),
+    changeEffort: vi.fn(),
+    changeHp: vi.fn(),
     delete: vi.fn(),
     findItems: vi.fn(),
     findItemById: vi.fn(),
@@ -144,6 +146,7 @@ export function makeNotifier(): GameSessionNotifier {
   return {
     notifyRosterChanged: vi.fn().mockResolvedValue(undefined),
     notifyHpChanged: vi.fn().mockResolvedValue(undefined),
+    notifyEffortChanged: vi.fn().mockResolvedValue(undefined),
     notifyCombatChanged: vi.fn().mockResolvedValue(undefined),
   };
 }

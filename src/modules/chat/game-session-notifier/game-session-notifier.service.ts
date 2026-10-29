@@ -1,4 +1,5 @@
 import type {
+  EffortChanged,
   GameSessionNotifier,
   HpChanged,
 } from '@shared/game-session/game-session-notifier.contract.js';
@@ -56,6 +57,18 @@ export class GameSessionNotifierService implements GameSessionNotifier {
       characterId: change.characterId,
       oldHp: change.oldHp,
       newHp: change.newHp,
+    });
+  }
+
+  async notifyEffortChanged(
+    gameId: string,
+    change: EffortChanged,
+  ): Promise<void> {
+    await this.publish(gameId, {
+      type: 'character.pe-changed',
+      characterId: change.characterId,
+      oldPe: change.oldPe,
+      newPe: change.newPe,
     });
   }
 

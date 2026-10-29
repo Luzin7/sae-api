@@ -131,7 +131,6 @@ export function createSeed(scope: string) {
         maxHp: 10,
         currentHp: 10,
         maxEffort: 5,
-        currentEffort: 5,
         ...overrides,
       })
       .returning();

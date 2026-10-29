@@ -109,10 +109,7 @@ describe('MonsterAttackService', () => {
     const { messages, characters, combat, bus, service } = build();
     vi.mocked(combat.findState).mockResolvedValue(STATE);
     vi.mocked(characters.findById).mockResolvedValue(makeTarget());
-    vi.mocked(characters.damageHp).mockResolvedValue({
-      previousHp: 20,
-      character: makeTarget({ currentHp: 15 }),
-    });
+    vi.mocked(characters.changeHp).mockResolvedValue({ oldHp: 20, newHp: 15 });
     const publish = vi.spyOn(bus, 'publish');
 
     const event = await service.execute({
@@ -124,7 +121,10 @@ describe('MonsterAttackService', () => {
       damage: 5,
     });
 
-    expect(characters.damageHp).toHaveBeenCalledWith('char-1', 5);
+    expect(characters.changeHp).toHaveBeenCalledWith('char-1', -5, {
+      sessionId: 'session-1',
+      playerId: 'p1',
+    });
     expect(event).toEqual({
       type: 'session.monster-attacked',
       monsterId: 'monster-1',
@@ -160,10 +160,10 @@ describe('MonsterAttackService', () => {
     expect(
       vi.mocked(messages.appendLog).mock.invocationCallOrder[0],
     ).toBeLessThan(
-      vi.mocked(characters.damageHp).mock.invocationCallOrder[0] ?? 0,
+      vi.mocked(characters.changeHp).mock.invocationCallOrder[0] ?? 0,
     );
     expect(
-      vi.mocked(characters.damageHp).mock.invocationCallOrder[0],
+      vi.mocked(characters.changeHp).mock.invocationCallOrder[0],
     ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
   });
 
@@ -171,10 +171,7 @@ describe('MonsterAttackService', () => {
     const { characters, combat, bus, service } = build();
     vi.mocked(combat.findState).mockResolvedValue(STATE);
     vi.mocked(characters.findById).mockResolvedValue(makeTarget());
-    vi.mocked(characters.damageHp).mockResolvedValue({
-      previousHp: 2,
-      character: makeTarget({ currentHp: 0 }),
-    });
+    vi.mocked(characters.changeHp).mockResolvedValue({ oldHp: 2, newHp: 0 });
     const publish = vi.spyOn(bus, 'publish');
 
     await service.execute({
@@ -209,7 +206,7 @@ describe('MonsterAttackService', () => {
       damage: 0,
     });
 
-    expect(characters.damageHp).not.toHaveBeenCalled();
+    expect(characters.changeHp).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalledWith(
       'session:session-1',
       expect.objectContaining({ type: 'character.hp-changed' }),
@@ -235,7 +232,7 @@ describe('MonsterAttackService', () => {
       }),
     ).rejects.toBeInstanceOf(MasterOnlyError);
     expect(combat.findState).not.toHaveBeenCalled();
-    expect(characters.damageHp).not.toHaveBeenCalled();
+    expect(characters.changeHp).not.toHaveBeenCalled();
   });
 
   it('rejects when there is no active combat', async () => {
@@ -252,7 +249,7 @@ describe('MonsterAttackService', () => {
         damage: 5,
       }),
     ).rejects.toBeInstanceOf(CombatStateNotFoundError);
-    expect(characters.damageHp).not.toHaveBeenCalled();
+    expect(characters.changeHp).not.toHaveBeenCalled();
   });
 
   it('rolls the attribute snapshotted on the combatant instance', async () => {
@@ -330,6 +327,6 @@ describe('MonsterAttackService', () => {
         damage: 5,
       }),
     ).rejects.toBeInstanceOf(ChatCharacterNotFoundError);
-    expect(characters.damageHp).not.toHaveBeenCalled();
+    expect(characters.changeHp).not.toHaveBeenCalled();
   });
 });

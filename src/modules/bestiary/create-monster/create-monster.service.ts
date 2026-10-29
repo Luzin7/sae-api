@@ -22,7 +22,6 @@ export class CreateMonsterService {
       gameId: input.gameId ?? null,
       createdBy: requesterId,
       currentHp: input.currentHp ?? input.maxHp,
-      currentEffort: input.currentEffort ?? input.maxEffort,
       cognition: input.cognition ?? DEFAULT_ATTRIBUTE,
       psyche: input.psyche ?? DEFAULT_ATTRIBUTE,
       instinct: input.instinct ?? DEFAULT_ATTRIBUTE,

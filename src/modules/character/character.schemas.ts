@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { AFFLICTION_KEYS } from '@shared/rules/afflictions.js';
+import { EffortDeltaSchema } from '@shared/rules/effort.js';
+import { HpDeltaSchema } from '@shared/rules/hp.js';
 import { SKILLS } from '@shared/rules/skills.js';
 import {
   HEIGHT_EXACT_MAX,
@@ -221,16 +223,13 @@ export const PreviewCharacterBodySchema = CharacterSheetBodySchema.pick({
   })
   .superRefine(refineUniqueSkills);
 
-export const UpdateVitalsBodySchema = z
-  .object({
-    currentHp: z.number().int().min(0).optional(),
-    currentEffort: z.number().int().min(0).optional(),
-  })
-  .refine(
-    (value) =>
-      value.currentHp !== undefined || value.currentEffort !== undefined,
-    { message: 'Informe currentHp ou currentEffort.' },
-  );
+export const ChangeHpBodySchema = z.object({
+  delta: HpDeltaSchema,
+});
+
+export const ChangeEffortBodySchema = z.object({
+  delta: EffortDeltaSchema,
+});
 
 export const CreateItemBodySchema = z.object({
   name: z.string().min(1).max(100),
@@ -286,7 +285,8 @@ export const CharacterListQuerySchema = z.object({
 export type CreateCharacterBody = z.infer<typeof CreateCharacterBodySchema>;
 export type PreviewCharacterBody = z.infer<typeof PreviewCharacterBodySchema>;
 export type UpdateCharacterBody = z.infer<typeof UpdateCharacterBodySchema>;
-export type UpdateVitalsBody = z.infer<typeof UpdateVitalsBodySchema>;
+export type ChangeHpBody = z.infer<typeof ChangeHpBodySchema>;
+export type ChangeEffortBody = z.infer<typeof ChangeEffortBodySchema>;
 export type CreateItemBody = z.infer<typeof CreateItemBodySchema>;
 export type UpdateItemBody = z.infer<typeof UpdateItemBodySchema>;
 export type UpsertSkillBody = z.infer<typeof UpsertSkillBodySchema>;

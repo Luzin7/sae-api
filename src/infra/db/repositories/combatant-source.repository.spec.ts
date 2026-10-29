@@ -58,7 +58,6 @@ const MONSTER_ROW: Row = {
   perception: 0,
   currentHp: 20,
   maxHp: 20,
-  currentEffort: 10,
   maxEffort: 10,
 };
 
@@ -78,7 +77,6 @@ describe('combatantSourceRepository.listByGame', () => {
           perception: 0,
           currentHp: 20,
           maxHp: 20,
-          currentEffort: 10,
           maxEffort: 10,
         },
       ],
@@ -111,7 +109,6 @@ describe('combatantSourceRepository.listByGame', () => {
           },
           currentHp: 20,
           maxHp: 20,
-          currentEffort: 10,
           maxEffort: 10,
         },
       },
@@ -156,7 +153,6 @@ describe('combatantSourceRepository.findMonsterInGame', () => {
       },
       currentHp: 20,
       maxHp: 20,
-      currentEffort: 10,
       maxEffort: 10,
       afflictions: [],
     });
