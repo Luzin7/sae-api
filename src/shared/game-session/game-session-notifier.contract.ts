@@ -11,4 +11,5 @@ export interface HpChanged {
 export interface GameSessionNotifier {
   notifyRosterChanged(gameId: string): Promise<void>;
   notifyHpChanged(gameId: string, change: HpChanged): Promise<void>;
+  notifyCombatChanged(gameId: string): Promise<void>;
 }

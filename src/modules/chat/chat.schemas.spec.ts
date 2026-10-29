@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OutboundEventSchema } from './chat.schemas.js';
+import { InboundFrameSchema, OutboundEventSchema } from './chat.schemas.js';
 
 const MONSTER_ENTRY = {
   combatantId: 'c-1',
@@ -76,5 +76,29 @@ describe('OutboundEventSchema', () => {
 
     expect(result.success).toBe(true);
     expect(result.data).toEqual(event);
+  });
+});
+
+describe('InboundFrameSchema master.next-turn', () => {
+  const SESSION_ID = '11111111-1111-4111-8111-111111111111';
+
+  it('accepts a frame with the expected turn and round', () => {
+    const result = InboundFrameSchema.safeParse({
+      type: 'master.next-turn',
+      sessionId: SESSION_ID,
+      expectedTurnIndex: 0,
+      expectedRound: 1,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a frame without the expected turn and round', () => {
+    const result = InboundFrameSchema.safeParse({
+      type: 'master.next-turn',
+      sessionId: SESSION_ID,
+    });
+
+    expect(result.success).toBe(false);
   });
 });

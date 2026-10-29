@@ -18,6 +18,7 @@ import {
 } from '@modules/character/character.errors.js';
 import type { CharacterRepository } from '@modules/character/character.repository.js';
 import { db } from '../index.js';
+import { removeCharacterCombatants } from './combat.repository.js';
 import { isForeignKeyViolation } from '../pg-errors.js';
 import {
   character as characterTable,
@@ -141,7 +142,10 @@ export function characterRepository(): CharacterRepository {
     },
 
     async delete(id: string): Promise<void> {
-      await db.delete(characterTable).where(eq(characterTable.id, id));
+      await db.transaction(async (tx) => {
+        await removeCharacterCombatants(tx, id);
+        await tx.delete(characterTable).where(eq(characterTable.id, id));
+      });
     },
 
     async findItems(characterId: string): Promise<CharacterItem[]> {

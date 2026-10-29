@@ -101,7 +101,12 @@ export const InboundFrameSchema = z.discriminatedUnion('type', [
     kind: z.enum(['character', 'monster']),
     refId: UuidSchema,
   }),
-  z.object({ type: z.literal('master.next-turn'), sessionId: UuidSchema }),
+  z.object({
+    type: z.literal('master.next-turn'),
+    sessionId: UuidSchema,
+    expectedTurnIndex: NonNegativeIntSchema,
+    expectedRound: z.number().int().min(1),
+  }),
   z.object({ type: z.literal('master.end-combat'), sessionId: UuidSchema }),
   z.object({
     type: z.literal('master.roll-monster-test'),

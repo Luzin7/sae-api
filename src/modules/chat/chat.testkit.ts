@@ -260,11 +260,23 @@ export function makeInMemoryCombat(
       roll: () => number,
       playerId: string | null,
     ) {
-      state.set(sessionId, { active: true, turnIndex: 0, round: 1 });
+      const running = state.get(sessionId);
+      state.set(sessionId, {
+        active: true,
+        turnIndex: running?.turnIndex ?? 0,
+        round: running?.round ?? 1,
+      });
 
       const previous = combatants.get(sessionId) ?? [];
       const byKey = new Map(
         previous.map((row) => [combatantKey(row.kind, row.refId), row]),
+      );
+      const instances = previous.filter(
+        (row) =>
+          row.kind === 'monster' &&
+          !seeds.some(
+            (seed) => seed.kind === 'monster' && seed.refId === row.refId,
+          ),
       );
       const next = seeds.map((seed) => {
         const kept = byKey.get(combatantKey(seed.kind, seed.refId));
@@ -297,6 +309,7 @@ export function makeInMemoryCombat(
           createdAt: new Date(2024, 0, 1, 0, 0, counter),
         };
       });
+      next.push(...instances);
       combatants.set(sessionId, next);
 
       const taken = next

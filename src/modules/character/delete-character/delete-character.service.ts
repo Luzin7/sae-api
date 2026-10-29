@@ -20,5 +20,6 @@ export class DeleteCharacterService {
 
     await this.characters.delete(id);
     await this.notifier.notifyRosterChanged(character.gameId);
+    await this.notifier.notifyCombatChanged(character.gameId);
   }
 }

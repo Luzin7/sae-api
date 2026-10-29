@@ -342,21 +342,25 @@ describe('chatGateway session state', () => {
     });
   });
 
-  it('sends a null snapshot and no combat frame when nothing is open', async () => {
+  it('sends a null test snapshot and an inactive combat frame when nothing is open', async () => {
     const { url } = await buildJoinedApp();
     const client = collectFrames(`${url}?token=p1`);
 
     client.send({ type: 'session.join', sessionId: SESSION_ID });
-    await client.waitFor(2);
+    await client.waitFor(3);
     client.close();
 
     expect(client.frames[1]).toEqual({
       type: 'session.test-snapshot',
       test: null,
     });
-    expect(client.frames.some((frame) => frame.type === 'session.combat')).toBe(
-      false,
-    );
+    expect(client.frames[2]).toEqual({
+      type: 'session.combat',
+      active: false,
+      turnIndex: 0,
+      round: 1,
+      entries: [],
+    });
   });
 
   it('dispatches master.close-test and broadcasts session.test-closed', async () => {
@@ -438,7 +442,7 @@ describe('chatGateway session state', () => {
     });
     const client = collectFrames(`${url}?token=master-1`);
     client.send({ type: 'session.join', sessionId: SESSION_ID });
-    await client.waitFor(2);
+    await client.waitFor(3);
     vi.mocked(combat.findState).mockResolvedValue({
       active: true,
       turnIndex: 0,
@@ -452,9 +456,9 @@ describe('chatGateway session state', () => {
       monsterId: MONSTER_ID,
     });
     await vi.waitFor(() => {
-      const broadcast = client.frames.some(
-        (frame) => frame.type === 'session.combat',
-      );
+      const broadcast = client.frames
+        .slice(3)
+        .some((frame) => frame.type === 'session.combat');
       if (!broadcast) throw new Error('not broadcast yet');
     });
     client.close();
