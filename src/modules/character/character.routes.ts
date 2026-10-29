@@ -85,7 +85,7 @@ export default async function characterRoutes(
       page,
     );
 
-    return { characters: characters.map(CharacterPresenter.toHTTP) };
+    return { characters: characters.map(CharacterPresenter.toReadHTTP) };
   });
 
   app.get('/game/:gameId', { preHandler: authenticate }, async (request) => {
@@ -95,7 +95,7 @@ export default async function characterRoutes(
       request.playerId,
     );
 
-    return { characters: characters.map(CharacterPresenter.toHTTP) };
+    return { characters: characters.map(CharacterPresenter.toReadHTTP) };
   });
 
   app.get('/:id', { preHandler: authenticate }, async (request) => {
@@ -105,7 +105,7 @@ export default async function characterRoutes(
       request.playerId,
     );
 
-    return { character: CharacterPresenter.toHTTP(character) };
+    return { character: CharacterPresenter.toReadHTTP(character) };
   });
 
   app.get('/:id/sheet', { preHandler: authenticate }, async (request) => {

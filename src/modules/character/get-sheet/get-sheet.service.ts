@@ -6,12 +6,13 @@ import type {
 } from '../character.entity.js';
 import {
   CharacterPresenter,
-  type CharacterResponse,
+  type CharacterReadResponse,
 } from '../character.presenter.js';
 import type { CharacterRepository } from '../character.repository.js';
+import { withAdvancementOf } from '../character-view.js';
 
 export interface CharacterSheet {
-  character: CharacterResponse;
+  character: CharacterReadResponse;
   items: CharacterItem[];
   skills: CharacterSkillDetail[];
 }
@@ -30,13 +31,14 @@ export class GetSheetService {
       requesterId,
     );
 
-    const [items, skills] = await Promise.all([
+    const [items, skills, view] = await Promise.all([
       this.characters.findItems(id),
       this.characters.findSkillDetails(id),
+      withAdvancementOf(this.characters, character),
     ]);
 
     return {
-      character: CharacterPresenter.toHTTP(character),
+      character: CharacterPresenter.toReadHTTP(view),
       items,
       skills,
     };

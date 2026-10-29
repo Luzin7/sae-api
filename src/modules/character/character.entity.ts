@@ -231,6 +231,12 @@ export type VitalLimitsDecision = (
   skills: CharacterSkillDetail[],
 ) => VitalLimits | null;
 
+export interface SkillSpendRow {
+  characterId: string;
+  attribute: AttributeName;
+  spent: number;
+}
+
 export interface UpsertSkillCommand {
   characterId: string;
   skillId: string;
