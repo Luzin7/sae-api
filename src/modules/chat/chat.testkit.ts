@@ -1,4 +1,5 @@
 import type { Rng } from '@shared/dice/roll.js';
+import { pickUniqueValue } from '@shared/dice/initiative.js';
 import { vi } from 'vitest';
 import type { CharacterAccess } from './character-access.contract.js';
 import type { ChatMessageRepository } from './chat.repository.js';
@@ -121,7 +122,7 @@ export function fixedRng(value: number): Rng {
 }
 
 /** RNG that walks a fixed sequence, repeating the last value forever. */
-export function sequenceRng(values: number[]): Rng {
+export function sequenceRng(values: number[]): () => number {
   let index = 0;
 
   return () => {
@@ -163,6 +164,10 @@ export interface InMemoryCombatantRow {
 
 export interface InMemoryCombat extends CombatRepository {
   rows(): InMemoryCombatantRow[];
+}
+
+function combatantKey(kind: CombatantKind, refId: string): string {
+  return `${kind}:${refId}`;
 }
 
 export function makeInMemoryCombat(
@@ -229,25 +234,52 @@ export function makeInMemoryCombat(
     async start(
       sessionId: string,
       seeds: CombatantSeed[],
+      roll: () => number,
       playerId: string | null,
     ) {
       state.set(sessionId, { active: true, turnIndex: 0, round: 1 });
-      combatants.set(
-        sessionId,
-        seeds.map((seed) => {
-          counter += 1;
 
-          return {
-            id: `c-${counter}`,
-            kind: seed.kind,
-            refId: seed.refId,
-            name: seed.name,
-            initiativeValue: null,
-            hasRolled: false,
-            createdAt: new Date(2024, 0, 1, 0, 0, counter),
-          };
-        }),
+      const previous = combatants.get(sessionId) ?? [];
+      const byKey = new Map(
+        previous.map((row) => [combatantKey(row.kind, row.refId), row]),
       );
+      const next = seeds.map((seed) => {
+        const kept = byKey.get(combatantKey(seed.kind, seed.refId));
+        if (kept) {
+          kept.name = seed.name;
+
+          return kept;
+        }
+
+        counter += 1;
+
+        return {
+          id: `c-${counter}`,
+          kind: seed.kind,
+          refId: seed.refId,
+          name: seed.name,
+          initiativeValue: null,
+          hasRolled: false,
+          createdAt: new Date(2024, 0, 1, 0, 0, counter),
+        };
+      });
+      combatants.set(sessionId, next);
+
+      const taken = next
+        .filter((row) => row.hasRolled && row.initiativeValue !== null)
+        .map((row) => row.initiativeValue as number);
+      for (const seed of seeds) {
+        if (seed.kind !== 'monster') continue;
+        const row = next.find(
+          (item) => item.kind === seed.kind && item.refId === seed.refId,
+        );
+        if (!row || row.hasRolled) continue;
+
+        const value = pickUniqueValue(taken, roll);
+        taken.push(value);
+        row.initiativeValue = value;
+        row.hasRolled = true;
+      }
 
       const current = payload(sessionId)!;
       await writeLog(sessionId, playerId, current);
@@ -273,10 +305,7 @@ export function makeInMemoryCombat(
       const taken = rows
         .filter((item) => item.hasRolled && item.initiativeValue !== null)
         .map((item) => item.initiativeValue as number);
-      let value = roll();
-      for (let attempt = 0; attempt < 20 && taken.includes(value); attempt++) {
-        value = roll();
-      }
+      const value = pickUniqueValue(taken, roll);
       target.initiativeValue = value;
       target.hasRolled = true;
 
