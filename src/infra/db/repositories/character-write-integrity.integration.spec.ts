@@ -22,6 +22,7 @@ import { monsterRepository } from './monster.repository.js';
 const notifier = {
   notifyRosterChanged: async () => undefined,
   notifyHpChanged: async () => undefined,
+  notifyEffortChanged: async () => undefined,
   notifyCombatChanged: async () => undefined,
 };
 const ROUNDS = 40;
@@ -100,34 +101,22 @@ describe.skipIf(!integrationEnabled)(
       }
     });
 
-    it.each(['damageHp', 'updateHpWithLog'] as const)(
-      '2. PATCH with a pre-damage version after %s is a conflict and keeps the damage',
-      async (method) => {
-        const row = await seedCharacter(table);
-        if (method === 'damageHp') await access.damageHp(row.id, 5);
-        else
-          await access.updateHpWithLog(row.id, 21, {
-            sessionId: table.sessionId,
-            playerId: null,
-            eventType: 'hp_change',
-            payload: {
-              characterId: row.id,
-              delta: -5,
-              currentHp: 21,
-              maxHp: 26,
-            },
-          });
+    it('2. PATCH with a pre-damage version after a PS change is a conflict and keeps the damage', async () => {
+      const row = await seedCharacter(table);
+      await access.changeHp(row.id, -5, {
+        sessionId: table.sessionId,
+        playerId: table.member.id,
+      });
 
-        await expect(
-          sheetPatch(row.id, 0, { nickname: 'verify-late' }),
-        ).rejects.toBeInstanceOf(CharacterVersionConflictError);
+      await expect(
+        sheetPatch(row.id, 0, { nickname: 'verify-late' }),
+      ).rejects.toBeInstanceOf(CharacterVersionConflictError);
 
-        const final = await readCharacter(row.id);
-        expect(final.currentHp).toBe(21);
-        expect(final.version).toBe(1);
-        expect(final.nickname).not.toBe('verify-late');
-      },
-    );
+      const final = await readCharacter(row.id);
+      expect(final.currentHp).toBe(21);
+      expect(final.version).toBe(1);
+      expect(final.nickname).not.toBe('verify-late');
+    });
 
     it('3. PATCH lowering max HP clamps currentHp in SQL', async () => {
       const row = await seedCharacter(table, {
@@ -153,7 +142,10 @@ describe.skipIf(!integrationEnabled)(
         });
         const damage = async () => {
           await sleep(round % 10);
-          return access.damageHp(row.id, 10);
+          return access.changeHp(row.id, -10, {
+            sessionId: table.sessionId,
+            playerId: table.member.id,
+          });
         };
         const patch = () => sheetPatch(row.id, 0, { constitution: -5 });
         const patched =

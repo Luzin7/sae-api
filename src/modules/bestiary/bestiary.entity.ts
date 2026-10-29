@@ -6,7 +6,6 @@ export interface Monster {
   maxHp: number;
   currentHp: number;
   maxEffort: number;
-  currentEffort: number;
   size: string | null;
   cognition: number;
   psyche: number;
@@ -28,7 +27,6 @@ export interface MonsterSheetInput {
   maxHp: number;
   maxEffort: number;
   currentHp?: number;
-  currentEffort?: number;
   size?: string | null;
   cognition?: number;
   psyche?: number;

@@ -33,7 +33,6 @@ function makeMonster(overrides: Partial<Monster> = {}): Monster {
     maxHp: 10,
     currentHp: 10,
     maxEffort: 5,
-    currentEffort: 5,
     size: null,
     cognition: -5,
     psyche: -5,
@@ -99,7 +98,6 @@ function makeMonsters(seed: Monster[] = []): FakeMonsterRepository {
         maxHp: input.maxHp,
         currentHp: input.currentHp ?? input.maxHp,
         maxEffort: input.maxEffort,
-        currentEffort: input.currentEffort ?? input.maxEffort,
         createdBy: input.createdBy,
       });
       rows.set(monster.id, monster);

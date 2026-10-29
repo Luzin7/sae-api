@@ -69,3 +69,21 @@ export async function requireCharacterInGame(
 
   return character;
 }
+
+/** The character's owner or the game's master may change its vitals. */
+export async function requireCharacterWriter(
+  characters: CharacterAccess,
+  game: GameRef,
+  playerId: string,
+  characterId: string,
+): Promise<CharacterSnapshot> {
+  const character = await requireCharacterInGame(
+    characters,
+    game.id,
+    characterId,
+  );
+  const isOwner = character.playerId === playerId;
+  if (!isOwner && game.masterId !== playerId) throw new ChatForbiddenError();
+
+  return character;
+}

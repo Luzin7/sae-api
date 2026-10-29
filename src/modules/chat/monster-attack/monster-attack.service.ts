@@ -87,16 +87,19 @@ export class MonsterAttackService {
     });
 
     if (input.damage > 0) {
-      const { previousHp, character } = await this.characters.damageHp(
+      const { oldHp, newHp } = await this.characters.changeHp(
         target.id,
-        input.damage,
+        -input.damage,
+        { sessionId: input.sessionId, playerId: input.playerId },
       );
-      this.bus.publish(chatRoom(input.sessionId), {
-        type: 'character.hp-changed',
-        characterId: character.id,
-        oldHp: previousHp,
-        newHp: character.currentHp,
-      });
+      if (oldHp !== newHp) {
+        this.bus.publish(chatRoom(input.sessionId), {
+          type: 'character.hp-changed',
+          characterId: target.id,
+          oldHp,
+          newHp,
+        });
+      }
     }
 
     const event: RealtimeEvent = {

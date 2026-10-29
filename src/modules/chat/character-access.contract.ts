@@ -1,5 +1,4 @@
 import type { AttributeKey } from '@shared/rules/attributes.js';
-import type { AppendSessionLogInput } from './chat.repository.js';
 
 /**
  * Consumer-owned cross-domain contract. The realtime slice needs to resolve a
@@ -25,9 +24,21 @@ export interface SkillRef {
   attribute: AttributeKey;
 }
 
-export interface HpDamageResult {
-  previousHp: number;
-  character: CharacterSnapshot;
+export interface HpChangeResult {
+  oldHp: number;
+  newHp: number;
+}
+
+export interface EffortChangeResult {
+  oldEffort: number;
+  newEffort: number;
+  oldHp: number;
+  newHp: number;
+}
+
+export interface VitalsChangeLog {
+  sessionId: string;
+  playerId: string;
 }
 
 export interface CharacterSkillRef {
@@ -43,14 +54,22 @@ export interface CharacterAccess {
     skillId: string,
   ): Promise<CharacterSkillRef | null>;
   /**
-   * Writes the new HP and the log row describing it in one transaction, so a
-   * change without its log (or the reverse) can never commit.
+   * Applies a PE gain or recovery to the locked character row: effort capped
+   * at the limit, each excess point costs 1 PS. Effort, HP, version and the
+   * log rows commit together.
    */
-  updateHpWithLog(
+  changeEffort(
     characterId: string,
-    newHp: number,
-    log: AppendSessionLogInput,
-  ): Promise<CharacterSnapshot>;
-  /** Decrements the stored HP in SQL so concurrent hits cannot overwrite each other. */
-  damageHp(characterId: string, damage: number): Promise<HpDamageResult>;
+    delta: number,
+    log: VitalsChangeLog,
+  ): Promise<EffortChangeResult>;
+  /**
+   * Applies a PS delta to the locked character row: clamp(current + delta, 0,
+   * maxHp). HP, version and the log row commit together.
+   */
+  changeHp(
+    characterId: string,
+    delta: number,
+    log: VitalsChangeLog,
+  ): Promise<HpChangeResult>;
 }

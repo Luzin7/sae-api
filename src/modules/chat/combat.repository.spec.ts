@@ -3,11 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Database } from '@infra/db/index.js';
 import { combatRepository } from '@infra/db/repositories/combat.repository.js';
 import type { CombatantSeed } from './combat.repository.js';
-import {
-  CombatantNotFoundError,
-  CombatNotReadyError,
-  CombatStateNotFoundError,
-} from './chat.errors.js';
+import { CombatNotReadyError } from './chat.errors.js';
 import {
   makeChatMessages,
   makeInMemoryCombat,
@@ -51,13 +47,18 @@ const SEEDS: CombatantSeed[] = [
 
 const PLAYER_ID = 'p-1';
 
-function advance(combat: ReturnType<typeof makeInMemoryCombat>, turn: number) {
-  return combat.advanceTurn({
+async function advance(
+  combat: ReturnType<typeof makeInMemoryCombat>,
+  turn: number,
+) {
+  const { state } = await combat.advanceTurn({
     sessionId: 's-1',
     playerId: PLAYER_ID,
     expectedTurnIndex: turn,
     expectedRound: 1,
   });
+
+  return state;
 }
 
 function value(
@@ -317,31 +318,6 @@ const MONSTER_SEED: CombatantSeed = {
   perception: 0,
 };
 
-function monsterRow(overrides: Row = {}): Row {
-  return {
-    id: 'c-1',
-    sessionId: 's-1',
-    kind: 'monster',
-    refId: 'mon-1',
-    name: 'Goblin',
-    initiativeValue: 12,
-    hasRolled: true,
-    currentHp: 10,
-    maxHp: 10,
-    currentEffort: 5,
-    maxEffort: 5,
-    afflictions: [],
-    cognition: 2,
-    psyche: -2,
-    instinct: 0,
-    constitution: 3,
-    motricity: 1,
-    perception: 0,
-    createdAt: new Date(2024, 0, 1),
-    ...overrides,
-  };
-}
-
 function snakeToCamel(name: string): string {
   return name.replace(/_([a-z])/g, (_match, letter) => letter.toUpperCase());
 }
@@ -581,142 +557,5 @@ describe('combatRepository (database)', () => {
       refId: 'mon-1',
     });
     expect(fake.combatants()).toHaveLength(1);
-  });
-
-  it('saveInstanceVitals writes the combat_state log in the same transaction', async () => {
-    const fake = fakeCombatDatabase({ combatants: [monsterRow()] });
-    const combat = combatRepository(fake.database);
-
-    await combat.saveInstanceVitals(
-      's-1',
-      'mon-1',
-      {
-        currentHp: 7,
-        currentEffort: 3,
-      },
-      PLAYER_ID,
-    );
-
-    expect(fake.logs).toHaveLength(1);
-    expect(fake.logs[0]).toMatchObject({
-      sessionId: 's-1',
-      playerId: PLAYER_ID,
-      eventType: 'combat_state',
-      inTransaction: true,
-    });
-    expect(fake.logs[0]?.payload).toMatchObject({
-      active: true,
-      entries: [expect.objectContaining({ currentHp: 7, currentEffort: 3 })],
-    });
-  });
-
-  it('saveInstanceVitals throws when no combatant matches', async () => {
-    const fake = fakeCombatDatabase({ combatants: [] });
-    const combat = combatRepository(fake.database);
-
-    await expect(
-      combat.saveInstanceVitals(
-        's-1',
-        'mon-1',
-        {
-          currentHp: 7,
-          currentEffort: 3,
-        },
-        PLAYER_ID,
-      ),
-    ).rejects.toBeInstanceOf(CombatantNotFoundError);
-    expect(fake.logs).toHaveLength(0);
-  });
-
-  it('saveInstanceVitals throws when no combat state row matches', async () => {
-    const fake = fakeCombatDatabase({
-      active: false,
-      combatants: [monsterRow()],
-    });
-    const combat = combatRepository(fake.database);
-
-    await expect(
-      combat.saveInstanceVitals(
-        's-1',
-        'mon-1',
-        { currentHp: 7, currentEffort: 3 },
-        PLAYER_ID,
-      ),
-    ).rejects.toBeInstanceOf(CombatStateNotFoundError);
-    expect(fake.combatants()[0]).toMatchObject({
-      currentHp: 10,
-      currentEffort: 5,
-    });
-    expect(fake.logs).toHaveLength(0);
-  });
-
-  it('saveInstanceVitals keeps the afflictions when the patch omits them', async () => {
-    const fake = fakeCombatDatabase({
-      combatants: [monsterRow({ afflictions: ['fobia'] })],
-    });
-    const combat = combatRepository(fake.database);
-
-    await combat.saveInstanceVitals(
-      's-1',
-      'mon-1',
-      { currentHp: 7, currentEffort: 5 },
-      PLAYER_ID,
-    );
-
-    expect(fake.combatants()[0]).toMatchObject({
-      currentHp: 7,
-      currentEffort: 5,
-      afflictions: ['fobia'],
-    });
-  });
-
-  it('saveInstanceVitals leaves combatants outside the predicate untouched', async () => {
-    const fake = fakeCombatDatabase({
-      combatants: [
-        monsterRow(),
-        monsterRow({
-          id: 'c-2',
-          kind: 'character',
-          refId: 'char-1',
-          name: 'Ana',
-          currentHp: 8,
-          currentEffort: 2,
-        }),
-      ],
-    });
-    const combat = combatRepository(fake.database);
-
-    await combat.saveInstanceVitals(
-      's-1',
-      'mon-1',
-      { currentHp: 7, currentEffort: 3 },
-      PLAYER_ID,
-    );
-
-    expect(fake.combatants()[0]).toMatchObject({
-      currentHp: 7,
-      currentEffort: 3,
-    });
-    expect(fake.combatants()[1]).toEqual({
-      id: 'c-2',
-      sessionId: 's-1',
-      kind: 'character',
-      refId: 'char-1',
-      name: 'Ana',
-      initiativeValue: 12,
-      hasRolled: true,
-      currentHp: 8,
-      maxHp: 10,
-      currentEffort: 2,
-      maxEffort: 5,
-      afflictions: [],
-      cognition: 2,
-      psyche: -2,
-      instinct: 0,
-      constitution: 3,
-      motricity: 1,
-      perception: 0,
-      createdAt: new Date(2024, 0, 1),
-    });
   });
 });

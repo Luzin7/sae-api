@@ -30,7 +30,8 @@ import { UpdateItemService } from './items/update-item/update-item.service.js';
 import { PreviewCharacterService } from './preview-character/preview-character.service.js';
 import { UpsertSkillService } from './skills/upsert-skill/upsert-skill.service.js';
 import { UpdateCharacterService } from './update-character/update-character.service.js';
-import { UpdateVitalsService } from './update-vitals/update-vitals.service.js';
+import { ChangeEffortService } from './change-effort/change-effort.service.js';
+import { ChangeHpService } from './change-hp/change-hp.service.js';
 
 process.env.JWT_SECRET = 'test-secret-key-for-tests-only';
 
@@ -69,7 +70,8 @@ function makeServices(
       membership,
       notifier,
     ),
-    updateVitals: new UpdateVitalsService(characters, membership, notifier),
+    changeHp: new ChangeHpService(characters, membership, notifier),
+    changeEffort: new ChangeEffortService(characters, membership, notifier),
     addItem: new AddItemService(characters),
     updateItem: new UpdateItemService(characters),
     deleteItem: new DeleteItemService(characters),
@@ -220,27 +222,49 @@ describe('character routes', () => {
     expect(res.json().character.id).toBe('char-1');
   });
 
-  it('updates vitals through the dedicated rule', async () => {
+  it('PS delta +5 from 10 answers with the character at 15 PS', async () => {
     const characters = makeCharacterRepository();
     vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ maxHp: 28 }),
+      makeCharacter({ currentHp: 10, maxHp: 28 }),
     );
-    vi.mocked(characters.save).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.changeHp).mockResolvedValue({
+      character: makeCharacter({ currentHp: 15, maxHp: 28 }),
+      oldEffort: 0,
+      oldHp: 10,
+    });
     const app = await buildTestApp(makeServices(characters, makeMembership()));
 
     const res = await app.inject({
       method: 'PATCH',
       url: '/characters/char-1/hp',
-      payload: { currentHp: 999 },
+      payload: { delta: 5 },
       headers: { cookie: `token=${makeToken(app)}` },
     });
 
     expect(res.statusCode).toBe(200);
-    expect(characters.save).toHaveBeenCalledWith('char-1', {
-      currentHp: 28,
-      currentEffort: makeCharacter().currentEffort,
-    });
+    expect(characters.changeHp).toHaveBeenCalledWith('char-1', 5);
+    expect(res.json().character.currentHp).toBe(15);
   });
+
+  it.each([{ delta: 0 }, { delta: 1001 }, { delta: 1.5 }, { currentHp: 10 }])(
+    'rejects the hp body %j',
+    async (payload) => {
+      const characters = makeCharacterRepository();
+      const app = await buildTestApp(
+        makeServices(characters, makeMembership()),
+      );
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/characters/char-1/hp',
+        payload,
+        headers: { cookie: `token=${makeToken(app)}` },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(characters.changeHp).not.toHaveBeenCalled();
+    },
+  );
 
   it('lets the master delete a sheet of their table', async () => {
     const characters = makeCharacterRepository();
@@ -320,7 +344,12 @@ describe('character routes', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(characters.upsertSkill).toHaveBeenCalledWith('char-1', SKILL_ID, 3);
+    expect(characters.upsertSkill).toHaveBeenCalledWith({
+      characterId: 'char-1',
+      skillId: SKILL_ID,
+      proficiencyBonus: 3,
+      deriveLimits: expect.any(Function),
+    });
   });
 });
 
@@ -896,6 +925,20 @@ describe('character write access', () => {
     return membership;
   }
 
+  function makeEffortRepository(newEffort: number, playerId = 'player-1') {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId, currentEffort: 5, maxEffort: 20 }),
+    );
+    vi.mocked(characters.changeEffort).mockResolvedValue({
+      character: makeCharacter({ playerId, currentEffort: newEffort }),
+      oldEffort: 5,
+      oldHp: 26,
+    });
+
+    return characters;
+  }
+
   async function patchVitals(
     route: 'hp' | 'pe',
     payload: Record<string, number>,
@@ -917,13 +960,15 @@ describe('character write access', () => {
     vi.mocked(characters.findById).mockResolvedValue(
       makeCharacter({ playerId: 'other-player', currentHp: 10, maxHp: 26 }),
     );
-    vi.mocked(characters.save).mockResolvedValue(
-      makeCharacter({ playerId: 'other-player', currentHp: 12 }),
-    );
+    vi.mocked(characters.changeHp).mockResolvedValue({
+      character: makeCharacter({ playerId: 'other-player', currentHp: 12 }),
+      oldEffort: 0,
+      oldHp: 10,
+    });
 
     const res = await patchVitals(
       'hp',
-      { currentHp: 12 },
+      { delta: 2 },
       characters,
       masterMembership(),
     );
@@ -932,36 +977,49 @@ describe('character write access', () => {
   });
 
   it('lets the master change effort on another player character', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({
-        playerId: 'other-player',
-        currentEffort: 5,
-        maxEffort: 20,
-      }),
-    );
-    vi.mocked(characters.save).mockResolvedValue(
-      makeCharacter({ playerId: 'other-player', currentEffort: 8 }),
-    );
+    const characters = makeEffortRepository(8, 'other-player');
 
     const res = await patchVitals(
       'pe',
-      { currentEffort: 8 },
+      { delta: 3 },
       characters,
       masterMembership(),
     );
 
     expect(res.statusCode).toBe(200);
+    expect(characters.changeEffort).toHaveBeenCalledWith('char-1', 3);
   });
 
-  it('lets the owner change their own effort', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ currentEffort: 5, maxEffort: 20 }),
+  it('delta 3 from 5 PE answers with the character at 8 PE', async () => {
+    const characters = makeEffortRepository(8);
+
+    const res = await patchVitals(
+      'pe',
+      { delta: 3 },
+      characters,
+      makeMembership(),
     );
-    vi.mocked(characters.save).mockResolvedValue(
-      makeCharacter({ currentEffort: 8 }),
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().character.currentEffort).toBe(8);
+  });
+
+  it.each([0, 101, -101, 1.5])('rejects delta %s', async (delta) => {
+    const characters = makeEffortRepository(8);
+
+    const res = await patchVitals(
+      'pe',
+      { delta },
+      characters,
+      makeMembership(),
     );
+
+    expect(res.statusCode).toBe(400);
+    expect(characters.changeEffort).not.toHaveBeenCalled();
+  });
+
+  it('rejects the old currentEffort body', async () => {
+    const characters = makeEffortRepository(8);
 
     const res = await patchVitals(
       'pe',
@@ -970,7 +1028,8 @@ describe('character write access', () => {
       makeMembership(),
     );
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
+    expect(characters.changeEffort).not.toHaveBeenCalled();
   });
 
   it('returns 403 to an unrelated player for hp and pe', async () => {
@@ -980,18 +1039,8 @@ describe('character write access', () => {
     );
     const membership = makeMembership();
 
-    const hp = await patchVitals(
-      'hp',
-      { currentHp: 10 },
-      characters,
-      membership,
-    );
-    const pe = await patchVitals(
-      'pe',
-      { currentEffort: 10 },
-      characters,
-      membership,
-    );
+    const hp = await patchVitals('hp', { delta: 2 }, characters, membership);
+    const pe = await patchVitals('pe', { delta: 2 }, characters, membership);
 
     expect(hp.statusCode).toBe(403);
     expect(pe.statusCode).toBe(403);

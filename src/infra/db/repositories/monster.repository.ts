@@ -40,7 +40,6 @@ export function monsterRepository(): MonsterRepository {
           maxHp: input.maxHp,
           currentHp: input.currentHp ?? input.maxHp,
           maxEffort: input.maxEffort,
-          currentEffort: input.currentEffort ?? input.maxEffort,
           size: input.size ?? null,
           cognition: input.cognition ?? DEFAULT_ATTRIBUTE,
           psyche: input.psyche ?? DEFAULT_ATTRIBUTE,

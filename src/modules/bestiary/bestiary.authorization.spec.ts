@@ -16,7 +16,6 @@ function makeMonster(overrides: Partial<Monster> = {}): Monster {
     maxHp: 10,
     currentHp: 10,
     maxEffort: 5,
-    currentEffort: 5,
     size: null,
     cognition: -5,
     psyche: -5,

@@ -19,6 +19,7 @@ import { gameAccessRepository } from './game-access.repository.js';
 const notifier = {
   notifyRosterChanged: async () => undefined,
   notifyHpChanged: async () => undefined,
+  notifyEffortChanged: async () => undefined,
   notifyCombatChanged: async () => undefined,
 };
 

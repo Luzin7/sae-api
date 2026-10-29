@@ -6,9 +6,11 @@ import type { CharacterAccess } from './character-access.contract.js';
 import type { ChatMessageRepository } from './chat.repository.js';
 import type {
   AdvanceTurnInput,
+  ChangeInstanceEffortInput,
+  ChangeInstanceHpInput,
+  SetInstanceAfflictionsInput,
   CombatantSeed,
   CombatRepository,
-  InstanceVitalsPatch,
 } from './combat.repository.js';
 import {
   CombatantNotFoundError,
@@ -20,6 +22,11 @@ import type {
   CombatantRef,
   CombatantSource,
 } from './combatant-source.contract.js';
+import { applyHpChange } from '@shared/rules/hp.js';
+import {
+  applyEffortChange,
+  recoverEffortOnTurnAdvance,
+} from '@shared/rules/effort.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
 import type {
@@ -60,7 +67,9 @@ export function makeCombat(): CombatRepository {
     addCombatant: vi.fn(),
     rollInitiative: vi.fn(),
     advanceTurn: vi.fn(),
-    saveInstanceVitals: vi.fn(),
+    changeInstanceEffort: vi.fn(),
+    changeInstanceHp: vi.fn(),
+    setInstanceAfflictions: vi.fn(),
     end: vi.fn(),
   };
 }
@@ -70,8 +79,8 @@ export function makeCharacterAccess(): CharacterAccess {
     findById: vi.fn(),
     findSkillById: vi.fn(),
     findSkillForCharacter: vi.fn(),
-    updateHpWithLog: vi.fn(),
-    damageHp: vi.fn(),
+    changeHp: vi.fn(),
+    changeEffort: vi.fn(),
   };
 }
 
@@ -424,7 +433,7 @@ export function makeInMemoryCombat(
       const stale =
         current.turnIndex !== input.expectedTurnIndex ||
         current.round !== input.expectedRound;
-      if (stale) return payload(input.sessionId)!;
+      if (stale) return { state: payload(input.sessionId)!, recovered: [] };
 
       const wrapping = current.turnIndex + 1 >= rows.length;
       state.set(input.sessionId, {
@@ -433,34 +442,105 @@ export function makeInMemoryCombat(
         round: wrapping ? current.round + 1 : current.round,
       });
 
+      const starting = entries(input.sessionId)[
+        state.get(input.sessionId)!.turnIndex
+      ]!;
+      const monsters = rows.filter(
+        (row) => row.kind === 'monster' && row.currentEffort !== null,
+      );
+      for (const recovery of recoverEffortOnTurnAdvance(
+        monsters.map((row) => ({
+          id: row.id,
+          currentEffort: row.currentEffort as number,
+        })),
+        starting.combatantId,
+      )) {
+        monsters.find((row) => row.id === recovery.id)!.currentEffort =
+          recovery.newEffort;
+      }
+
       const next = payload(input.sessionId)!;
       await writeLog(input.sessionId, input.playerId, next);
 
-      return next;
+      return { state: next, recovered: [] };
     },
 
-    async saveInstanceVitals(
-      sessionId: string,
-      monsterId: string,
-      patch: InstanceVitalsPatch,
-      playerId: string,
-    ) {
-      const current = state.get(sessionId);
-      if (!current) throw new CombatStateNotFoundError();
+    async changeInstanceEffort(input: ChangeInstanceEffortInput) {
+      if (!state.get(input.sessionId)) throw new CombatStateNotFoundError();
 
-      const rows = combatants.get(sessionId) ?? [];
-      const target = rows.find(
-        (row) => row.kind === 'monster' && row.refId === monsterId,
+      const target = (combatants.get(input.sessionId) ?? []).find(
+        (row) => row.kind === 'monster' && row.refId === input.monsterId,
+      );
+      if (
+        !target ||
+        target.currentEffort === null ||
+        target.maxEffort === null ||
+        target.currentHp === null
+      ) {
+        throw new CombatantNotFoundError();
+      }
+
+      const oldEffort = target.currentEffort;
+      const oldHp = target.currentHp;
+      const applied = applyEffortChange(
+        {
+          currentEffort: oldEffort,
+          effortLimit: target.maxEffort,
+          currentHp: oldHp,
+        },
+        input.delta,
+      );
+      target.currentEffort = applied.currentEffort;
+      target.currentHp = applied.currentHp;
+
+      const next = payload(input.sessionId)!;
+      await writeLog(input.sessionId, input.playerId, next);
+
+      return {
+        state: next,
+        oldEffort,
+        newEffort: applied.currentEffort,
+        oldHp,
+        newHp: applied.currentHp,
+      };
+    },
+
+    async changeInstanceHp(input: ChangeInstanceHpInput) {
+      if (!state.get(input.sessionId)) throw new CombatStateNotFoundError();
+
+      const target = (combatants.get(input.sessionId) ?? []).find(
+        (row) => row.kind === 'monster' && row.refId === input.monsterId,
+      );
+      if (!target || target.currentHp === null || target.maxHp === null) {
+        throw new CombatantNotFoundError();
+      }
+
+      const oldHp = target.currentHp;
+      target.currentHp = applyHpChange(
+        { currentHp: oldHp, maxHp: target.maxHp },
+        input.delta,
+      ).currentHp;
+
+      const next = payload(input.sessionId)!;
+      await writeLog(input.sessionId, input.playerId, next);
+
+      return { state: next, oldHp, newHp: target.currentHp };
+    },
+
+    async setInstanceAfflictions(input: SetInstanceAfflictionsInput) {
+      if (!state.get(input.sessionId)) throw new CombatStateNotFoundError();
+
+      const target = (combatants.get(input.sessionId) ?? []).find(
+        (row) => row.kind === 'monster' && row.refId === input.monsterId,
       );
       if (!target) throw new CombatantNotFoundError();
 
-      target.currentHp = patch.currentHp;
-      target.currentEffort = patch.currentEffort;
-      if (patch.afflictions !== undefined) {
-        target.afflictions = [...patch.afflictions];
-      }
+      target.afflictions = [...input.afflictions];
 
-      await writeLog(sessionId, playerId, payload(sessionId)!);
+      const next = payload(input.sessionId)!;
+      await writeLog(input.sessionId, input.playerId, next);
+
+      return { state: next };
     },
 
     async end(sessionId: string, playerId: string | null) {

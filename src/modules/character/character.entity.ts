@@ -138,9 +138,10 @@ export interface UpdateCharacterInput {
   posture?: string;
 }
 
-export interface UpdateVitalsInput {
-  currentHp?: number;
-  currentEffort?: number;
+export interface VitalsChangeOutcome {
+  character: Character;
+  oldEffort: number;
+  oldHp: number;
 }
 
 export type ItemType =
@@ -214,6 +215,27 @@ export interface SkillSummary {
 export interface CharacterSkillDetail extends CharacterSkill {
   skillName: string;
   attribute: AttributeName;
+}
+
+export interface VitalLimits {
+  maxHp: number;
+  maxEffort: number;
+}
+
+/**
+ * Decides, from the locked character and its skills after the upsert, the new
+ * limits; null leaves the limits untouched.
+ */
+export type VitalLimitsDecision = (
+  character: Character,
+  skills: CharacterSkillDetail[],
+) => VitalLimits | null;
+
+export interface UpsertSkillCommand {
+  characterId: string;
+  skillId: string;
+  proficiencyBonus: number;
+  deriveLimits: VitalLimitsDecision;
 }
 
 export interface Page {

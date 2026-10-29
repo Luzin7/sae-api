@@ -8,7 +8,6 @@ export interface MonsterRef {
   attributes: Record<AttributeKey, number>;
   currentHp: number;
   maxHp: number;
-  currentEffort: number;
   maxEffort: number;
   afflictions: string[];
 }
@@ -17,7 +16,6 @@ export interface MonsterTemplate {
   attributes: Record<AttributeKey, number>;
   currentHp: number;
   maxHp: number;
-  currentEffort: number;
   maxEffort: number;
 }
 

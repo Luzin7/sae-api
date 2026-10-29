@@ -17,7 +17,6 @@ type MonsterAttributesAndVitals = {
   perception: number;
   currentHp: number;
   maxHp: number;
-  currentEffort: number;
   maxEffort: number;
 };
 
@@ -97,7 +96,6 @@ function toMonsterTemplate(row: MonsterAttributesAndVitals): MonsterTemplate {
     },
     currentHp: row.currentHp,
     maxHp: row.maxHp,
-    currentEffort: row.currentEffort,
     maxEffort: row.maxEffort,
   };
 }
@@ -137,7 +135,6 @@ export function combatantSourceRepository(
             perception: monster.perception,
             currentHp: monster.currentHp,
             maxHp: monster.maxHp,
-            currentEffort: monster.currentEffort,
             maxEffort: monster.maxEffort,
           })
           .from(monster)
@@ -185,7 +182,6 @@ export function combatantSourceRepository(
           perception: monster.perception,
           currentHp: monster.currentHp,
           maxHp: monster.maxHp,
-          currentEffort: monster.currentEffort,
           maxEffort: monster.maxEffort,
         })
         .from(monster)

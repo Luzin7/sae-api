@@ -104,15 +104,6 @@ export type RealtimeEvent =
       kind: RollKind;
     }
   | {
-      type: 'session.monster-vitals';
-      monsterId: string;
-      currentHp: number;
-      maxHp: number;
-      currentEffort: number;
-      maxEffort: number;
-      afflictions: string[];
-    }
-  | {
       type: 'session.monster-attacked';
       monsterId: string;
       name: string;

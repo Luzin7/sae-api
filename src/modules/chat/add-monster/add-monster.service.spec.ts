@@ -35,9 +35,8 @@ function makeMonster(overrides: Partial<MonsterRef> = {}): MonsterRef {
     },
     currentHp: 20,
     maxHp: 20,
-    currentEffort: 10,
     maxEffort: 10,
-    afflictions: ['ferido'],
+    afflictions: ['trauma'],
     ...overrides,
   };
 }
@@ -145,9 +144,9 @@ describe('AddMonsterService', () => {
         name: 'Goblin',
         currentHp: 20,
         maxHp: 20,
-        currentEffort: 10,
+        currentEffort: 0,
         maxEffort: 10,
-        afflictions: ['ferido'],
+        afflictions: ['trauma'],
       }),
     ]);
   });
@@ -262,7 +261,7 @@ describe('AddMonsterService', () => {
         refId: MONSTER_ID,
         currentHp: 20,
         maxHp: 20,
-        afflictions: ['ferido'],
+        afflictions: ['trauma'],
       }),
     ]);
   });

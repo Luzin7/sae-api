@@ -20,6 +20,8 @@ export interface StartCombatInput {
   sessionId: string;
 }
 
+const STARTING_EFFORT = 0;
+
 function seedWithoutVitals(ref: CombatantRef): CombatantSeed {
   return {
     kind: ref.kind,
@@ -51,7 +53,7 @@ function toCombatantSeed(ref: CombatantRef): CombatantSeed {
     name: ref.name,
     currentHp: template.currentHp,
     maxHp: template.maxHp,
-    currentEffort: template.currentEffort,
+    currentEffort: STARTING_EFFORT,
     maxEffort: template.maxEffort,
     afflictions: [],
     cognition: template.attributes.cognition,

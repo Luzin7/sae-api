@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type {
   CombatStatePayload,
   CombatantPayload,
@@ -11,14 +11,26 @@ import {
 } from '@modules/chat/chat.errors.js';
 import type {
   AdvanceTurnInput,
+  AdvanceTurnResult,
+  CharacterEffortRecovery,
+  ChangeInstanceEffortInput,
+  ChangeInstanceHpInput,
   CombatRepository,
   CombatantSeed,
-  InstanceVitalsPatch,
+  InstanceEffortChange,
+  InstanceHpChange,
+  SetInstanceAfflictionsInput,
 } from '@modules/chat/combat.repository.js';
 import { pickUniqueValue } from '@shared/dice/initiative.js';
 import { systemRng } from '@shared/dice/random.js';
+import { applyHpChange } from '@shared/rules/hp.js';
+import {
+  applyEffortChange,
+  recoverEffortOnTurnAdvance,
+  type EffortHolder,
+} from '@shared/rules/effort.js';
 import { db, type Database } from '../index.js';
-import { combatant, combatState } from '../schema.js';
+import { character, combatant, combatState } from '../schema.js';
 import { insertSessionLog, type Transaction } from './session-log.js';
 
 const MAX_FACES = 20;
@@ -171,21 +183,86 @@ function takenValues(rows: CombatantRow[]): number[] {
     .map((row) => row.initiativeValue as number);
 }
 
-function vitalsPatch(patch: InstanceVitalsPatch): {
-  currentHp: number;
+interface LockedInstance {
   currentEffort: number;
-  afflictions?: string[];
-} {
-  const values: {
-    currentHp: number;
-    currentEffort: number;
-    afflictions?: string[];
-  } = { currentHp: patch.currentHp, currentEffort: patch.currentEffort };
-  if (patch.afflictions !== undefined) {
-    values.afflictions = [...patch.afflictions];
+  maxEffort: number;
+  currentHp: number;
+  maxHp: number;
+}
+
+interface InstanceChange<R> {
+  next: { currentEffort: number; currentHp: number; afflictions?: string[] };
+  result: R;
+}
+
+function toLockedInstance(row: CombatantRow): LockedInstance {
+  if (
+    row.currentEffort === null ||
+    row.maxEffort === null ||
+    row.currentHp === null ||
+    row.maxHp === null
+  ) {
+    throw new CombatantNotFoundError();
   }
 
-  return values;
+  return {
+    currentEffort: row.currentEffort,
+    maxEffort: row.maxEffort,
+    currentHp: row.currentHp,
+    maxHp: row.maxHp,
+  };
+}
+
+/**
+ * Locks combat_state then the monster instance row (the same order as the
+ * turn advance), applies the decided change and logs the new combat state.
+ */
+async function changeLockedInstance<R>(
+  database: Database,
+  input: { sessionId: string; monsterId: string; playerId: string },
+  decide: (instance: LockedInstance) => InstanceChange<R>,
+): Promise<{ state: CombatStatePayload; result: R }> {
+  return database.transaction(async (tx) => {
+    const [state] = await tx
+      .select()
+      .from(combatState)
+      .where(eq(combatState.sessionId, input.sessionId))
+      .for('update');
+    if (!state) throw new CombatStateNotFoundError();
+
+    const [target] = await tx
+      .select()
+      .from(combatant)
+      .where(
+        and(
+          eq(combatant.sessionId, input.sessionId),
+          eq(combatant.kind, 'monster'),
+          eq(combatant.refId, input.monsterId),
+        ),
+      )
+      .for('update');
+    if (!target) throw new CombatantNotFoundError();
+
+    const decided = decide(toLockedInstance(target));
+    await tx
+      .update(combatant)
+      .set(decided.next)
+      .where(eq(combatant.id, target.id));
+
+    const rows = await tx
+      .select()
+      .from(combatant)
+      .where(eq(combatant.sessionId, input.sessionId));
+    const next = toState(state, rows);
+    await insertSessionLog(tx, {
+      sessionId: input.sessionId,
+      playerId: input.playerId,
+      eventType: 'combat_state',
+      payload: next,
+    });
+
+    return { state: next, result: decided.result };
+  });
 }
 
 function nextTurnPosition(
@@ -262,6 +339,81 @@ export async function removeCharacterCombatants(
       ),
     });
   }
+}
+
+interface TurnRecovery {
+  rows: CombatantRow[];
+  recovered: CharacterEffortRecovery[];
+}
+
+async function recoverTurnEffort(
+  tx: Transaction,
+  rows: CombatantRow[],
+  startingId: string,
+): Promise<TurnRecovery> {
+  const characterIds = rows
+    .filter((row) => row.kind === 'character')
+    .map((row) => row.refId);
+  const characterHolders: EffortHolder[] =
+    characterIds.length === 0
+      ? []
+      : await tx
+          .select({ id: character.id, currentEffort: character.currentEffort })
+          .from(character)
+          .where(inArray(character.id, characterIds))
+          .orderBy(character.id)
+          .for('update');
+  const monsterHolders: EffortHolder[] = rows
+    .filter((row) => row.kind === 'monster' && row.currentEffort !== null)
+    .map((row) => ({ id: row.id, currentEffort: row.currentEffort as number }));
+
+  const characterRecoveries = recoverEffortOnTurnAdvance(
+    characterHolders,
+    startingId,
+  );
+  for (const recovery of characterRecoveries) {
+    await tx
+      .update(character)
+      .set({
+        currentEffort: recovery.newEffort,
+        version: sql`${character.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(character.id, recovery.id));
+  }
+
+  const monsterEfforts = new Map<string, number>();
+  for (const recovery of recoverEffortOnTurnAdvance(
+    monsterHolders,
+    startingId,
+  )) {
+    await tx
+      .update(combatant)
+      .set({ currentEffort: recovery.newEffort })
+      .where(eq(combatant.id, recovery.id));
+    monsterEfforts.set(recovery.id, recovery.newEffort);
+  }
+
+  return {
+    rows: rows.map((row) =>
+      monsterEfforts.has(row.id)
+        ? { ...row, currentEffort: monsterEfforts.get(row.id) ?? null }
+        : row,
+    ),
+    recovered: characterRecoveries.map((recovery) => ({
+      characterId: recovery.id,
+      oldEffort: recovery.oldEffort,
+      newEffort: recovery.newEffort,
+    })),
+  };
+}
+
+function startingCombatantId(rows: CombatantRow[], turnIndex: number): string {
+  const starting = orderEntries(rows)[turnIndex];
+
+  return starting?.kind === 'character'
+    ? starting.refId
+    : (starting?.combatantId ?? '');
 }
 
 function toSeed(sessionId: string, seed: CombatantSeed) {
@@ -476,7 +628,7 @@ export function combatRepository(database: Database = db): CombatRepository {
       });
     },
 
-    async advanceTurn(input: AdvanceTurnInput): Promise<CombatStatePayload> {
+    async advanceTurn(input: AdvanceTurnInput): Promise<AdvanceTurnResult> {
       return database.transaction(async (tx) => {
         const [state] = await tx
           .select()
@@ -494,7 +646,7 @@ export function combatRepository(database: Database = db): CombatRepository {
         const stale =
           state.turnIndex !== input.expectedTurnIndex ||
           state.round !== input.expectedRound;
-        if (stale) return toState(state, rows);
+        if (stale) return { state: toState(state, rows), recovered: [] };
 
         const { turnIndex, round } = nextTurnPosition(
           state.turnIndex,
@@ -508,7 +660,12 @@ export function combatRepository(database: Database = db): CombatRepository {
           .returning();
         if (!updated) throw new CombatStateNotFoundError();
 
-        const next = toState(updated, rows);
+        const recovery = await recoverTurnEffort(
+          tx,
+          rows,
+          startingCombatantId(rows, updated.turnIndex),
+        );
+        const next = toState(updated, recovery.rows);
         await insertSessionLog(tx, {
           sessionId: input.sessionId,
           playerId: input.playerId,
@@ -516,49 +673,83 @@ export function combatRepository(database: Database = db): CombatRepository {
           payload: next,
         });
 
-        return next;
+        return { state: next, recovered: recovery.recovered };
       });
     },
 
-    async saveInstanceVitals(
-      sessionId: string,
-      monsterId: string,
-      patch: InstanceVitalsPatch,
-      playerId: string,
-    ): Promise<void> {
-      await database.transaction(async (tx) => {
-        const [state] = await tx
-          .select()
-          .from(combatState)
-          .where(eq(combatState.sessionId, sessionId))
-          .for('update');
-        if (!state) throw new CombatStateNotFoundError();
+    async changeInstanceEffort(
+      input: ChangeInstanceEffortInput,
+    ): Promise<InstanceEffortChange> {
+      const { state, result } = await changeLockedInstance(
+        database,
+        input,
+        (instance) => {
+          const applied = applyEffortChange(
+            {
+              currentEffort: instance.currentEffort,
+              effortLimit: instance.maxEffort,
+              currentHp: instance.currentHp,
+            },
+            input.delta,
+          );
 
-        const [updated] = await tx
-          .update(combatant)
-          .set(vitalsPatch(patch))
-          .where(
-            and(
-              eq(combatant.sessionId, sessionId),
-              eq(combatant.kind, 'monster'),
-              eq(combatant.refId, monsterId),
-            ),
-          )
-          .returning();
-        if (!updated) throw new CombatantNotFoundError();
+          return {
+            next: {
+              currentEffort: applied.currentEffort,
+              currentHp: applied.currentHp,
+            },
+            result: {
+              oldEffort: instance.currentEffort,
+              newEffort: applied.currentEffort,
+              oldHp: instance.currentHp,
+              newHp: applied.currentHp,
+            },
+          };
+        },
+      );
 
-        const rows = await tx
-          .select()
-          .from(combatant)
-          .where(eq(combatant.sessionId, sessionId));
+      return { state, ...result };
+    },
 
-        await insertSessionLog(tx, {
-          sessionId,
-          playerId,
-          eventType: 'combat_state',
-          payload: toState(state, rows),
-        });
-      });
+    async changeInstanceHp(
+      input: ChangeInstanceHpInput,
+    ): Promise<InstanceHpChange> {
+      const { state, result } = await changeLockedInstance(
+        database,
+        input,
+        (instance) => {
+          const { currentHp } = applyHpChange(
+            { currentHp: instance.currentHp, maxHp: instance.maxHp },
+            input.delta,
+          );
+
+          return {
+            next: { currentEffort: instance.currentEffort, currentHp },
+            result: { oldHp: instance.currentHp, newHp: currentHp },
+          };
+        },
+      );
+
+      return { state, ...result };
+    },
+
+    async setInstanceAfflictions(
+      input: SetInstanceAfflictionsInput,
+    ): Promise<{ state: CombatStatePayload }> {
+      const { state } = await changeLockedInstance(
+        database,
+        input,
+        (instance) => ({
+          next: {
+            currentEffort: instance.currentEffort,
+            currentHp: instance.currentHp,
+            afflictions: [...input.afflictions],
+          },
+          result: null,
+        }),
+      );
+
+      return { state };
     },
 
     async end(
