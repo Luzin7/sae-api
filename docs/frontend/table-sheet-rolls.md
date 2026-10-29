@@ -137,7 +137,23 @@ The master can also read `GET /characters/:id`, `GET /characters/:id/items`, `GE
 - `character.pe-changed` (`{ "characterId": "uuid", "oldPe": 5, "newPe": 8 }`) is pushed whenever PE changes: `character.pe-change` frame, `PATCH /characters/:id/pe`, or per-turn recovery. See section 3.5 (PE) and 3.6 (PS).
 - `character.np-changed` (`{ "characterId": "uuid", "oldNp": 3, "newNp": 4 }`) is pushed to the game room after `PATCH /characters/:id` changes NP (Mestre only). Nothing is pushed when NP is unchanged or the save fails (including a `409` version conflict). Refetch the sheet on receipt: `maxHp`, `bExp` and the attribute and skill pools change with NP. Best-effort: no active session, no frame.
 - Lowering NP below what is already spent answers `400 VALIDATION` (never `409`) with a message naming each item, e.g. `Não dá para descer: Perícias de Cognição usam 14 de 10. Pontos de Atributo usam 22 de 20.`; nothing is written.
+- `character.advanced` (`{ "characterId": "uuid" }`) is pushed to the game room after `POST /characters/:id/advancement` succeeds. Refetch the sheet on receipt. Nothing is pushed when the request fails (including `409`). Best-effort: no active session, no frame.
 - Items and skills are not pushed; refetch after those mutations.
+
+### 3.3.1 Advancement (add-only spend)
+
+`POST /characters/:id/advancement`, owner only (the Mestre who is not the owner gets `403`).
+
+```json
+{ "version": 3, "attributes": { "constitution": 3 }, "skills": [{ "skillId": "uuid", "proficiencyBonus": 4 }] }
+```
+
+- `attributes` (optional, partial) and `skills` carry TARGET values, never deltas. `skills` has no repeated `skillId`.
+- Only points gained are added; points already spent never go back. Any target below the saved value answers `400 VALIDATION` `Pontos distribuídos não podem ser retirados.`; a request that raises nothing answers `400 VALIDATION` `Nada para evoluir.`. Nothing is written in either case.
+- Attribute budget, skill pools and per-skill caps are checked against the current NP; the existing messages apply.
+- `maxHp` is recomputed from Constituição and Vitalidade, `maxEffort` from Condicionamento. Current PS and PE are kept, only clamped down if the new limit is lower. NP and `bExp` are untouched.
+- `version` is the sheet version the client read; a stale one answers `409`, so a replay of the same body also answers `409`.
+- Answers `200 { "character": { ... } }` with the same shape as `GET /characters/:id`, including `advancement` and the bumped `version`.
 
 ### 3.4 Legacy data
 

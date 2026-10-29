@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { authenticate } from '@infra/http/authenticate.js';
+import type { AdvanceCharacterService } from './advance-character/advance-character.service.js';
 import type { AddItemService } from './items/add-item/add-item.service.js';
 import type { DeleteItemService } from './items/delete-item/delete-item.service.js';
 import type { UpdateItemService } from './items/update-item/update-item.service.js';
 import type { CharacterQueryService } from './character-query.service.js';
 import { CharacterPresenter } from './character.presenter.js';
 import {
+  AdvanceCharacterBodySchema,
   CharacterGameParamsSchema,
   CharacterItemParamsSchema,
   CharacterListQuerySchema,
@@ -37,6 +39,7 @@ export interface CharacterServices {
   getCharacter: GetCharacterService;
   getSheet: GetSheetService;
   updateCharacter: UpdateCharacterService;
+  advanceCharacter: AdvanceCharacterService;
   deleteCharacter: DeleteCharacterService;
   changeHp: ChangeHpService;
   changeEffort: ChangeEffortService;
@@ -126,6 +129,22 @@ export default async function characterRoutes(
 
     return { character: CharacterPresenter.toHTTP(character) };
   });
+
+  app.post(
+    '/:id/advancement',
+    { preHandler: authenticate },
+    async (request) => {
+      const { id } = CharacterParamsSchema.parse(request.params);
+      const body = AdvanceCharacterBodySchema.parse(request.body);
+      const view = await opts.services.advanceCharacter.execute(
+        id,
+        request.playerId,
+        body,
+      );
+
+      return { character: CharacterPresenter.toReadHTTP(view) };
+    },
+  );
 
   app.patch('/:id/hp', { preHandler: authenticate }, async (request) => {
     const { id } = CharacterParamsSchema.parse(request.params);

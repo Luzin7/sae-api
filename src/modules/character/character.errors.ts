@@ -115,6 +115,24 @@ export class SkillBonusCapExceededError extends DomainError {
   }
 }
 
+export class SpentPointsLockedError extends DomainError {
+  readonly code: DomainErrorCode = 'VALIDATION';
+  readonly httpStatus = 400;
+
+  constructor() {
+    super('Pontos distribuídos não podem ser retirados.');
+  }
+}
+
+export class EmptyAdvancementError extends DomainError {
+  readonly code: DomainErrorCode = 'VALIDATION';
+  readonly httpStatus = 400;
+
+  constructor() {
+    super('Nada para evoluir.');
+  }
+}
+
 export class PreviewRateLimitedError extends DomainError {
   readonly code: DomainErrorCode = 'RATE_LIMITED';
   readonly httpStatus = 429;

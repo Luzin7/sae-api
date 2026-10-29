@@ -149,6 +149,7 @@ export function makeNotifier(): GameSessionNotifier {
     notifyHpChanged: vi.fn().mockResolvedValue(undefined),
     notifyEffortChanged: vi.fn().mockResolvedValue(undefined),
     notifyNpChanged: vi.fn().mockResolvedValue(undefined),
+    notifyCharacterAdvanced: vi.fn().mockResolvedValue(undefined),
     notifyCombatChanged: vi.fn().mockResolvedValue(undefined),
   };
 }

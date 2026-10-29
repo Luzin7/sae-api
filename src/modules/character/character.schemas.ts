@@ -202,6 +202,24 @@ export const UpdateCharacterBodySchema =
     refineSizeSources(false),
   ).superRefine(refineUniqueAfflictions);
 
+export const AdvanceCharacterBodySchema = z
+  .object({
+    version: z.number().int().min(0),
+    attributes: z
+      .object({
+        cognition: AttributeSchema,
+        psyche: AttributeSchema,
+        instinct: AttributeSchema,
+        constitution: AttributeSchema,
+        motricity: AttributeSchema,
+        perception: AttributeSchema,
+      })
+      .partial()
+      .default({}),
+    skills: SkillAllocationsSchema.default([]),
+  })
+  .superRefine(refineUniqueSkills);
+
 export const PreviewCharacterBodySchema = CharacterSheetBodySchema.pick({
   np: true,
   cognition: true,
@@ -287,6 +305,7 @@ export const CharacterListQuerySchema = z.object({
 
 export type CreateCharacterBody = z.infer<typeof CreateCharacterBodySchema>;
 export type PreviewCharacterBody = z.infer<typeof PreviewCharacterBodySchema>;
+export type AdvanceCharacterBody = z.infer<typeof AdvanceCharacterBodySchema>;
 export type UpdateCharacterBody = z.infer<typeof UpdateCharacterBodySchema>;
 export type ChangeHpBody = z.infer<typeof ChangeHpBodySchema>;
 export type ChangeEffortBody = z.infer<typeof ChangeEffortBodySchema>;

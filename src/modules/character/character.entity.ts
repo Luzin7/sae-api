@@ -259,7 +259,7 @@ export interface Vitals {
 export type SheetChanges = Omit<
   UpdateCharacterInput,
   'currentHp' | 'currentEffort' | 'maxHp' | 'maxEffort'
-> & { maxHp: number; maxEffort: number };
+> & { maxHp: number; maxEffort: number; skills?: UpsertSkillInput[] };
 
 export type SheetDecision = (
   current: Character,

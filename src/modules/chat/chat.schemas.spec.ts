@@ -186,6 +186,15 @@ describe('hp delta frames', () => {
     expect(result.data).toEqual(frame);
   });
 
+  it('accepts the advanced frame', () => {
+    const frame = { type: 'character.advanced', characterId: 'char-1' };
+
+    const result = OutboundEventSchema.safeParse(frame);
+
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual(frame);
+  });
+
   it('no longer accepts session.monster-vitals as an outbound event', () => {
     expect(
       OutboundEventSchema.safeParse({

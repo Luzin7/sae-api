@@ -1,4 +1,5 @@
 import type {
+  CharacterAdvanced,
   EffortChanged,
   GameSessionNotifier,
   HpChanged,
@@ -79,6 +80,16 @@ export class GameSessionNotifierService implements GameSessionNotifier {
       characterId: change.characterId,
       oldNp: change.oldNp,
       newNp: change.newNp,
+    });
+  }
+
+  async notifyCharacterAdvanced(
+    gameId: string,
+    change: CharacterAdvanced,
+  ): Promise<void> {
+    await this.publish(gameId, {
+      type: 'character.advanced',
+      characterId: change.characterId,
     });
   }
 

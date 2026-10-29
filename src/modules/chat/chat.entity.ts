@@ -91,6 +91,10 @@ export type RealtimeEvent =
       newNp: number;
     }
   | {
+      type: 'character.advanced';
+      characterId: string;
+    }
+  | {
       type: 'master.narration';
       playerId: string;
       playerName: string;
