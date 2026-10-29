@@ -161,6 +161,12 @@ The master can also read `GET /characters/:id`, `GET /characters/:id/items`, `GE
 
 Legacy rows may still have `character.heightCm`, `character.weightKg` and `character.size` as `null`. Render them gracefully (placeholder, omit the line, never crash or print `null`).
 
+### 3.4.1 Bestiary: monster size
+
+`size` on bestiary create (`POST /bestiary`) and update (`PATCH /bestiary/:id`) is a choice, no longer free text. Send one of the keys `miudo`, `pequeno`, `medio`, `grande`, `enorme`, or `null`/omit it. Any other value (for example `"Médio"` or `"Gigantão"`) is a `400` with `error.code: "VALIDATION"`. Responses return the same key or `null`.
+
+Render the label from `GET /rules` -> `sizeCategories` (`[{ key, name, min, max }]`, e.g. `{ "key": "medio", "name": "Médio" }`); never show the raw key. Build the picker from the same list. Monsters saved before this change were normalized by the server: a recognizable name became its key, anything else became `null` (render a placeholder).
+
 ### 3.5 Pontos de Esforco (PE)
 
 Rules (rulebook, Cap. 2): PE starts at 0 and rises. Limite de Esforco = 20 + proficiency bonus in Condicionamento (`maxEffort`). Exausto means `currentEffort >= maxEffort`; clients compute it, the server never stores it.

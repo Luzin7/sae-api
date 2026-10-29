@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SIZE_CATEGORY_KEYS } from '@shared/rules/size.js';
 
 const AttributeSchema = z.union([
   z.literal(-5),
@@ -18,7 +19,7 @@ const SheetFields = {
   maxHp: z.number().int().positive(),
   maxEffort: z.number().int().positive(),
   currentHp: z.number().int().min(0).optional(),
-  size: z.string().max(30).nullable().optional(),
+  size: z.enum(SIZE_CATEGORY_KEYS).nullable().optional(),
   cognition: AttributeSchema.default(-5),
   psyche: AttributeSchema.default(-5),
   instinct: AttributeSchema.default(-5),

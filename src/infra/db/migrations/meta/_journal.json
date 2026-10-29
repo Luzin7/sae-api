@@ -71,6 +71,13 @@
       "when": 1793289719334,
       "tag": "0009_pontos_de_esforco",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793306057744,
+      "tag": "0010_monster_size_categories",
+      "breakpoints": true
     }
   ]
 }
