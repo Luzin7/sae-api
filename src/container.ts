@@ -269,6 +269,7 @@ export function buildContainer(deps: {
         ),
         deleteCharacter: new DeleteCharacterService(
           characters,
+          gameAccess,
           sessionNotifier,
         ),
         updateVitals: new UpdateVitalsService(

@@ -57,7 +57,11 @@ function makeServices(
       fixedRng,
       notifier,
     ),
-    deleteCharacter: new DeleteCharacterService(characters, notifier),
+    deleteCharacter: new DeleteCharacterService(
+      characters,
+      membership,
+      notifier,
+    ),
     updateVitals: new UpdateVitalsService(characters, membership, notifier),
     addItem: new AddItemService(characters),
     updateItem: new UpdateItemService(characters),
@@ -75,8 +79,11 @@ async function buildTestApp(services: CharacterServices) {
   return app;
 }
 
-function makeToken(app: Awaited<ReturnType<typeof buildTestApp>>) {
-  return app.jwt.sign({ sub: 'player-1', name: 'Tester' });
+function makeToken(
+  app: Awaited<ReturnType<typeof buildTestApp>>,
+  sub = 'player-1',
+) {
+  return app.jwt.sign({ sub, name: 'Tester' });
 }
 
 function createPayload() {
@@ -227,10 +234,29 @@ describe('character routes', () => {
     });
   });
 
-  it('deletes a character for its owner', async () => {
+  it('lets the master delete a sheet of their table', async () => {
     const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'player-1' }),
+    );
     vi.mocked(characters.delete).mockResolvedValue(undefined);
+    const app = await buildTestApp(makeServices(characters, makeMembership()));
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/characters/char-1',
+      headers: { cookie: `token=${makeToken(app, 'master-1')}` },
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(characters.delete).toHaveBeenCalledWith('char-1');
+  });
+
+  it('returns 403 when a non-master player deletes a sheet', async () => {
+    const characters = makeCharacterRepository();
+    vi.mocked(characters.findById).mockResolvedValue(
+      makeCharacter({ playerId: 'other-player' }),
+    );
     const app = await buildTestApp(makeServices(characters, makeMembership()));
 
     const res = await app.inject({
@@ -239,8 +265,8 @@ describe('character routes', () => {
       headers: { cookie: `token=${makeToken(app)}` },
     });
 
-    expect(res.statusCode).toBe(204);
-    expect(characters.delete).toHaveBeenCalledWith('char-1');
+    expect(res.statusCode).toBe(403);
+    expect(characters.delete).not.toHaveBeenCalled();
   });
 
   it('adds and lists items for an owned character', async () => {

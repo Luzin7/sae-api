@@ -40,6 +40,22 @@ export async function requireReadableCharacter(
   throw new ForbiddenError();
 }
 
+/** Master-only guard: only the game master may delete a character sheet. */
+export async function requireMasterCharacter(
+  repository: CharacterRepository,
+  access: GameAccess,
+  id: string,
+  requesterId: string,
+): Promise<Character> {
+  const character = await repository.findById(id);
+  if (!character) throw new CharacterNotFoundError();
+
+  const game = await access.findById(character.gameId);
+  if (game?.masterId !== requesterId) throw new ForbiddenError();
+
+  return character;
+}
+
 export async function requireEditableCharacter(
   repository: CharacterRepository,
   access: GameAccess,
