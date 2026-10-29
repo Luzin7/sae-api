@@ -1157,6 +1157,32 @@ describe('character preview contract', () => {
     expect(characters.create).not.toHaveBeenCalled();
   });
 
+  it('derives size from a rolled band and an exact value', async () => {
+    const { res } = await postPreview({
+      np: 1,
+      heightRoll: 'min',
+      weightKg: 70,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().preview.size).toEqual({
+      factor: 0.5,
+      category: 'pequeno',
+      next: { category: 'medio', factorNeeded: 2 },
+    });
+  });
+
+  it('rejects an exact value together with a roll for the same dimension', async () => {
+    const { res } = await postPreview({
+      np: 1,
+      heightCm: 180,
+      heightRoll: 'max',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('VALIDATION');
+  });
+
   it('rejects an invalid attribute value', async () => {
     const { res } = await postPreview({ constitution: 0 });
 

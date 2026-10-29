@@ -6,8 +6,12 @@ import {
 } from '@shared/rules/social-classes.js';
 import {
   nextSizeCategory,
+  heightFactor,
+  rolledHeightFactor,
+  rolledWeightFactor,
   sizeCategory,
-  sizeFactorMean,
+  weightFactor,
+  type SizeExtremeBand,
   type NextSizeCategory,
   type SizeCategoryKey,
 } from '@shared/rules/size.js';
@@ -41,6 +45,19 @@ export interface SizeDetail {
   next: NextSizeCategory | null;
 }
 
+function sizeDetailFromFactors(
+  height: number | null,
+  weight: number | null,
+): SizeDetail | null {
+  if (height === null || weight === null) return null;
+
+  const factor = (height + weight) / 2;
+  const category = sizeCategory(factor);
+  if (category === null) return null;
+
+  return { factor, category, next: nextSizeCategory(factor) };
+}
+
 /** Size factor, category and next category; null when height/weight is missing or out of bands. */
 export function deriveSizeDetail(
   heightCm: number | null | undefined,
@@ -49,13 +66,44 @@ export function deriveSizeDetail(
   if (heightCm === null || heightCm === undefined) return null;
   if (weightKg === null || weightKg === undefined) return null;
 
-  const factor = sizeFactorMean(heightCm, weightKg);
-  if (factor === null) return null;
+  return sizeDetailFromFactors(heightFactor(heightCm), weightFactor(weightKg));
+}
 
-  const category = sizeCategory(factor);
-  if (category === null) return null;
+export interface SizeInputs {
+  heightCm?: number | null;
+  heightRoll?: SizeExtremeBand;
+  weightKg?: number | null;
+  weightRoll?: SizeExtremeBand;
+}
 
-  return { factor, category, next: nextSizeCategory(factor) };
+function dimensionFactor(
+  roll: SizeExtremeBand | undefined,
+  rolledFactor: (band: SizeExtremeBand) => number,
+  value: number | null | undefined,
+  factorOf: (value: number) => number | null,
+): number | null {
+  if (roll) return rolledFactor(roll);
+  if (value === null || value === undefined) return null;
+
+  return factorOf(value);
+}
+
+/** Like `deriveSizeDetail`, but a rolled dimension counts as its band's fixed factor. */
+export function derivePreviewSizeDetail(input: SizeInputs): SizeDetail | null {
+  return sizeDetailFromFactors(
+    dimensionFactor(
+      input.heightRoll,
+      rolledHeightFactor,
+      input.heightCm,
+      heightFactor,
+    ),
+    dimensionFactor(
+      input.weightRoll,
+      rolledWeightFactor,
+      input.weightKg,
+      weightFactor,
+    ),
+  );
 }
 
 /** Size category key from height/weight; null when either is missing. */

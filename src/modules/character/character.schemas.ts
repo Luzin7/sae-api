@@ -213,7 +213,9 @@ export const PreviewCharacterBodySchema = CharacterSheetBodySchema.pick({
   personality: true,
   posture: true,
   heightCm: true,
+  heightRoll: true,
   weightKg: true,
+  weightRoll: true,
   socialClass: true,
 })
   .partial()
@@ -221,6 +223,7 @@ export const PreviewCharacterBodySchema = CharacterSheetBodySchema.pick({
     np: CharacterSheetBodySchema.shape.np,
     skills: SkillAllocationsSchema.optional(),
   })
+  .superRefine(refineSizeSources(false))
   .superRefine(refineUniqueSkills);
 
 export const ChangeHpBodySchema = z.object({
