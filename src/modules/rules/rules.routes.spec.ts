@@ -75,4 +75,30 @@ describe('GET /rules', () => {
     expect(body.attributeBudgetByNp[20]).toBe(attributeBudget(20));
     expect(body.attributeBudgetByNp).toHaveLength(21);
   });
+
+  it('returns the starting wealth range of each social class', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/rules',
+      headers: { authorization: `Bearer ${token()}` },
+    });
+
+    const body = response.json<{
+      socialClasses: Array<{
+        key: string;
+        startingWealth: { min: number; max: number };
+      }>;
+    }>();
+    expect(
+      body.socialClasses.map(({ key, startingWealth }) => [
+        key,
+        startingWealth,
+      ]),
+    ).toEqual([
+      ['opulento', { min: 1440, max: 5760 }],
+      ['abastado', { min: 240, max: 960 }],
+      ['plebeu', { min: 80, max: 320 }],
+      ['miseravel', { min: 40, max: 160 }],
+    ]);
+  });
 });
