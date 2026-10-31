@@ -14,6 +14,8 @@ import {
   OFICIO_CD_REDUCTION,
   OFICIOS,
   PERSONALITIES,
+  type PersonalityDefinition,
+  type PostureDefinition,
   POSTURES,
   PROFICIENCY_LEVELS,
   PROFICIENCY_SKILL_CAP,
@@ -37,6 +39,13 @@ export interface RulesRoutesOptions {
   skillCatalog: SkillCatalog;
 }
 
+function archetypeLevels({
+  name,
+  levels,
+}: PersonalityDefinition | PostureDefinition) {
+  return { name, levels };
+}
+
 /**
  * Read-only catalog of the rulebook tables. Constants come from `@shared/rules`;
  * only `skillCatalog` is read from the DB so it can carry the persisted ids.
@@ -57,8 +66,8 @@ export default async function rulesRoutes(
     personalities: PERSONALITIES,
     postures: POSTURES,
     proficiencyByArchetype: {
-      personalities: PERSONALITIES,
-      postures: POSTURES,
+      personalities: PERSONALITIES.map(archetypeLevels),
+      postures: POSTURES.map(archetypeLevels),
     },
     oficios: OFICIOS,
     oficioCdReduction: OFICIO_CD_REDUCTION,

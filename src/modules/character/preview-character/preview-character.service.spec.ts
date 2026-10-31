@@ -102,6 +102,8 @@ describe('PreviewCharacterService', () => {
       skillBudget: null,
       attributePoints: { budget: 20, spent: 0, remaining: 20 },
       size: null,
+      heightFactor: null,
+      weightFactor: null,
       startingWealth: null,
     });
     expect(characters.findSkillsByIds).not.toHaveBeenCalled();
@@ -222,6 +224,25 @@ describe('PreviewCharacterService', () => {
     });
 
     expect(preview.size?.category).toBe('miudo');
+  });
+
+  it('returns the height factor alone when weight is missing', async () => {
+    const { service } = makeService();
+
+    const preview = await service.execute({ np: 1, heightCm: 180 });
+
+    expect(preview.heightFactor).toBe(2);
+    expect(preview.weightFactor).toBeNull();
+    expect(preview.size).toBeNull();
+  });
+
+  it('returns the fixed factor of a rolled max height band', async () => {
+    const { service } = makeService();
+
+    const preview = await service.execute({ np: 1, heightRoll: 'max' });
+
+    expect(preview.heightFactor).toBe(5);
+    expect(preview.weightFactor).toBeNull();
   });
 
   it('returns null size when only one of height and weight is given', async () => {

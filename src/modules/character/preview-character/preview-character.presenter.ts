@@ -13,6 +13,8 @@ export class CharacterPreviewPresenter {
       skillBudget: preview.skillBudget,
       attributePoints: preview.attributePoints,
       size: preview.size,
+      heightFactor: preview.heightFactor,
+      weightFactor: preview.weightFactor,
       startingWealth: preview.startingWealth,
     };
   }

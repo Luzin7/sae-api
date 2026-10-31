@@ -10,7 +10,7 @@ import { AFFLICTION_KEYS, AFFLICTIONS } from './afflictions.js';
 import { MOTIVATIONS } from './motivations.js';
 import { OFICIOS, oficioCdReduction } from './oficios.js';
 import { SKILLS } from './skills.js';
-import { deriveProficiency } from './archetypes.js';
+import { deriveProficiency, PERSONALITIES, POSTURES } from './archetypes.js';
 import { levelPoints, proficiencyPool } from './proficiency.js';
 import {
   rollHeight,
@@ -80,6 +80,27 @@ describe('proficiency pools and archetype derivation', () => {
 
   it('returns null for an unknown archetype', () => {
     expect(deriveProficiency('Erudito', 'Inexistente')).toBeNull();
+  });
+});
+
+describe('archetype texts', () => {
+  const archetypes = [...PERSONALITIES, ...POSTURES];
+
+  it('gives every archetype a motto and at least one paragraph', () => {
+    expect(archetypes).toHaveLength(20);
+    for (const { motto, paragraphs } of archetypes) {
+      expect(motto).not.toBe('');
+      expect(paragraphs.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('carries the rulebook text of Erudito', () => {
+    const erudito = PERSONALITIES[0];
+    expect(erudito.motto).toBe('Observe. Analise. Questione.');
+    expect(erudito.paragraphs[0]).toMatch(
+      /^O mundo não é algo a ser apenas vivido ele deve ser \*\*compreendido\*\*\./,
+    );
+    expect(erudito.paragraphs.at(-1)).toBe('E você foi feito para resolvê-lo.');
   });
 });
 
