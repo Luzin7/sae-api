@@ -34,6 +34,6 @@ export function setRefreshCookie(reply: FastifyReply, token: string): void {
 }
 
 export function clearAuthCookies(reply: FastifyReply): void {
-  reply.clearCookie(ACCESS_COOKIE, { path: '/' });
-  reply.clearCookie(REFRESH_COOKIE, { path: '/' });
+  reply.clearCookie(ACCESS_COOKIE, cookiePolicy());
+  reply.clearCookie(REFRESH_COOKIE, cookiePolicy());
 }

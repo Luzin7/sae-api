@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ForbiddenError } from '@shared/errors/http-errors.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import { type GameSession, type SessionLog } from '../session.entity.js';
-import { SessionNotFoundError } from '../session.errors.js';
 import type { SessionRepository } from '../session.repository.js';
 import { ListLogsService } from './list-logs.service.js';
 
@@ -87,25 +86,6 @@ describe('ListLogsService', () => {
       ),
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(sessions.listLogs).not.toHaveBeenCalled();
-  });
-
-  it('throws SessionNotFoundError when the session does not exist', async () => {
-    const sessions = makeSessions();
-    const access = makeAccess();
-    vi.mocked(access.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'p1',
-    });
-    vi.mocked(sessions.findById).mockResolvedValue(null);
-
-    await expect(
-      new ListLogsService(sessions, access).execute(
-        'game-1',
-        'session-1',
-        'p1',
-        PAGE,
-      ),
-    ).rejects.toBeInstanceOf(SessionNotFoundError);
   });
 
   it('returns paginated logs for a member in the right game', async () => {

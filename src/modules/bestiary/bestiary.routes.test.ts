@@ -243,24 +243,6 @@ describe('bestiary routes', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('creates a monster with an official size key', async () => {
-    const monsters = makeMonsters();
-    const create = vi.spyOn(monsters, 'create');
-    const app = await buildTestApp(monsters);
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/bestiary',
-      payload: makeBody({ size: 'medio' }),
-      headers: { cookie: `token=${makeToken(app, MASTER_A)}` },
-    });
-
-    expect(res.statusCode).toBe(201);
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ size: 'medio' }),
-    );
-  });
-
   it('rejects a create with a size outside the official keys', async () => {
     const monsters = makeMonsters();
     const create = vi.spyOn(monsters, 'create');

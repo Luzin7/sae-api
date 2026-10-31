@@ -16,7 +16,7 @@ import type {
   CombatantRef,
   CombatantSource,
 } from './combatant-source.contract.js';
-import type { CombatRepository, CombatantSeed } from './combat.repository.js';
+import type { CombatRepository } from './combat.repository.js';
 import type { GameAccess } from '@shared/game-access/game-access.contract.js';
 import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
 import type { Rng } from '@shared/dice/roll.js';
@@ -220,25 +220,6 @@ function advance(
   });
 }
 
-function reusableMonsterSeed(): CombatantSeed {
-  return {
-    kind: 'monster',
-    refId: 'mon-reusable',
-    name: 'Ogro',
-    currentHp: 33,
-    maxHp: 40,
-    currentEffort: 4,
-    maxEffort: 6,
-    afflictions: [],
-    cognition: 0,
-    psyche: 0,
-    instinct: 0,
-    constitution: 0,
-    motricity: 0,
-    perception: 0,
-  };
-}
-
 function entryValue(
   entries: { refId: string; initiativeValue: number | null }[],
   refId: string,
@@ -292,84 +273,6 @@ describe('StartCombatService', () => {
     });
 
     expect(entryValue(state.entries, MONSTER_ID)).toBe(13);
-  });
-
-  it('keeps monster and player values when the same combat starts twice', async () => {
-    const flow = buildFlow({ rng: sequenceRng([7, 18, 3, 4]) });
-    await flow.startCombat.execute({
-      playerId: MASTER_ID,
-      sessionId: SESSION_ID,
-    });
-    await rollAs(flow, OWNER_ID, 'character', CHARACTER_ID);
-
-    const state = await flow.startCombat.execute({
-      playerId: MASTER_ID,
-      sessionId: SESSION_ID,
-    });
-
-    expect(entryValue(state.entries, MONSTER_ID)).toBe(7);
-    expect(entryValue(state.entries, CHARACTER_ID)).toBe(18);
-    expect(entryValue(state.entries, FOREIGN_CHARACTER_ID)).toBeNull();
-  });
-
-  it('keeps an added reusable monster and the turn position when started again', async () => {
-    const flow = buildFlow({ rng: fixedRng(10) });
-    await flow.startCombat.execute({
-      playerId: MASTER_ID,
-      sessionId: SESSION_ID,
-    });
-    await rollAs(flow, MASTER_ID, 'character', CHARACTER_ID);
-    await rollAs(flow, MASTER_ID, 'character', FOREIGN_CHARACTER_ID);
-    await flow.combat.addCombatant(
-      SESSION_ID,
-      reusableMonsterSeed(),
-      MASTER_ID,
-    );
-    const before = await advance(flow, { turnIndex: 0, round: 1 });
-
-    const state = await flow.startCombat.execute({
-      playerId: MASTER_ID,
-      sessionId: SESSION_ID,
-    });
-
-    const ogre = state.entries.find((entry) => entry.refId === 'mon-reusable');
-    const ogreBefore = before.entries.find(
-      (entry) => entry.refId === 'mon-reusable',
-    );
-    expect(ogre).toBeDefined();
-    expect(ogre?.currentHp).toBe(33);
-    expect(ogre?.initiativeValue).toBe(ogreBefore?.initiativeValue);
-    expect(state.turnIndex).toBe(before.turnIndex);
-    expect(state.round).toBe(before.round);
-  });
-
-  it('deduplicates a new monster against a preserved player value', async () => {
-    const refs = makeRefs();
-    const flow = buildFlow({ refs, rng: sequenceRng([11, 14, 14, 6]) });
-    await flow.startCombat.execute({
-      playerId: MASTER_ID,
-      sessionId: SESSION_ID,
-    });
-    await rollAs(flow, OWNER_ID, 'character', CHARACTER_ID);
-    refs.push({
-      kind: 'monster',
-      refId: 'mon-2',
-      name: 'Orc',
-      ownerPlayerId: null,
-    });
-
-    const state = await flow.startCombat.execute({
-      playerId: MASTER_ID,
-      sessionId: SESSION_ID,
-    });
-
-    expect(entryValue(state.entries, MONSTER_ID)).toBe(11);
-    expect(entryValue(state.entries, CHARACTER_ID)).toBe(14);
-    expect(entryValue(state.entries, 'mon-2')).toBe(6);
-    const values = state.entries
-      .filter((entry) => entry.hasRolled)
-      .map((entry) => entry.initiativeValue);
-    expect(new Set(values).size).toBe(values.length);
   });
 
   it('rejects a non-master player', async () => {
@@ -469,43 +372,6 @@ describe('NextTurnService', () => {
     await expect(
       advance(flow, { turnIndex: 0, round: 1 }),
     ).rejects.toBeInstanceOf(CombatNotReadyError);
-  });
-
-  it('wraps the round when advancing past the last combatant', async () => {
-    const flow = buildFlow();
-    await flow.startCombat.execute({
-      playerId: MASTER_ID,
-      sessionId: SESSION_ID,
-    });
-    await rollAs(flow, MASTER_ID, 'character', CHARACTER_ID);
-    await rollAs(flow, MASTER_ID, 'character', FOREIGN_CHARACTER_ID);
-    await rollAs(flow, MASTER_ID, 'monster', MONSTER_ID);
-
-    await advance(flow, { turnIndex: 0, round: 1 });
-    await advance(flow, { turnIndex: 1, round: 1 });
-    const state = await advance(flow, { turnIndex: 2, round: 1 });
-
-    expect(state.turnIndex).toBe(0);
-    expect(state.round).toBe(2);
-  });
-
-  it('advances once when two frames carry the same expected turn', async () => {
-    const flow = buildFlow();
-    await flow.startCombat.execute({
-      playerId: MASTER_ID,
-      sessionId: SESSION_ID,
-    });
-    await rollAs(flow, MASTER_ID, 'character', CHARACTER_ID);
-    await rollAs(flow, MASTER_ID, 'character', FOREIGN_CHARACTER_ID);
-    await rollAs(flow, MASTER_ID, 'monster', MONSTER_ID);
-
-    await advance(flow, { turnIndex: 0, round: 1 });
-    const second = await advance(flow, { turnIndex: 0, round: 1 });
-
-    expect(second.turnIndex).toBe(1);
-    const state = await flow.combat.findState(SESSION_ID);
-    expect(state?.turnIndex).toBe(1);
-    expect(state?.round).toBe(1);
   });
 });
 

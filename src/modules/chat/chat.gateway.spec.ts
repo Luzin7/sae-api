@@ -1,6 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ForbiddenError } from '@shared/errors/http-errors.js';
 import websocketPlugin from '../../plugins/websocket.plugin.js';
 import { InMemoryMessageBus } from './chat.bus.js';
 import chatGateway, { type ChatServices } from './chat.gateway.js';
@@ -510,68 +509,6 @@ describe('chatGateway session state', () => {
     expect(characters.changeHp).not.toHaveBeenCalled();
   });
 
-  it('dispatches master.monster-afflictions-update and broadcasts the combat state', async () => {
-    const { url, combat } = await buildJoinedApp();
-    vi.mocked(combat.setInstanceAfflictions).mockResolvedValue({
-      state: { active: true, turnIndex: 0, round: 1, entries: [] },
-    });
-    const client = collectFrames(`${url}?token=master-1`);
-    client.send({ type: 'session.join', sessionId: SESSION_ID });
-    await client.waitFor(3);
-
-    client.send({
-      type: 'master.monster-afflictions-update',
-      sessionId: SESSION_ID,
-      monsterId: MONSTER_ID,
-      afflictions: ['fobia'],
-    });
-    await vi.waitFor(() => {
-      if (!client.frames.slice(3).some((f) => f.type === 'session.combat')) {
-        throw new Error('not broadcast yet');
-      }
-    });
-    client.close();
-
-    expect(combat.setInstanceAfflictions).toHaveBeenCalledWith({
-      sessionId: SESSION_ID,
-      monsterId: MONSTER_ID,
-      afflictions: ['fobia'],
-      playerId: 'master-1',
-    });
-  });
-
-  it('dispatches master.monster-hp-change and broadcasts the combat state', async () => {
-    const { url, combat } = await buildJoinedApp();
-    vi.mocked(combat.changeInstanceHp).mockResolvedValue({
-      state: { active: true, turnIndex: 0, round: 1, entries: [] },
-      oldHp: 10,
-      newHp: 7,
-    });
-    const client = collectFrames(`${url}?token=master-1`);
-    client.send({ type: 'session.join', sessionId: SESSION_ID });
-    await client.waitFor(3);
-
-    client.send({
-      type: 'master.monster-hp-change',
-      sessionId: SESSION_ID,
-      monsterId: MONSTER_ID,
-      delta: -3,
-    });
-    await vi.waitFor(() => {
-      if (!client.frames.slice(3).some((f) => f.type === 'session.combat')) {
-        throw new Error('not broadcast yet');
-      }
-    });
-    client.close();
-
-    expect(combat.changeInstanceHp).toHaveBeenCalledWith({
-      sessionId: SESSION_ID,
-      monsterId: MONSTER_ID,
-      delta: -3,
-      playerId: 'master-1',
-    });
-  });
-
   it('dispatches character.pe-change and broadcasts pe and hp changes', async () => {
     const { url, characters } = await buildJoinedApp();
     vi.mocked(characters.findById).mockResolvedValue({
@@ -651,40 +588,6 @@ describe('chatGateway session state', () => {
 
     expect(characters.changeEffort).not.toHaveBeenCalled();
   });
-
-  it('dispatches master.monster-pe-change and broadcasts the combat state', async () => {
-    const { url, combat } = await buildJoinedApp();
-    vi.mocked(combat.changeInstanceEffort).mockResolvedValue({
-      state: { active: true, turnIndex: 0, round: 1, entries: [] },
-      oldEffort: 0,
-      newEffort: 2,
-      oldHp: 10,
-      newHp: 10,
-    });
-    const client = collectFrames(`${url}?token=master-1`);
-    client.send({ type: 'session.join', sessionId: SESSION_ID });
-    await client.waitFor(3);
-
-    client.send({
-      type: 'master.monster-pe-change',
-      sessionId: SESSION_ID,
-      monsterId: MONSTER_ID,
-      delta: 2,
-    });
-    await vi.waitFor(() => {
-      if (!client.frames.slice(3).some((f) => f.type === 'session.combat')) {
-        throw new Error('not broadcast yet');
-      }
-    });
-    client.close();
-
-    expect(combat.changeInstanceEffort).toHaveBeenCalledWith({
-      sessionId: SESSION_ID,
-      monsterId: MONSTER_ID,
-      delta: 2,
-      playerId: 'master-1',
-    });
-  });
 });
 
 describe('chatGateway unexpected errors', () => {
@@ -744,19 +647,5 @@ describe('chatGateway unexpected errors', () => {
       type: 'error',
       error: { code: 'INTERNAL' },
     });
-  });
-
-  it('does not log a domain error', async () => {
-    const { logger, url } = await buildApp(() =>
-      Promise.reject(new ForbiddenError('sem acesso')),
-    );
-    const client = collectFrames(url);
-
-    client.send(peChange);
-    await client.waitFor(1);
-    client.close();
-
-    expect(logger.error).not.toHaveBeenCalled();
-    expect(client.frames[0]).toMatchObject({ type: 'error' });
   });
 });

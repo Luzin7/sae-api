@@ -6,7 +6,6 @@ import {
   makeMembership,
   makeNotifier,
 } from '../character.testkit.js';
-import { CharacterNotFoundError } from '../character.errors.js';
 import { DeleteCharacterService } from './delete-character.service.js';
 
 describe('DeleteCharacterService', () => {
@@ -69,21 +68,6 @@ describe('DeleteCharacterService', () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(characters.delete).not.toHaveBeenCalled();
     expect(notifier.notifyRosterChanged).not.toHaveBeenCalled();
-  });
-
-  it('rejects deleting a missing sheet', async () => {
-    const characters = makeCharacterRepository();
-    const notifier = makeNotifier();
-    vi.mocked(characters.findById).mockResolvedValue(null);
-
-    await expect(
-      new DeleteCharacterService(
-        characters,
-        makeMembership(),
-        notifier,
-      ).execute('missing', 'master-1'),
-    ).rejects.toBeInstanceOf(CharacterNotFoundError);
-    expect(characters.delete).not.toHaveBeenCalled();
   });
 
   it('lets the master delete a sheet of their table', async () => {

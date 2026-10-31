@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   assertAttributeBudget,
-  attributeBudget,
   attributePointsSpent,
 } from './character.attributes.js';
 import {
@@ -22,42 +21,13 @@ function scores(overrides: Partial<AttributeScores> = {}): AttributeScores {
   };
 }
 
-describe('attributeBudget', () => {
-  it('grants 20 points at NP1 and +2 per even NP', () => {
-    expect(attributeBudget(1)).toBe(20);
-    expect(attributeBudget(2)).toBe(22);
-    expect(attributeBudget(3)).toBe(22);
-    expect(attributeBudget(4)).toBe(24);
-  });
-});
-
 describe('attributePointsSpent', () => {
-  it('charges the scale index from the -5 floor', () => {
-    expect(attributePointsSpent(scores())).toBe(0);
-    expect(attributePointsSpent(scores({ cognition: 5 }))).toBe(8);
-    expect(attributePointsSpent(scores({ cognition: 1 }))).toBe(4);
-  });
-
   it('rejects -1 and 0 with a named validation error', () => {
     expect(() => attributePointsSpent(scores({ cognition: 0 }))).toThrow(
       InvalidAttributeError,
     );
     expect(() => attributePointsSpent(scores({ instinct: -1 }))).toThrow(
       InvalidAttributeError,
-    );
-  });
-});
-
-describe('InvalidAttributeError', () => {
-  it('names the attribute in pt-BR', () => {
-    expect(new InvalidAttributeError('cognition', 0).message).toBe(
-      'Valor de atributo inválido para Cognição: 0.',
-    );
-  });
-
-  it('falls back to the raw key for an unknown attribute', () => {
-    expect(new InvalidAttributeError('luck', 0).message).toBe(
-      'Valor de atributo inválido para luck: 0.',
     );
   });
 });

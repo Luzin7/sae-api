@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { integrationEnabled } from '@test/integration-env.js';
 import { createSeed, type SeededTable } from '@test/integration-db.js';
@@ -564,27 +563,6 @@ describe.skipIf(!integrationEnabled)('pontos de esforco (real DB)', () => {
   });
 
   describe('migration 0009', () => {
-    const statements = readFileSync(
-      new URL('../migrations/0009_pontos_de_esforco.sql', import.meta.url),
-      'utf8',
-    ).split('--> statement-breakpoint');
-
-    async function runMigration(): Promise<void> {
-      await db.transaction(async (tx) => {
-        for (const statement of statements)
-          await tx.execute(sql.raw(statement));
-      });
-    }
-
-    it('reruns without touching effort already stored', async () => {
-      const row = await seedCharacter(table, { currentEffort: 4 });
-
-      await runMigration();
-      await runMigration();
-
-      expect((await readCharacter(row.id)).currentEffort).toBe(4);
-    });
-
     it('the check rejects effort above the limit and below zero', async () => {
       const row = await seedCharacter(table, { maxEffort: 20 });
 

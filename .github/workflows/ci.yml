@@ -2,18 +2,45 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: Typecheck, build e testes
+  ci:
+    name: Lint, testes, integração (Postgres real) e build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sae_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sae_integration"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/sae_integration
+      INTEGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/sae_integration
+      REQUIRE_INTEGRATION: "1"
+    defaults:
+      run:
+        shell: bash -euo pipefail {0}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,26 +52,24 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Lint
-        run: npm run lint
+      - name: Lint, testes unitários e build em paralelo
+        run: |
+          npm run lint & lint=$!
+          npx vitest run --exclude '**/node_modules/**' --exclude '**/dist/**' --exclude '**/*.integration.spec.ts' & unit=$!
+          npm run build & build=$!
+          wait "$lint"
+          wait "$unit"
+          wait "$build"
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Migrations
+        run: npx tsx src/infra/db/migrate.ts
 
-      - name: Build
-        run: npm run build
+      - name: Testes de integração
+        run: npx vitest run .integration.spec.ts --no-file-parallelism --testTimeout=30000
 
-      - name: Test
-        run: npm run test
-
-      - name: Install dependencies (produção)
-        run: npm ci
-        env:
-          NODE_ENV: production
-
-      - name: Build (produção)
-        run: npm run build
-        env:
-          NODE_ENV: production
+      - name: Runtime de produção (dependências sem dev, como no Dockerfile)
+        run: |
+          npm prune --omit=dev --no-audit --no-fund
+          NODE_ENV=production node dist/infra/db/migrate.js

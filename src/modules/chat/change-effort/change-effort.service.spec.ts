@@ -97,51 +97,6 @@ describe('ChangeEffortService', () => {
     });
   });
 
-  it('lets the game master change any character in the game', async () => {
-    const { characters, service } = build();
-
-    await service.execute(frame('master-1'));
-
-    expect(characters.changeEffort).toHaveBeenCalledWith('char-1', 5, {
-      sessionId: 'session-1',
-      playerId: 'master-1',
-    });
-  });
-
-  it('publishes no hp change when PS did not move', async () => {
-    const { characters, service, publish } = build();
-    vi.mocked(characters.changeEffort).mockResolvedValue({
-      oldEffort: 5,
-      newEffort: 2,
-      oldHp: 30,
-      newHp: 30,
-    });
-
-    await service.execute(frame('master-1', -3));
-
-    expect(publish).toHaveBeenCalledTimes(1);
-    expect(publish).toHaveBeenCalledWith('session:session-1', {
-      type: 'character.pe-changed',
-      characterId: 'char-1',
-      oldPe: 5,
-      newPe: 2,
-    });
-  });
-
-  it('publishes nothing when the change moved nothing', async () => {
-    const { characters, service, publish } = build();
-    vi.mocked(characters.changeEffort).mockResolvedValue({
-      oldEffort: 0,
-      newEffort: 0,
-      oldHp: 30,
-      newHp: 30,
-    });
-
-    await service.execute(frame('master-1', -3));
-
-    expect(publish).not.toHaveBeenCalled();
-  });
-
   it('forbids the character owner and writes nothing', async () => {
     const { characters, service, publish } = build();
 

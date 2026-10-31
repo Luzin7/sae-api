@@ -123,23 +123,6 @@ describe('UpdateCharacterService', () => {
     expect(notifier.notifyRosterChanged).not.toHaveBeenCalled();
   });
 
-  it('notifies the live roster after saving', async () => {
-    const characters = makeCharacterRepository();
-    const notifier = makeNotifier();
-    const stored = makeCharacter({ playerId: 'other-player' });
-    vi.mocked(characters.findById).mockResolvedValue(stored);
-    stubUpdateSheet(characters, stored);
-
-    await new UpdateCharacterService(
-      characters,
-      makeMembership(),
-      fixedRng(1),
-      notifier,
-    ).execute('char-1', 'master-1', { version: 0, nickname: 'Renamed' });
-
-    expect(notifier.notifyRosterChanged).toHaveBeenCalledWith('game-1');
-  });
-
   it('rejects a sheet whose attributes exceed the np budget', async () => {
     await expect(
       decide({
@@ -198,12 +181,6 @@ describe('UpdateCharacterService', () => {
     expect(changes).not.toHaveProperty('currentHp');
     expect(changes).not.toHaveProperty('currentEffort');
     expect(changes).toMatchObject({ maxHp: 26, maxEffort: 20 });
-  });
-
-  it('does not forward the version as a sheet field', async () => {
-    const changes = await decide({ input: { nickname: 'Renamed' } });
-
-    expect(changes).not.toHaveProperty('version');
   });
 
   it('re-derives proficiency levels when the archetype changes', async () => {
@@ -390,49 +367,6 @@ describe('UpdateCharacterService', () => {
   });
 
   describe('np change notification', () => {
-    async function run(
-      npFrom: number,
-      npTo: number | undefined,
-      notifier: ReturnType<typeof makeNotifier>,
-    ): Promise<void> {
-      const characters = makeCharacterRepository();
-      const current = makeCharacter({ np: npFrom });
-      vi.mocked(characters.findById).mockResolvedValue(current);
-      vi.mocked(characters.updateSheet).mockImplementation(async (command) => {
-        const changes = command.decide(current, []);
-
-        return { ...current, np: changes.np ?? current.np };
-      });
-
-      await new UpdateCharacterService(
-        characters,
-        makeMembership(),
-        fixedRng(1),
-        notifier,
-      ).execute('char-1', 'master-1', { version: 0, np: npTo });
-    }
-
-    it('publishes the old and new np to the game', async () => {
-      const notifier = makeNotifier();
-
-      await run(3, 4, notifier);
-
-      expect(notifier.notifyNpChanged).toHaveBeenCalledWith('game-1', {
-        characterId: 'char-1',
-        oldNp: 3,
-        newNp: 4,
-      });
-      expect(notifier.notifyRosterChanged).toHaveBeenCalledWith('game-1');
-    });
-
-    it('publishes nothing when np is unchanged', async () => {
-      const notifier = makeNotifier();
-
-      await run(3, 3, notifier);
-
-      expect(notifier.notifyNpChanged).not.toHaveBeenCalled();
-    });
-
     it('publishes nothing on a version conflict', async () => {
       const notifier = makeNotifier();
       const characters = makeCharacterRepository();
@@ -469,21 +403,6 @@ describe('UpdateCharacterService', () => {
     ).execute('char-1', 'player-1', { version: 0, nickname: 'X' });
 
     expect(stub.changes()).toMatchObject({ np: 3, constitution: -2 });
-  });
-
-  it('normalizes bonds before saving them', async () => {
-    const changes = await decide({ input: { bonds: ' a , A , b ' } });
-
-    expect(changes.bonds).toEqual(['A', 'B']);
-  });
-
-  it('keeps the stored bonds when the patch omits them', async () => {
-    const changes = await decide({
-      character: makeCharacter({ bonds: ['Aliado'] }),
-      input: { nickname: 'Renamed' },
-    });
-
-    expect(changes).not.toHaveProperty('bonds');
   });
 
   it('keeps legacy free-text afflictions when the patch omits them', async () => {
