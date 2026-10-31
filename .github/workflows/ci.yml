@@ -68,3 +68,8 @@ jobs:
 
       - name: Build (também faz o typecheck)
         run: npm run build
+
+      - name: Build de produção (dependências sem dev, como no Dockerfile)
+        run: |
+          npm ci --omit=dev --prefer-offline --no-audit --no-fund
+          NODE_ENV=production node dist/infra/db/migrate.js
