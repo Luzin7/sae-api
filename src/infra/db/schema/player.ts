@@ -31,10 +31,15 @@ export const authSession = pgTable(
     expiresAt: timestamp('expires_at').notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     lastUsedAt: timestamp('last_used_at'),
+    familyId: uuid('family_id').notNull().defaultRandom(),
+    usedAt: timestamp('used_at'),
+    revokedAt: timestamp('revoked_at'),
+    replacedById: uuid('replaced_by_id'),
   },
   (t) => [
     index('auth_session_player_idx').on(t.playerId),
     index('auth_session_expires_idx').on(t.expiresAt),
+    index('auth_session_family_idx').on(t.familyId),
   ],
 );
 

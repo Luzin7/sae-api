@@ -1,9 +1,10 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, gt, isNull, lte } from 'drizzle-orm';
 import type { Credentials, PublicPlayer } from '@modules/auth/auth.entity.js';
 import type {
-  AuthSession,
   AuthSessionRepository,
   CredentialsRepository,
+  RotateSessionInput,
+  RotationOutcome,
 } from '@modules/auth/auth.repository.js';
 import { db } from '../index.js';
 import { authSession, player } from '../schema.js';
@@ -20,6 +21,53 @@ function toCredentials(row: CredentialRow): Credentials {
 
 function toPublicPlayer(row: CredentialRow): PublicPlayer {
   return { id: row.id, name: row.name };
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+function isInsideGraceWindow(usedAt: Date, input: RotateSessionInput): boolean {
+  return input.now.getTime() - usedAt.getTime() <= input.graceWindowMs;
+}
+
+async function insertSuccessor(
+  tx: Tx,
+  parent: { playerId: string; familyId: string },
+  input: RotateSessionInput,
+): Promise<string> {
+  const [successor] = await tx
+    .insert(authSession)
+    .values({
+      playerId: parent.playerId,
+      familyId: parent.familyId,
+      tokenHash: input.successorHash,
+      expiresAt: input.successorExpiresAt,
+    })
+    .returning({ id: authSession.id });
+  if (!successor) throw new Error('Falha ao emitir o refresh token.');
+
+  return successor.id;
+}
+
+async function pruneExpired(
+  tx: Tx,
+  playerId: string,
+  now: Date,
+): Promise<void> {
+  await tx
+    .delete(authSession)
+    .where(
+      and(eq(authSession.playerId, playerId), lte(authSession.expiresAt, now)),
+    );
+}
+
+async function issued(tx: Tx, playerId: string): Promise<RotationOutcome> {
+  const [owner] = await tx
+    .select({ name: player.name })
+    .from(player)
+    .where(eq(player.id, playerId));
+  if (!owner) return { status: 'unknown' };
+
+  return { status: 'issued', playerId, name: owner.name };
 }
 
 export function credentialsRepository(): CredentialsRepository {
@@ -60,31 +108,70 @@ export function authSessionRepository(): AuthSessionRepository {
       });
     },
 
-    async findByHash(tokenHash: string): Promise<AuthSession | null> {
-      const [row] = await db
-        .select({
-          playerId: authSession.playerId,
-          name: player.name,
-          expiresAt: authSession.expiresAt,
-          lastUsedAt: authSession.lastUsedAt,
-        })
-        .from(authSession)
-        .innerJoin(player, eq(authSession.playerId, player.id))
-        .where(eq(authSession.tokenHash, tokenHash))
-        .limit(1);
+    async rotate(input: RotateSessionInput): Promise<RotationOutcome> {
+      return db.transaction(async (tx) => {
+        const [claimed] = await tx
+          .update(authSession)
+          .set({ usedAt: input.now, lastUsedAt: input.now })
+          .where(
+            and(
+              eq(authSession.tokenHash, input.presentedHash),
+              isNull(authSession.usedAt),
+              isNull(authSession.revokedAt),
+              gt(authSession.expiresAt, input.now),
+            ),
+          )
+          .returning({
+            id: authSession.id,
+            playerId: authSession.playerId,
+            familyId: authSession.familyId,
+          });
 
-      if (!row) return null;
+        if (claimed) {
+          const successorId = await insertSuccessor(tx, claimed, input);
+          await tx
+            .update(authSession)
+            .set({ replacedById: successorId })
+            .where(eq(authSession.id, claimed.id));
+          await pruneExpired(tx, claimed.playerId, input.now);
 
-      return {
-        playerId: row.playerId,
-        name: row.name,
-        expiresAt: row.expiresAt,
-        lastUsedAt: row.lastUsedAt,
-      };
-    },
+          return issued(tx, claimed.playerId);
+        }
 
-    async deleteByHash(tokenHash: string): Promise<void> {
-      await db.delete(authSession).where(eq(authSession.tokenHash, tokenHash));
+        const [row] = await tx
+          .select({
+            playerId: authSession.playerId,
+            familyId: authSession.familyId,
+            expiresAt: authSession.expiresAt,
+            usedAt: authSession.usedAt,
+            revokedAt: authSession.revokedAt,
+          })
+          .from(authSession)
+          .where(eq(authSession.tokenHash, input.presentedHash));
+
+        if (!row) return { status: 'unknown' };
+        if (row.revokedAt) return { status: 'revoked' };
+        if (row.expiresAt.getTime() <= input.now.getTime()) {
+          return { status: 'expired' };
+        }
+        if (!row.usedAt || !isInsideGraceWindow(row.usedAt, input)) {
+          await tx
+            .update(authSession)
+            .set({ revokedAt: input.now })
+            .where(
+              and(
+                eq(authSession.familyId, row.familyId),
+                isNull(authSession.revokedAt),
+              ),
+            );
+
+          return { status: 'reused' };
+        }
+
+        await insertSuccessor(tx, row, input);
+
+        return issued(tx, row.playerId);
+      });
     },
 
     async deleteByPlayerId(playerId: string): Promise<void> {

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   InvalidCredentialsError,
+  RefreshTokenReusedError,
   SessionExpiredError,
+  SessionRevokedError,
   UsernameTakenError,
 } from './auth.errors.js';
 import type {
@@ -10,7 +12,10 @@ import type {
 } from './auth.repository.js';
 import { LoginService } from './login/login.service.js';
 import { LogoutService } from './logout/logout.service.js';
-import { RefreshService } from './refresh/refresh.service.js';
+import {
+  REFRESH_GRACE_WINDOW_MS,
+  RefreshService,
+} from './refresh/refresh.service.js';
 import { RegisterService } from './register/register.service.js';
 import { WsTokenService } from './ws-token/ws-token.service.js';
 
@@ -24,8 +29,7 @@ function makeCredentialsRepository(): CredentialsRepository {
 function makeSessionsRepository(): AuthSessionRepository {
   return {
     create: vi.fn(),
-    findByHash: vi.fn(),
-    deleteByHash: vi.fn(),
+    rotate: vi.fn(),
     deleteByPlayerId: vi.fn(),
   };
 }
@@ -187,45 +191,43 @@ describe('RefreshService', () => {
     return { service, sessions, refreshTokens };
   }
 
-  it('throws SessionExpiredError when the presented token is unknown', async () => {
+  it.each([
+    ['unknown', SessionExpiredError],
+    ['expired', SessionExpiredError],
+    ['revoked', SessionRevokedError],
+    ['reused', RefreshTokenReusedError],
+  ] as const)('maps a %s token to its named error', async (status, error) => {
     const { service, sessions } = makeSubject();
-    vi.mocked(sessions.findByHash).mockResolvedValue(null);
+    vi.mocked(sessions.rotate).mockResolvedValue({ status });
 
-    await expect(service.execute('unknown')).rejects.toBeInstanceOf(
-      SessionExpiredError,
-    );
+    await expect(service.execute('presented')).rejects.toBeInstanceOf(error);
   });
 
-  it('throws SessionExpiredError when the session expired', async () => {
+  it('rejects an empty token without touching the repository', async () => {
     const { service, sessions } = makeSubject();
-    vi.mocked(sessions.findByHash).mockResolvedValue({
-      playerId: 'player-1',
-      name: 'Alice',
-      expiresAt: new Date(Date.now() - 1_000),
-      lastUsedAt: null,
-    });
 
-    await expect(service.execute('expired')).rejects.toBeInstanceOf(
+    await expect(service.execute('')).rejects.toBeInstanceOf(
       SessionExpiredError,
     );
+    expect(sessions.rotate).not.toHaveBeenCalled();
   });
 
-  it('rotates the session and signs a new access token', async () => {
+  it('rotates through the repository and signs a new access token', async () => {
     const { service, sessions } = makeSubject();
-    vi.mocked(sessions.findByHash).mockResolvedValue({
+    vi.mocked(sessions.rotate).mockResolvedValue({
+      status: 'issued',
       playerId: 'player-1',
       name: 'Alice',
-      expiresAt: new Date(Date.now() + 100_000),
-      lastUsedAt: null,
     });
 
     const result = await service.execute('old-token');
 
-    expect(sessions.deleteByHash).toHaveBeenCalledWith('hash:old-token');
-    expect(sessions.create).toHaveBeenCalledWith({
-      playerId: 'player-1',
-      tokenHash: 'hash:new-refresh-token',
-      expiresAt: expect.any(Date),
+    expect(sessions.rotate).toHaveBeenCalledWith({
+      presentedHash: 'hash:old-token',
+      successorHash: 'hash:new-refresh-token',
+      successorExpiresAt: expect.any(Date),
+      now: expect.any(Date),
+      graceWindowMs: REFRESH_GRACE_WINDOW_MS,
     });
     expect(result).toEqual({
       accessToken: 'new-access-token',

@@ -78,6 +78,13 @@
       "when": 1793306057744,
       "tag": "0010_monster_size_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793471389283,
+      "tag": "0011_refresh_token_families",
+      "breakpoints": true
     }
   ]
 }

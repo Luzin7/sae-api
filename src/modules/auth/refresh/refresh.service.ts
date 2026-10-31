@@ -1,8 +1,13 @@
 import type { RefreshResult, TokenPayload } from '../auth.entity.js';
-import { SessionExpiredError } from '../auth.errors.js';
+import {
+  RefreshTokenReusedError,
+  SessionExpiredError,
+  SessionRevokedError,
+} from '../auth.errors.js';
 import type { AuthSessionRepository } from '../auth.repository.js';
 
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const REFRESH_GRACE_WINDOW_MS = 30_000;
 
 export class RefreshService {
   constructor(
@@ -19,29 +24,26 @@ export class RefreshService {
     },
   ) {}
 
-  // Rotation: the presented token is revoked and a fresh one issued on every
-  // successful refresh, so a leaked token is single-use.
   async execute(presentedToken: string): Promise<RefreshResult> {
-    const tokenHash = this.refreshTokens.hash(presentedToken);
-    const session = await this.sessions.findByHash(tokenHash);
-    if (!session) throw new SessionExpiredError();
+    if (!presentedToken) throw new SessionExpiredError();
 
-    if (session.expiresAt.getTime() <= Date.now()) {
-      throw new SessionExpiredError();
-    }
-
-    await this.sessions.deleteByHash(tokenHash);
     const refreshToken = this.refreshTokens.generate();
-    await this.sessions.create({
-      playerId: session.playerId,
-      tokenHash: this.refreshTokens.hash(refreshToken),
-      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+    const now = new Date();
+    const outcome = await this.sessions.rotate({
+      presentedHash: this.refreshTokens.hash(presentedToken),
+      successorHash: this.refreshTokens.hash(refreshToken),
+      successorExpiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_MS),
+      now,
+      graceWindowMs: REFRESH_GRACE_WINDOW_MS,
     });
+    if (outcome.status === 'reused') throw new RefreshTokenReusedError();
+    if (outcome.status === 'revoked') throw new SessionRevokedError();
+    if (outcome.status !== 'issued') throw new SessionExpiredError();
 
     return {
       accessToken: this.signing.sign({
-        sub: session.playerId,
-        name: session.name,
+        sub: outcome.playerId,
+        name: outcome.name,
       }),
       refreshToken,
     };
