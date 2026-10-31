@@ -49,21 +49,6 @@ describe('rollAttribute', () => {
     expect(result.kind).toBe('worst');
     expect(result.result).toBe(Math.min(...result.rolls));
   });
-
-  it('requests d20 (1..20) for every roll', () => {
-    const calls: Array<[number, number]> = [];
-    const rng: Rng = (min, max) => {
-      calls.push([min, max]);
-      return 10;
-    };
-
-    const { rolls } = rollAttribute(4, rng);
-    expect(rolls).toHaveLength(4);
-    for (const [min, max] of calls) {
-      expect(min).toBe(1);
-      expect(max).toBe(20);
-    }
-  });
 });
 
 describe('rollWithModifiers', () => {

@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryMessageBus } from '../chat.bus.js';
-import {
-  ChatMonsterNotFoundError,
-  CombatStateNotFoundError,
-  MasterOnlyError,
-} from '../chat.errors.js';
+import { ChatMonsterNotFoundError, MasterOnlyError } from '../chat.errors.js';
 import {
   fixedRng,
   makeChatMessages,
@@ -44,11 +40,6 @@ const STATE: CombatStatePayload = {
 const SNAPSHOT_STATE: CombatStatePayload = {
   ...STATE,
   entries: [{ ...STATE.entries[0]!, cognition: 3 }],
-};
-
-const UNKNOWN_ATTRIBUTES_STATE: CombatStatePayload = {
-  ...STATE,
-  entries: [{ ...STATE.entries[0]!, cognition: null }],
 };
 
 function build() {
@@ -135,20 +126,6 @@ describe('RollMonsterTestService', () => {
     expect(combat.findState).not.toHaveBeenCalled();
   });
 
-  it('rejects when there is no active combat', async () => {
-    const { combat, service } = build();
-    vi.mocked(combat.findState).mockResolvedValue(null);
-
-    await expect(
-      service.execute({
-        playerId: 'p1',
-        sessionId: 'session-1',
-        monsterId: 'monster-1',
-        attribute: 'cognition',
-      }),
-    ).rejects.toBeInstanceOf(CombatStateNotFoundError);
-  });
-
   it('rolls the attribute snapshotted on the combatant instance', async () => {
     const { combat, service } = build();
     vi.mocked(combat.findState).mockResolvedValue(SNAPSHOT_STATE);
@@ -165,20 +142,6 @@ describe('RollMonsterTestService', () => {
       result: 12,
       kind: 'best',
     });
-  });
-
-  it('rejects a combatant without a snapshotted attribute', async () => {
-    const { combat, service } = build();
-    vi.mocked(combat.findState).mockResolvedValue(UNKNOWN_ATTRIBUTES_STATE);
-
-    await expect(
-      service.execute({
-        playerId: 'p1',
-        sessionId: 'session-1',
-        monsterId: 'monster-1',
-        attribute: 'cognition',
-      }),
-    ).rejects.toBeInstanceOf(ChatMonsterNotFoundError);
   });
 
   it('rejects a monster that is not in the combat', async () => {

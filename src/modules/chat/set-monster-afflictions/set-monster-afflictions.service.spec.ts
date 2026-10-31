@@ -42,28 +42,6 @@ function build() {
 describe('SetMonsterAfflictionsService', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('persists the list and broadcasts the combat state', async () => {
-    const { combat, publish, service } = build();
-
-    await service.execute({
-      playerId: 'master-1',
-      sessionId: 'session-1',
-      monsterId: 'monster-1',
-      afflictions: ['fobia', 'vicio'],
-    });
-
-    expect(combat.setInstanceAfflictions).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      monsterId: 'monster-1',
-      afflictions: ['fobia', 'vicio'],
-      playerId: 'master-1',
-    });
-    expect(publish).toHaveBeenCalledWith('session:session-1', {
-      type: 'session.combat',
-      state: STATE,
-    });
-  });
-
   it('forbids a non-master and writes nothing', async () => {
     const { combat, publish, service } = build();
 

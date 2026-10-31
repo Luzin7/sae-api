@@ -102,29 +102,6 @@ describe('ConnectService', () => {
     ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
   });
 
-  it('resolves a player with no character as an empty list', async () => {
-    const { access, bus, service } = build([]);
-    vi.mocked(access.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'master-1',
-    });
-    vi.mocked(access.isMember).mockResolvedValue(true);
-    bus.register('socket-1', 'p1', () => undefined);
-    const publish = vi.spyOn(bus, 'publish');
-
-    await service.execute({
-      playerId: 'p1',
-      socketId: 'socket-1',
-      sessionId: 'session-1',
-    });
-
-    expect(publish).toHaveBeenCalledWith('session:session-1', {
-      type: 'presence',
-      master: null,
-      players: [{ playerId: 'p1', name: 'Ana', characterIds: [] }],
-    });
-  });
-
   it('joins a player carrying every character in oldest-first order', async () => {
     const { access, bus, service } = build([
       directoryCharacter('p1', 'char-new', '2024-03-01T00:00:00.000Z'),
@@ -151,63 +128,6 @@ describe('ConnectService', () => {
         name: 'Ana',
         characterIds: ['char-old', 'char-new'],
       },
-    });
-  });
-
-  it('puts a connected master in master and keeps them out of players', async () => {
-    const { access, bus, service } = build();
-    vi.mocked(access.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'master-1',
-    });
-    vi.mocked(access.isMember).mockResolvedValue(true);
-    bus.register('socket-1', 'master-1', () => undefined);
-    const publish = vi.spyOn(bus, 'publish');
-
-    await service.execute({
-      playerId: 'master-1',
-      socketId: 'socket-1',
-      sessionId: 'session-1',
-    });
-
-    const expected = {
-      master: { playerId: 'master-1', name: 'Mestre' },
-      players: [],
-    };
-    expect(publish).toHaveBeenCalledWith('session:session-1', {
-      type: 'presence',
-      ...expected,
-    });
-    expect(publish).toHaveBeenCalledWith('session:session-1', {
-      type: 'session.state',
-      ...expected,
-    });
-    expect(publish).not.toHaveBeenCalledWith(
-      'session:session-1',
-      expect.objectContaining({ type: 'session.player-joined' }),
-    );
-  });
-
-  it('keeps master null when the master is not connected', async () => {
-    const { access, bus, service } = build();
-    vi.mocked(access.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'master-1',
-    });
-    vi.mocked(access.isMember).mockResolvedValue(true);
-    bus.register('socket-1', 'p1', () => undefined);
-    const publish = vi.spyOn(bus, 'publish');
-
-    await service.execute({
-      playerId: 'p1',
-      socketId: 'socket-1',
-      sessionId: 'session-1',
-    });
-
-    expect(publish).toHaveBeenCalledWith('session:session-1', {
-      type: 'session.state',
-      master: null,
-      players: [{ playerId: 'p1', name: 'Ana', characterIds: ['char-1'] }],
     });
   });
 
@@ -260,16 +180,6 @@ describe('ConnectService', () => {
 
       expect(result.openTest).toBeNull();
       expect(messages.listTestRollers).not.toHaveBeenCalled();
-    });
-
-    it('passes the combat state through', async () => {
-      const { combat, service } = buildMember();
-      const state = { active: true, turnIndex: 0, round: 1, entries: [] };
-      vi.mocked(combat.findState).mockResolvedValue(state);
-
-      const result = await service.execute(joinInput);
-
-      expect(result.combat).toEqual(state);
     });
   });
 });

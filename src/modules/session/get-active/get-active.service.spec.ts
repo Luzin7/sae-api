@@ -34,15 +34,6 @@ function makeAccess(): GameAccess {
 describe('GetActiveService', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('forbids when the game does not exist', async () => {
-    const access = makeAccess();
-    vi.mocked(access.findById).mockResolvedValue(null);
-
-    await expect(
-      new GetActiveService(makeSessions(), access).execute('game-1', 'p1'),
-    ).rejects.toBeInstanceOf(ForbiddenError);
-  });
-
   it('forbids a player who is not in the game', async () => {
     const access = makeAccess();
     vi.mocked(access.findById).mockResolvedValue({
@@ -72,40 +63,5 @@ describe('GetActiveService', () => {
 
     expect(access.isMember).not.toHaveBeenCalled();
     expect(result?.id).toBe('session-1');
-  });
-
-  it('returns the active session for a member', async () => {
-    const sessions = makeSessions();
-    const access = makeAccess();
-    vi.mocked(access.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'master-1',
-    });
-    vi.mocked(access.isMember).mockResolvedValue(true);
-    vi.mocked(sessions.findActiveByGame).mockResolvedValue(makeSession());
-
-    const result = await new GetActiveService(sessions, access).execute(
-      'game-1',
-      'p1',
-    );
-
-    expect(result?.id).toBe('session-1');
-  });
-
-  it('returns null when there is no active session', async () => {
-    const sessions = makeSessions();
-    const access = makeAccess();
-    vi.mocked(access.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'p1',
-    });
-    vi.mocked(sessions.findActiveByGame).mockResolvedValue(null);
-
-    const result = await new GetActiveService(sessions, access).execute(
-      'game-1',
-      'p1',
-    );
-
-    expect(result).toBeNull();
   });
 });

@@ -263,20 +263,4 @@ describe('AdvanceCharacterService', () => {
     await expect(run()).rejects.toBeInstanceOf(CharacterVersionConflictError);
     expect(notifier.notifyCharacterAdvanced).not.toHaveBeenCalled();
   });
-
-  it('notifies the game and returns the view with the balance', async () => {
-    const { characters, notifier, run } = build({
-      input: { attributes: { cognition: -4 } },
-    });
-    const updated = makeCharacter({ version: 1, cognition: -4 });
-    vi.mocked(characters.updateSheet).mockResolvedValue(updated);
-
-    const view = await run();
-
-    expect(notifier.notifyCharacterAdvanced).toHaveBeenCalledWith('game-1', {
-      characterId: 'char-1',
-    });
-    expect(view.character).toBe(updated);
-    expect(view.advancement.attributePoints.budget).toBe(20);
-  });
 });

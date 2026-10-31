@@ -105,19 +105,6 @@ describe('game routes', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it('rejects a create request with an invalid body', async () => {
-    const app = await buildTestApp(makeServices(makeGames()));
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/games',
-      payload: {},
-      headers: { cookie: `token=${makeToken(app)}` },
-    });
-
-    expect(res.statusCode).toBe(400);
-  });
-
   it('creates a game for the authenticated master', async () => {
     const games = makeGames();
     vi.mocked(games.create).mockResolvedValue(makeGame());

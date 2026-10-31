@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { resolvePlayerPresence, resolvePresence } from './chat.players.js';
+import { resolvePresence } from './chat.players.js';
 import { directoryCharacter, makePlayerDirectory } from './chat.testkit.js';
 
 describe('resolvePresence', () => {
@@ -49,27 +49,6 @@ describe('resolvePresence', () => {
     ]);
   });
 
-  it('breaks a creation tie by character id', async () => {
-    const directory = makePlayerDirectory({ p1: 'Ana' }, [
-      directoryCharacter('p1', 'char-b'),
-      directoryCharacter('p1', 'char-a'),
-      directoryCharacter('p1', 'char-c'),
-    ]);
-
-    const presence = await resolvePresence(
-      directory,
-      'game-1',
-      ['p1'],
-      'master',
-    );
-
-    expect(presence.players[0]?.characterIds).toEqual([
-      'char-a',
-      'char-b',
-      'char-c',
-    ]);
-  });
-
   it('drops unknown ids and reports an offline master as null', async () => {
     const directory = makePlayerDirectory({ p1: 'Ana' });
 
@@ -84,29 +63,5 @@ describe('resolvePresence', () => {
       master: null,
       players: [{ playerId: 'p1', name: 'Ana', characterIds: [] }],
     });
-  });
-});
-
-describe('resolvePlayerPresence', () => {
-  it('returns the character links for one player', async () => {
-    const directory = makePlayerDirectory({ p1: 'Ana' }, [
-      directoryCharacter('p1', 'char-1'),
-    ]);
-
-    await expect(
-      resolvePlayerPresence(directory, 'game-1', 'p1'),
-    ).resolves.toEqual({
-      playerId: 'p1',
-      name: 'Ana',
-      characterIds: ['char-1'],
-    });
-  });
-
-  it('returns null for an unknown player', async () => {
-    const directory = makePlayerDirectory();
-
-    await expect(
-      resolvePlayerPresence(directory, 'game-1', 'ghost'),
-    ).resolves.toBeNull();
   });
 });

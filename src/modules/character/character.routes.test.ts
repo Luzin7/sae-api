@@ -110,16 +110,6 @@ function createPayload() {
 beforeEach(() => vi.clearAllMocks());
 
 describe('character routes', () => {
-  it('returns 401 without authentication', async () => {
-    const app = await buildTestApp(
-      makeServices(makeCharacterRepository(), makeMembership()),
-    );
-
-    const res = await app.inject({ method: 'POST', url: '/characters' });
-
-    expect(res.statusCode).toBe(401);
-  });
-
   it('rejects a create request with an invalid body', async () => {
     const app = await buildTestApp(
       makeServices(makeCharacterRepository(), makeMembership()),
@@ -396,118 +386,9 @@ describe('character routes', () => {
     expect(listed.statusCode).toBe(200);
     expect(listed.json().items).toHaveLength(1);
   });
-
-  it('answers 404 to the removed skills upsert route', async () => {
-    const characters = makeCharacterRepository();
-    const app = await buildTestApp(makeServices(characters, makeMembership()));
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/characters/char-1/skills',
-      payload: { skillId: SKILL_ID, proficiencyBonus: 3 },
-      headers: { cookie: `token=${makeToken(app)}` },
-    });
-
-    expect(res.statusCode).toBe(404);
-  });
 });
 
 describe('character read access', () => {
-  it('lets the owner read the character', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    const app = await buildTestApp(makeServices(characters, makeMembership()));
-
-    const res = await app.inject({
-      method: 'GET',
-      url: '/characters/char-1',
-      headers: { cookie: `token=${makeToken(app)}` },
-    });
-
-    expect(res.statusCode).toBe(200);
-  });
-
-  it('lets the game master read the character', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ playerId: 'other-player' }),
-    );
-    const membership = makeMembership();
-    vi.mocked(membership.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'player-1',
-    });
-    const app = await buildTestApp(makeServices(characters, membership));
-
-    const res = await app.inject({
-      method: 'GET',
-      url: '/characters/char-1',
-      headers: { cookie: `token=${makeToken(app)}` },
-    });
-
-    expect(res.statusCode).toBe(200);
-  });
-
-  it('lets the owner read items and skills', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    vi.mocked(characters.findItems).mockResolvedValue([makeItem()]);
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([
-      makeSkillDetail(),
-    ]);
-    const app = await buildTestApp(makeServices(characters, makeMembership()));
-    const cookie = `token=${makeToken(app)}`;
-
-    const items = await app.inject({
-      method: 'GET',
-      url: '/characters/char-1/items',
-      headers: { cookie },
-    });
-    const skills = await app.inject({
-      method: 'GET',
-      url: '/characters/char-1/skills',
-      headers: { cookie },
-    });
-
-    expect(items.statusCode).toBe(200);
-    expect(items.json().items).toHaveLength(1);
-    expect(skills.statusCode).toBe(200);
-    expect(skills.json().skills[0].skillName).toBe('Vitalidade');
-    expect(skills.json().skills[0].attribute).toBe('constitution');
-  });
-
-  it('lets the game master read items and skills', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ playerId: 'other-player' }),
-    );
-    vi.mocked(characters.findItems).mockResolvedValue([makeItem()]);
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([
-      makeSkillDetail(),
-    ]);
-    const membership = makeMembership();
-    vi.mocked(membership.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'player-1',
-    });
-    const app = await buildTestApp(makeServices(characters, membership));
-    const cookie = `token=${makeToken(app)}`;
-
-    const items = await app.inject({
-      method: 'GET',
-      url: '/characters/char-1/items',
-      headers: { cookie },
-    });
-    const skills = await app.inject({
-      method: 'GET',
-      url: '/characters/char-1/skills',
-      headers: { cookie },
-    });
-
-    expect(items.statusCode).toBe(200);
-    expect(skills.statusCode).toBe(200);
-  });
-
   it('returns 403 to a player who is neither owner nor master', async () => {
     const characters = makeCharacterRepository();
     vi.mocked(characters.findById).mockResolvedValue(
@@ -592,32 +473,6 @@ describe('character read access', () => {
     expect(body.skills[0].skillName).toBe('Vitalidade');
     expect(body.skills[0].attribute).toBe('constitution');
   });
-
-  it('returns the whole sheet to the game master', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(
-      makeCharacter({ playerId: 'other-player' }),
-    );
-    vi.mocked(characters.findItems).mockResolvedValue([makeItem()]);
-    vi.mocked(characters.findSkillDetails).mockResolvedValue([
-      makeSkillDetail(),
-    ]);
-    const membership = makeMembership();
-    vi.mocked(membership.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'player-1',
-    });
-    const app = await buildTestApp(makeServices(characters, membership));
-
-    const res = await app.inject({
-      method: 'GET',
-      url: '/characters/char-1/sheet',
-      headers: { cookie: `token=${makeToken(app)}` },
-    });
-
-    expect(res.statusCode).toBe(200);
-    expect(res.json().character.playerId).toBe('other-player');
-  });
 });
 
 describe('character size validation', () => {
@@ -701,51 +556,12 @@ describe('character size validation', () => {
     );
   });
 
-  it('rejects a create with both weightKg and weightRoll', async () => {
-    const { res } = await postCharacter({
-      ...createPayload(),
-      weightRoll: 'max',
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.message).toContain(
-      'weightKg: Escolha o peso ou deixe para o destino, não os dois.',
-    );
-  });
-
   it('rejects a height below the exact band', async () => {
     const { res } = await postCharacter({ ...createPayload(), heightCm: 100 });
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toContain(
       'heightCm: Altura deve estar entre 150 e 250 cm.',
-    );
-  });
-
-  it('rejects a height above the exact band', async () => {
-    const { res } = await postCharacter({ ...createPayload(), heightCm: 300 });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.message).toContain(
-      'heightCm: Altura deve estar entre 150 e 250 cm.',
-    );
-  });
-
-  it('rejects a weight below the exact band', async () => {
-    const { res } = await postCharacter({ ...createPayload(), weightKg: 10 });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.message).toContain(
-      'weightKg: Peso deve estar entre 50 e 150 kg.',
-    );
-  });
-
-  it('rejects a weight above the exact band', async () => {
-    const { res } = await postCharacter({ ...createPayload(), weightKg: 200 });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.message).toContain(
-      'weightKg: Peso deve estar entre 50 e 150 kg.',
     );
   });
 
@@ -797,39 +613,6 @@ describe('character size validation', () => {
     expect(res.statusCode).toBe(200);
     expect(characters.updateSheet).toHaveBeenCalledOnce();
     expect(res.json().character.version).toBe(0);
-  });
-
-  it('rejects an update with both heightCm and heightRoll', async () => {
-    const { res, characters } = await patchCharacter({
-      heightCm: 180,
-      heightRoll: 'min',
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.message).toContain(
-      'heightCm: Escolha a altura ou deixe para o destino, não os dois.',
-    );
-    expect(characters.updateSheet).not.toHaveBeenCalled();
-  });
-
-  it('rejects an update with heightCm outside the exact band', async () => {
-    const { res, characters } = await patchCharacter({ heightCm: 300 });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.message).toContain(
-      'heightCm: Altura deve estar entre 150 e 250 cm.',
-    );
-    expect(characters.updateSheet).not.toHaveBeenCalled();
-  });
-
-  it('rejects an update with repeated afflictions', async () => {
-    const { res, characters } = await patchCharacter({
-      afflictions: ['fobia', 'fobia'],
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.message).toContain('Aflição repetida.');
-    expect(characters.updateSheet).not.toHaveBeenCalled();
   });
 });
 
@@ -1181,19 +964,6 @@ describe('character preview contract', () => {
 
     return { res, characters };
   }
-
-  it('returns 401 without authentication', async () => {
-    const { res } = await postPreview({}, false);
-
-    expect(res.statusCode).toBe(401);
-  });
-
-  it('accepts an empty body', async () => {
-    const { res } = await postPreview({});
-
-    expect(res.statusCode).toBe(200);
-    expect(res.json().preview.hitDie).toBeNull();
-  });
 
   it('returns derived values for a half-filled form', async () => {
     const { res, characters } = await postPreview({

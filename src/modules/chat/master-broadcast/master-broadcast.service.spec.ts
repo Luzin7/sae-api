@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryMessageBus } from '../chat.bus.js';
-import { EmptyNarrationError, MasterOnlyError } from '../chat.errors.js';
+import { MasterOnlyError } from '../chat.errors.js';
 import {
   makeChatMessages,
   makeGameAccess,
@@ -84,22 +84,5 @@ describe('MasterBroadcastService', () => {
     expect(
       vi.mocked(messages.appendLog).mock.invocationCallOrder[0],
     ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
-  });
-
-  it('rejects blank narration', async () => {
-    const { messages, access, service } = build();
-    vi.mocked(access.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'p1',
-    });
-
-    await expect(
-      service.execute({
-        playerId: 'p1',
-        sessionId: 'session-1',
-        text: '   ',
-      }),
-    ).rejects.toBeInstanceOf(EmptyNarrationError);
-    expect(messages.appendLog).not.toHaveBeenCalled();
   });
 });

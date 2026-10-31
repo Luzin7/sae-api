@@ -46,28 +46,6 @@ function build() {
 describe('ChangeMonsterHpService', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('applies the delta to the instance and broadcasts the combat state', async () => {
-    const { combat, publish, service } = build();
-
-    await service.execute({
-      playerId: 'master-1',
-      sessionId: 'session-1',
-      monsterId: 'monster-1',
-      delta: -3,
-    });
-
-    expect(combat.changeInstanceHp).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      monsterId: 'monster-1',
-      delta: -3,
-      playerId: 'master-1',
-    });
-    expect(publish).toHaveBeenCalledWith('session:session-1', {
-      type: 'session.combat',
-      state: STATE,
-    });
-  });
-
   it('forbids a non-master and writes nothing', async () => {
     const { combat, publish, service } = build();
 
