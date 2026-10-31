@@ -70,6 +70,7 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/sae_integration
       INTEGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/sae_integration
+      REQUIRE_INTEGRATION: "1"
     defaults:
       run:
         shell: bash -euo pipefail {0}
