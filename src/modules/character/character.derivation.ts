@@ -93,7 +93,6 @@ const SIZE_DIMENSIONS = {
   },
 } as const;
 
-/** Size factor of one dimension: a rolled band counts as its fixed factor; null when missing or out of bands. */
 export function sizeFactor(
   dimension: SizeDimension,
   input: SizeInputs,

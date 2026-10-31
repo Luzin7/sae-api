@@ -14,6 +14,8 @@ import {
   OFICIO_CD_REDUCTION,
   OFICIOS,
   PERSONALITIES,
+  type PersonalityDefinition,
+  type PostureDefinition,
   POSTURES,
   PROFICIENCY_LEVELS,
   PROFICIENCY_SKILL_CAP,
@@ -37,13 +39,10 @@ export interface RulesRoutesOptions {
   skillCatalog: SkillCatalog;
 }
 
-function archetypeLevels<Levels>({
+function archetypeLevels({
   name,
   levels,
-}: {
-  name: string;
-  levels: Levels;
-}) {
+}: PersonalityDefinition | PostureDefinition) {
   return { name, levels };
 }
 
