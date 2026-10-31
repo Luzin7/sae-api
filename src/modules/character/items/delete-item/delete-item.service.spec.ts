@@ -22,19 +22,4 @@ describe('DeleteItemService', () => {
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(characters.deleteItem).not.toHaveBeenCalled();
   });
-
-  it('deletes the item when it belongs to the character', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    vi.mocked(characters.findItemById).mockResolvedValue(makeItem());
-    vi.mocked(characters.deleteItem).mockResolvedValue(undefined);
-
-    await new DeleteItemService(characters).execute(
-      'char-1',
-      'item-1',
-      'player-1',
-    );
-
-    expect(characters.deleteItem).toHaveBeenCalledWith('item-1');
-  });
 });

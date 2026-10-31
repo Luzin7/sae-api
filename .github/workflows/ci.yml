@@ -48,3 +48,47 @@ jobs:
         run: npm run build
         env:
           NODE_ENV: production
+
+  integration:
+    name: Testes de integração (Postgres real)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sae_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sae_integration"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/sae_integration
+      INTEGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/sae_integration
+      REQUIRE_INTEGRATION: "1"
+    defaults:
+      run:
+        shell: bash -euo pipefail {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Migrations
+        run: npx tsx src/infra/db/migrate.ts
+
+      - name: Testes de integração
+        run: npx vitest run .integration.spec.ts --no-file-parallelism --testTimeout=30000

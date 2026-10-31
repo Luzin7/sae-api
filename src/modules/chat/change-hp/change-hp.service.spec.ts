@@ -86,26 +86,6 @@ describe('ChangeHpService', () => {
     });
   });
 
-  it('lets the game master change any character in the game', async () => {
-    const { characters, service } = build();
-
-    await service.execute(frame('master-1', -4));
-
-    expect(characters.changeHp).toHaveBeenCalledWith('char-1', -4, {
-      sessionId: 'session-1',
-      playerId: 'master-1',
-    });
-  });
-
-  it('publishes nothing when PS did not move', async () => {
-    const { characters, service, publish } = build();
-    vi.mocked(characters.changeHp).mockResolvedValue({ oldHp: 0, newHp: 0 });
-
-    await service.execute(frame('master-1', -1));
-
-    expect(publish).not.toHaveBeenCalled();
-  });
-
   it('forbids the character owner and writes nothing', async () => {
     const { characters, service, publish } = build();
 

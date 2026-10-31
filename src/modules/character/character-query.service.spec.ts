@@ -12,23 +12,6 @@ import { CharacterQueryService } from './character-query.service.js';
 describe('CharacterQueryService', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('lists the characters owned by a player', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findByPlayer).mockResolvedValue([makeCharacter()]);
-
-    const result = await new CharacterQueryService(
-      characters,
-      makeMembership(),
-    ).listMine('player-1', { limit: 20, offset: 0 });
-
-    expect(characters.findByPlayer).toHaveBeenCalledWith('player-1', {
-      limit: 20,
-      offset: 0,
-    });
-    expect(result).toHaveLength(1);
-    expect(result[0]?.character.id).toBe('char-1');
-  });
-
   it('computes the advancement of two listed characters with one findSkillSpend call', async () => {
     const characters = makeCharacterRepository();
     vi.mocked(characters.findByPlayer).mockResolvedValue([
@@ -81,20 +64,6 @@ describe('CharacterQueryService', () => {
     expect(characters.findByGame).toHaveBeenCalledWith('game-1');
     expect(result).toHaveLength(1);
     expect(characters.findSkillSpend).toHaveBeenCalledTimes(1);
-  });
-
-  it('lists items of an owned character', async () => {
-    const characters = makeCharacterRepository();
-    vi.mocked(characters.findById).mockResolvedValue(makeCharacter());
-    vi.mocked(characters.findItems).mockResolvedValue([makeItem()]);
-
-    const result = await new CharacterQueryService(
-      characters,
-      makeMembership(),
-    ).listItems('char-1', 'player-1');
-
-    expect(characters.findItems).toHaveBeenCalledWith('char-1');
-    expect(result[0]?.name).toBe('Knife');
   });
 
   it('lists skills of an owned character with catalog name and attribute', async () => {

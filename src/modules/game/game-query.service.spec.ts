@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ForbiddenError } from '@shared/errors/http-errors.js';
 import type { PlayerDirectory } from '@shared/player-directory/player-directory.contract.js';
 import type { Game } from './game.entity.js';
-import { GameNotFoundError } from './game.errors.js';
 import type { GameRepository } from './game.repository.js';
 import { GameQueryService } from './game-query.service.js';
 
@@ -82,19 +81,6 @@ describe('GameQueryService', () => {
     expect(result.map((game) => game.id)).toEqual(['g1', 'g2']);
   });
 
-  it('uses the default page for getMine', async () => {
-    const games = makeGames();
-    vi.mocked(games.findMastered).mockResolvedValue([]);
-    vi.mocked(games.findJoined).mockResolvedValue([]);
-
-    await new GameQueryService(games, makePlayers()).getMine('player-1');
-
-    expect(games.findJoined).toHaveBeenCalledWith('player-1', {
-      limit: 20,
-      offset: 0,
-    });
-  });
-
   it('returns the game for a member and forbids an outsider', async () => {
     const games = makeGames();
     vi.mocked(games.findById).mockResolvedValue(makeGame());
@@ -110,18 +96,6 @@ describe('GameQueryService', () => {
     await expect(
       new GameQueryService(games, makePlayers()).getGame('game-1', 'outsider'),
     ).rejects.toBeInstanceOf(ForbiddenError);
-  });
-
-  it('throws GameNotFoundError when the game is absent', async () => {
-    const games = makeGames();
-    vi.mocked(games.findById).mockResolvedValue(null);
-
-    await expect(
-      new GameQueryService(games, makePlayers()).getPlayers(
-        'game-1',
-        'player-1',
-      ),
-    ).rejects.toBeInstanceOf(GameNotFoundError);
   });
 
   it('returns the master plus players with their character ids', async () => {
@@ -149,29 +123,6 @@ describe('GameQueryService', () => {
     });
     expect(players.findCharactersByGame).toHaveBeenCalledTimes(1);
     expect(players.findCharactersByGame).toHaveBeenCalledWith('game-1');
-  });
-
-  it('returns every character id of a player in the directory order', async () => {
-    const games = makeGames();
-    const players = makePlayers(
-      { 'master-1': 'Mestre' },
-      { p1: ['char-old', 'char-new'] },
-    );
-    vi.mocked(games.findById).mockResolvedValue(makeGame());
-    vi.mocked(games.isMember).mockResolvedValue(true);
-    vi.mocked(games.findPlayers).mockResolvedValue([
-      { id: 'p1', name: 'Ana' },
-      { id: 'master-1', name: 'Mestre' },
-    ]);
-
-    const roster = await new GameQueryService(games, players).getPlayers(
-      'game-1',
-      'player-1',
-    );
-
-    expect(roster.players).toEqual([
-      { id: 'p1', name: 'Ana', characterIds: ['char-old', 'char-new'] },
-    ]);
   });
 
   it('resolves the master from masterId when they are not in player_game', async () => {

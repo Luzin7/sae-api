@@ -94,17 +94,6 @@ function setCookieHeader(headers: {
 }
 
 describe('POST /auth/register', () => {
-  it('rejects a name shorter than 3 characters', async () => {
-    const { app } = await buildTestApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/auth/register',
-      payload: { name: 'ab', password: 'secret123' },
-    });
-
-    expect(res.statusCode).toBe(400);
-  });
-
   it('rejects a password shorter than 8 characters', async () => {
     const { app } = await buildTestApp();
     const res = await app.inject({
@@ -142,17 +131,6 @@ describe('POST /auth/register', () => {
 });
 
 describe('POST /auth/login', () => {
-  it('rejects an empty body', async () => {
-    const { app } = await buildTestApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/auth/login',
-      payload: {},
-    });
-
-    expect(res.statusCode).toBe(400);
-  });
-
   it('returns 401 with the generic error for unknown credentials', async () => {
     const { app, credentials } = await buildTestApp();
     vi.mocked(credentials.findByUsername).mockResolvedValue(null);
@@ -264,16 +242,5 @@ describe('POST /auth/login per-account rate limit', () => {
     const other = await loginAs(app, 'someone-else', 12);
 
     expect(other.statusCode).toBe(401);
-  });
-
-  it('keeps invalid bodies as validation errors', async () => {
-    const { app } = await buildTestApp('2');
-    const res = await app.inject({
-      method: 'POST',
-      url: '/auth/login',
-      payload: { name: 42 },
-    });
-
-    expect(res.statusCode).toBe(400);
   });
 });

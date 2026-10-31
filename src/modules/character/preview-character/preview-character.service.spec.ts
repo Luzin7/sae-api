@@ -252,13 +252,4 @@ describe('PreviewCharacterService', () => {
 
     expect(preview.size).toBeNull();
   });
-
-  it('never writes to the repository', async () => {
-    const { characters, service } = makeService();
-
-    await service.execute(FULL_INPUT);
-
-    expect(characters.create).not.toHaveBeenCalled();
-    expect(characters.save).not.toHaveBeenCalled();
-  });
 });

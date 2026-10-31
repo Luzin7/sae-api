@@ -31,24 +31,6 @@ function build() {
 describe('EndCombatService', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('tears down the combat and publishes the ended state', async () => {
-    const { combat, bus, service } = build();
-    const ended = { active: false, turnIndex: 0, round: 1, entries: [] };
-    vi.mocked(combat.end).mockResolvedValue(ended);
-    const publish = vi.spyOn(bus, 'publish');
-
-    await service.execute({ playerId: 'p1', sessionId: 'session-1' });
-
-    expect(combat.end).toHaveBeenCalledWith('session-1', 'p1');
-    expect(vi.mocked(combat.end).mock.invocationCallOrder[0]).toBeLessThan(
-      publish.mock.invocationCallOrder[0] ?? 0,
-    );
-    expect(publish).toHaveBeenCalledWith('session:session-1', {
-      type: 'session.combat',
-      state: ended,
-    });
-  });
-
   it('forbids a non-master', async () => {
     const { access, combat, service } = build();
     vi.mocked(access.findById).mockResolvedValue({

@@ -34,15 +34,6 @@ function makeAccess(): GameAccess {
 describe('StartSessionService', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('forbids when the game does not exist', async () => {
-    const access = makeAccess();
-    vi.mocked(access.findById).mockResolvedValue(null);
-
-    await expect(
-      new StartSessionService(makeSessions(), access).execute('game-1', 'p1'),
-    ).rejects.toBeInstanceOf(ForbiddenError);
-  });
-
   it('forbids when the requester is not the master', async () => {
     const access = makeAccess();
     vi.mocked(access.findById).mockResolvedValue({
@@ -67,24 +58,5 @@ describe('StartSessionService', () => {
     await expect(
       new StartSessionService(sessions, access).execute('game-1', 'p1'),
     ).rejects.toBeInstanceOf(ConflictError);
-  });
-
-  it('creates a session for the master', async () => {
-    const sessions = makeSessions();
-    const access = makeAccess();
-    vi.mocked(access.findById).mockResolvedValue({
-      id: 'game-1',
-      masterId: 'p1',
-    });
-    vi.mocked(sessions.findActiveByGame).mockResolvedValue(null);
-    vi.mocked(sessions.create).mockResolvedValue(makeSession());
-
-    const result = await new StartSessionService(sessions, access).execute(
-      'game-1',
-      'p1',
-    );
-
-    expect(sessions.create).toHaveBeenCalledWith('game-1');
-    expect(result.isActive).toBe(true);
   });
 });

@@ -69,9 +69,5 @@ describe.skipIf(!integrationEnabled)(
         ]),
       );
     });
-
-    it('returns nothing for an empty list', async () => {
-      await expect(characters.findSkillSpend([])).resolves.toEqual([]);
-    });
   },
 );

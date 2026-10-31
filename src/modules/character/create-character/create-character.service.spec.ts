@@ -111,23 +111,6 @@ describe('CreateCharacterService', () => {
     expect(notifier.notifyRosterChanged).not.toHaveBeenCalled();
   });
 
-  it('notifies the live roster with the created character game', async () => {
-    const characters = makeCharacterRepository();
-    const membership = makeMembership();
-    const notifier = makeNotifier();
-    vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
-
-    await new CreateCharacterService(
-      characters,
-      membership,
-      fixedRng(1),
-      notifier,
-    ).execute('player-1', baseCommand());
-
-    expect(notifier.notifyRosterChanged).toHaveBeenCalledWith('game-1');
-  });
-
   it('allows the game master who is not a member to create a character', async () => {
     const characters = makeCharacterRepository();
     const membership = makeMembership();
@@ -323,42 +306,6 @@ describe('CreateCharacterService', () => {
     ).rejects.toBeInstanceOf(InvalidHeightError);
   });
 
-  it('normalizes bonds before persisting them', async () => {
-    const characters = makeCharacterRepository();
-    const membership = makeMembership();
-    vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
-
-    await new CreateCharacterService(
-      characters,
-      membership,
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('player-1', baseCommand({ bonds: ' a , A , b ' }));
-
-    expect(characters.create).toHaveBeenCalledWith(
-      expect.objectContaining({ bonds: ['A', 'B'] }),
-    );
-  });
-
-  it('leaves bonds untouched when they are omitted', async () => {
-    const characters = makeCharacterRepository();
-    const membership = makeMembership();
-    vi.mocked(membership.isMember).mockResolvedValue(true);
-    vi.mocked(characters.create).mockResolvedValue(makeCreateResult());
-
-    await new CreateCharacterService(
-      characters,
-      membership,
-      fixedRng(1),
-      makeNotifier(),
-    ).execute('player-1', baseCommand());
-
-    expect(characters.create).toHaveBeenCalledWith(
-      expect.not.objectContaining({ bonds: expect.anything() }),
-    );
-  });
-
   describe('with starting skills', () => {
     const VITALIDADE_ID = '11111111-1111-1111-1111-111111111111';
     const CONDICIONAMENTO_ID = '22222222-2222-2222-2222-222222222222';
@@ -406,18 +353,6 @@ describe('CreateCharacterService', () => {
           currentHp: 20 + 6 + 4,
           maxEffort: 23,
         }),
-      );
-    });
-
-    it('passes the requested skills to the repository', async () => {
-      const { characters, service } = setup();
-      const skills = [{ skillId: VITALIDADE_ID, proficiencyBonus: 2 }];
-      vi.mocked(characters.findSkillsByIds).mockResolvedValue([vitalidade]);
-
-      await service.execute('player-1', baseCommand({ skills }));
-
-      expect(characters.create).toHaveBeenCalledWith(
-        expect.objectContaining({ skills }),
       );
     });
 

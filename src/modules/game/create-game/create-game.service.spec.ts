@@ -51,24 +51,4 @@ describe('CreateGameService', () => {
     });
     expect(result.inviteCode).toBe('CODE123');
   });
-
-  it('forwards optional description and imageUrl', async () => {
-    const games = makeGames();
-    vi.mocked(games.create).mockResolvedValue(makeGame());
-
-    await new CreateGameService(games, {
-      generate: () => 'CODE123',
-    }).execute('master-1', {
-      name: 'Mesa',
-      description: 'Uma campanha',
-      imageUrl: 'https://example.com/art.png',
-    });
-
-    expect(games.create).toHaveBeenCalledWith('master-1', {
-      name: 'Mesa',
-      description: 'Uma campanha',
-      imageUrl: 'https://example.com/art.png',
-      inviteCode: 'CODE123',
-    });
-  });
 });

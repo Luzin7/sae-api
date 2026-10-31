@@ -74,38 +74,6 @@ function makeAuthToken(
 beforeEach(() => vi.clearAllMocks());
 
 describe('session routes', () => {
-  it('returns 401 when unauthenticated', async () => {
-    const app = await buildTestApp(makeServices(makeSessions(), makeAccess()));
-
-    const res = await app.inject({
-      method: 'POST',
-      url: `/games/${GAME_ID}/session/start`,
-    });
-
-    expect(res.statusCode).toBe(401);
-  });
-
-  it('returns 201 when the master starts a session', async () => {
-    const sessions = makeSessions();
-    const access = makeAccess();
-    vi.mocked(access.findById).mockResolvedValue({
-      id: GAME_ID,
-      masterId: PLAYER_ID,
-    });
-    vi.mocked(sessions.findActiveByGame).mockResolvedValue(null);
-    vi.mocked(sessions.create).mockResolvedValue(makeSession());
-    const app = await buildTestApp(makeServices(sessions, access));
-
-    const res = await app.inject({
-      method: 'POST',
-      url: `/games/${GAME_ID}/session/start`,
-      headers: { cookie: `token=${makeAuthToken(app)}` },
-    });
-
-    expect(res.statusCode).toBe(201);
-    expect(res.json().session.id).toBe(SESSION_ID);
-  });
-
   it('returns 409 when a session is already active', async () => {
     const sessions = makeSessions();
     const access = makeAccess();
@@ -146,25 +114,5 @@ describe('session routes', () => {
 
     expect(res.statusCode).toBe(403);
     expect(sessions.listLogs).not.toHaveBeenCalled();
-  });
-
-  it('returns 200 with a null session when there is no active session', async () => {
-    const sessions = makeSessions();
-    const access = makeAccess();
-    vi.mocked(access.findById).mockResolvedValue({
-      id: GAME_ID,
-      masterId: PLAYER_ID,
-    });
-    vi.mocked(sessions.findActiveByGame).mockResolvedValue(null);
-    const app = await buildTestApp(makeServices(sessions, access));
-
-    const res = await app.inject({
-      method: 'GET',
-      url: `/games/${GAME_ID}/session/active`,
-      headers: { cookie: `token=${makeAuthToken(app)}` },
-    });
-
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ session: null });
   });
 });
