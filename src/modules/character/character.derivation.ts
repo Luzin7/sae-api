@@ -76,13 +76,33 @@ export interface SizeInputs {
   weightRoll?: SizeExtremeBand;
 }
 
-function dimensionFactor(
-  roll: SizeExtremeBand | undefined,
-  rolledFactor: (band: SizeExtremeBand) => number,
-  value: number | null | undefined,
-  factorOf: (value: number) => number | null,
+export type SizeDimension = 'height' | 'weight';
+
+const SIZE_DIMENSIONS = {
+  height: {
+    rolledFactor: rolledHeightFactor,
+    factorOf: heightFactor,
+    valueKey: 'heightCm',
+    rollKey: 'heightRoll',
+  },
+  weight: {
+    rolledFactor: rolledWeightFactor,
+    factorOf: weightFactor,
+    valueKey: 'weightKg',
+    rollKey: 'weightRoll',
+  },
+} as const;
+
+/** Size factor of one dimension: a rolled band counts as its fixed factor; null when missing or out of bands. */
+export function sizeFactor(
+  dimension: SizeDimension,
+  input: SizeInputs,
 ): number | null {
+  const { rolledFactor, factorOf, valueKey, rollKey } =
+    SIZE_DIMENSIONS[dimension];
+  const roll = input[rollKey];
   if (roll) return rolledFactor(roll);
+  const value = input[valueKey];
   if (value === null || value === undefined) return null;
 
   return factorOf(value);
@@ -91,18 +111,8 @@ function dimensionFactor(
 /** Like `deriveSizeDetail`, but a rolled dimension counts as its band's fixed factor. */
 export function derivePreviewSizeDetail(input: SizeInputs): SizeDetail | null {
   return sizeDetailFromFactors(
-    dimensionFactor(
-      input.heightRoll,
-      rolledHeightFactor,
-      input.heightCm,
-      heightFactor,
-    ),
-    dimensionFactor(
-      input.weightRoll,
-      rolledWeightFactor,
-      input.weightKg,
-      weightFactor,
-    ),
+    sizeFactor('height', input),
+    sizeFactor('weight', input),
   );
 }
 

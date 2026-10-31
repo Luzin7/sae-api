@@ -18,8 +18,11 @@ describe('derivationTables parity with the rule functions', () => {
   it.each(NPS)('maxHp matches at NP %i for every CON and skill bonus', (np) => {
     for (const con of ATTRIBUTE_SCALE) {
       for (const bonus of SKILL_BONUSES) {
-        const { base } = tables.vitalFormulas.maxHp;
-        const served = base + np * tables.hitDieByConstitution[con].max + bonus;
+        const { base, hitDiePerNp } = tables.vitalFormulas.maxHp;
+        const dieTerm = hitDiePerNp
+          ? np * tables.hitDieByConstitution[con].max
+          : 0;
+        const served = base + dieTerm + bonus;
         expect(served).toBe(maxHp(np, con, bonus));
       }
     }

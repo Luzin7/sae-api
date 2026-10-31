@@ -37,6 +37,16 @@ export interface RulesRoutesOptions {
   skillCatalog: SkillCatalog;
 }
 
+function archetypeLevels<Levels>({
+  name,
+  levels,
+}: {
+  name: string;
+  levels: Levels;
+}) {
+  return { name, levels };
+}
+
 /**
  * Read-only catalog of the rulebook tables. Constants come from `@shared/rules`;
  * only `skillCatalog` is read from the DB so it can carry the persisted ids.
@@ -57,8 +67,8 @@ export default async function rulesRoutes(
     personalities: PERSONALITIES,
     postures: POSTURES,
     proficiencyByArchetype: {
-      personalities: PERSONALITIES,
-      postures: POSTURES,
+      personalities: PERSONALITIES.map(archetypeLevels),
+      postures: POSTURES.map(archetypeLevels),
     },
     oficios: OFICIOS,
     oficioCdReduction: OFICIO_CD_REDUCTION,

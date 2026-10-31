@@ -44,6 +44,7 @@ export interface BodyDimensionRule {
 export interface VitalFormula {
   base: number;
   skill: string;
+  hitDiePerNp: boolean;
 }
 
 export interface DerivationTables {
@@ -101,8 +102,12 @@ export function derivationTables(): DerivationTables {
     ) as Record<ProficiencyLevel, number>,
     bExpByNp: byNp(bExp),
     vitalFormulas: {
-      maxHp: { base: MAX_HP_BASE, skill: VITALIDADE },
-      maxEffort: { base: MAX_EFFORT_BASE, skill: CONDICIONAMENTO },
+      maxHp: { base: MAX_HP_BASE, skill: VITALIDADE, hitDiePerNp: true },
+      maxEffort: {
+        base: MAX_EFFORT_BASE,
+        skill: CONDICIONAMENTO,
+        hitDiePerNp: false,
+      },
     },
   };
 }

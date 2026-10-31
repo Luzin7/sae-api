@@ -159,8 +159,33 @@ describe('GET /rules', () => {
     expect(body.bExpByNp).toHaveLength(21);
     expect([1, 2, 20].map((np) => body.bExpByNp[np])).toEqual([0, 1, 10]);
     expect(body.vitalFormulas).toEqual({
-      maxHp: { base: 20, skill: 'Vitalidade' },
-      maxEffort: { base: 20, skill: 'Condicionamento' },
+      maxHp: { base: 20, skill: 'Vitalidade', hitDiePerNp: true },
+      maxEffort: { base: 20, skill: 'Condicionamento', hitDiePerNp: false },
     });
+  });
+
+  it('serves proficiencyByArchetype as name and levels only', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/rules',
+      headers: { authorization: `Bearer ${token()}` },
+    });
+
+    const { personalities, postures } = response.json().proficiencyByArchetype;
+    expect(personalities[0]).toEqual({
+      name: 'Erudito',
+      levels: {
+        cognition: 'especialista',
+        psyche: 'imperito',
+        instinct: 'imperito',
+      },
+    });
+    expect(postures[0]).toEqual({
+      name: 'Abrutalhado',
+      levels: expect.any(Object),
+    });
+    expect(response.json().personalities[0].motto).toBe(
+      'Observe. Analise. Questione.',
+    );
   });
 });
