@@ -6,6 +6,7 @@ import {
   setRefreshCookie,
 } from '@infra/http/auth-cookies.js';
 import { LoginBodySchema, RegisterBodySchema } from './auth.schemas.js';
+import { createLoginAccountRateLimit } from './login/login-account-rate-limit.js';
 import type { LoginService } from './login/login.service.js';
 import type { LogoutService } from './logout/logout.service.js';
 import type { RefreshService } from './refresh/refresh.service.js';
@@ -42,15 +43,22 @@ export default async function authRoutes(
     return reply.status(201).send({ player: result.player });
   });
 
-  app.post('/auth/login', AUTH_RATE_LIMIT, async (request, reply) => {
-    const body = LoginBodySchema.parse(request.body);
-    const result = await opts.services.login.execute(body);
+  app.post(
+    '/auth/login',
+    {
+      ...AUTH_RATE_LIMIT,
+      preHandler: createLoginAccountRateLimit(app),
+    },
+    async (request, reply) => {
+      const body = LoginBodySchema.parse(request.body);
+      const result = await opts.services.login.execute(body);
 
-    setAuthCookie(reply, result.accessToken);
-    setRefreshCookie(reply, result.refreshToken);
+      setAuthCookie(reply, result.accessToken);
+      setRefreshCookie(reply, result.refreshToken);
 
-    return reply.send({ player: result.player });
-  });
+      return reply.send({ player: result.player });
+    },
+  );
 
   app.post(
     '/auth/logout',

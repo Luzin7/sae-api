@@ -29,3 +29,14 @@ export class SessionExpiredError extends DomainError {
     super('Sessão expirada ou inválida.');
   }
 }
+
+export class LoginRateLimitedError extends DomainError {
+  readonly code: DomainErrorCode = 'RATE_LIMITED';
+  readonly httpStatus = 429;
+
+  constructor() {
+    super(
+      'Muitas tentativas de login para esta conta. Aguarde alguns minutos.',
+    );
+  }
+}
