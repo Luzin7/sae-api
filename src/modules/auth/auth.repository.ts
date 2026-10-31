@@ -5,12 +5,18 @@ export interface CredentialsRepository {
   create(input: { name: string; passwordHash: string }): Promise<PublicPlayer>;
 }
 
-export interface AuthSession {
-  playerId: string;
-  name: string;
-  expiresAt: Date;
-  lastUsedAt: Date | null;
+export interface RotateSessionInput {
+  presentedHash: string;
+  successorHash: string;
+  successorExpiresAt: Date;
+  now: Date;
+  graceWindowMs: number;
 }
+
+export type RotationOutcome =
+  | { status: 'issued'; playerId: string; name: string }
+  | { status: 'unknown' | 'expired' }
+  | { status: 'revoked' | 'reused'; playerId: string; familyId: string };
 
 export interface AuthSessionRepository {
   create(input: {
@@ -18,7 +24,6 @@ export interface AuthSessionRepository {
     tokenHash: string;
     expiresAt: Date;
   }): Promise<void>;
-  findByHash(tokenHash: string): Promise<AuthSession | null>;
-  deleteByHash(tokenHash: string): Promise<void>;
+  rotate(input: RotateSessionInput): Promise<RotationOutcome>;
   deleteByPlayerId(playerId: string): Promise<void>;
 }

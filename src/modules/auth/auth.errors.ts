@@ -40,3 +40,28 @@ export class LoginRateLimitedError extends DomainError {
     );
   }
 }
+
+export class SessionRevokedError extends DomainError {
+  readonly code: DomainErrorCode = 'UNAUTHORIZED';
+  readonly httpStatus = 401;
+
+  constructor() {
+    super('Sessão encerrada. Entre novamente.');
+  }
+}
+
+export class RefreshTokenReusedError extends DomainError {
+  readonly code: DomainErrorCode = 'UNAUTHORIZED';
+  readonly httpStatus = 401;
+
+  constructor() {
+    super('Sessão encerrada por segurança. Entre novamente.');
+  }
+}
+
+export class RefreshTokenIssueFailedError extends Error {
+  constructor() {
+    super('Falha ao emitir o refresh token.');
+    this.name = 'RefreshTokenIssueFailedError';
+  }
+}

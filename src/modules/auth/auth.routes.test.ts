@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import authPlugin from '../../plugins/auth.plugin.js';
 import rateLimitPlugin from '../../plugins/rate-limit.plugin.js';
 import { parseTrustProxy } from '@infra/http/trust-proxy.js';
@@ -27,8 +27,7 @@ function makeCredentialsRepository(): CredentialsRepository {
 function makeSessionsRepository(): AuthSessionRepository {
   return {
     create: vi.fn(),
-    findByHash: vi.fn(),
-    deleteByHash: vi.fn(),
+    rotate: vi.fn(),
     deleteByPlayerId: vi.fn(),
   };
 }
@@ -67,7 +66,9 @@ async function buildTestApp(trustProxy?: string): Promise<TestApp> {
       passwords,
       refreshTokens,
     ),
-    refresh: new RefreshService(sessions, { sign }, refreshTokens),
+    refresh: new RefreshService(sessions, { sign }, refreshTokens, {
+      warn: vi.fn(),
+    }),
     logout: new LogoutService(sessions),
     wsToken: new WsTokenService({ sign }),
   };
@@ -165,11 +166,10 @@ describe('POST /auth/refresh', () => {
 
   it('rotates the session and sets fresh cookies', async () => {
     const { app, sessions } = await buildTestApp();
-    vi.mocked(sessions.findByHash).mockResolvedValue({
+    vi.mocked(sessions.rotate).mockResolvedValue({
+      status: 'issued',
       playerId: 'player-1',
       name: 'Alice',
-      expiresAt: new Date(Date.now() + 100_000),
-      lastUsedAt: null,
     });
 
     const res = await app.inject({
@@ -182,6 +182,130 @@ describe('POST /auth/refresh', () => {
     const cookies = setCookieHeader(res.headers);
     expect(cookies).toContain('refresh_token=');
   });
+});
+
+describe('auth cookie attributes', () => {
+  const SEVEN_DAYS_SECONDS = '604800';
+
+  function parseCookie(
+    headers: { 'set-cookie'?: string | string[] },
+    name: string,
+  ): Map<string, string> {
+    const header = headers['set-cookie'] ?? [];
+    const lines = Array.isArray(header) ? header : [header];
+    const line = lines.find((entry) => entry.startsWith(`${name}=`)) ?? '';
+    const attributes = new Map<string, string>();
+    for (const part of line.split(';').slice(1)) {
+      const [key = '', value = ''] = part.trim().split('=');
+      attributes.set(key.toLowerCase(), value);
+    }
+
+    return attributes;
+  }
+
+  async function login() {
+    const { app, credentials } = await buildTestApp();
+    vi.mocked(credentials.findByUsername).mockResolvedValue({
+      id: 'player-1',
+      name: 'Alice',
+      passwordHash: 'password-hash',
+    });
+
+    return app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { name: 'Alice', password: 'secret123' },
+    });
+  }
+
+  async function refresh() {
+    const { app, sessions } = await buildTestApp();
+    vi.mocked(sessions.rotate).mockResolvedValue({
+      status: 'issued',
+      playerId: 'player-1',
+      name: 'Alice',
+    });
+
+    return app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      cookies: { refresh_token: 'old-token' },
+    });
+  }
+
+  async function logout() {
+    const { app } = await buildTestApp();
+
+    return app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      cookies: { token: app.jwt.sign({ sub: 'player-1', name: 'Alice' }) },
+    });
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    ['login', login],
+    ['refresh', refresh],
+  ])('%s sets exact cookie attributes in development', async (_, call) => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const res = await call();
+
+    const access = parseCookie(res.headers, 'token');
+    const refreshCookie = parseCookie(res.headers, 'refresh_token');
+    for (const attributes of [access, refreshCookie]) {
+      expect(attributes.has('httponly')).toBe(true);
+      expect(attributes.has('secure')).toBe(false);
+      expect(attributes.get('samesite')).toBe('Lax');
+      expect(attributes.get('path')).toBe('/');
+    }
+    expect(access.has('max-age')).toBe(false);
+    expect(refreshCookie.get('max-age')).toBe(SEVEN_DAYS_SECONDS);
+  });
+
+  it.each([
+    ['login', login],
+    ['refresh', refresh],
+  ])('%s sets exact cookie attributes in production', async (_, call) => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const res = await call();
+
+    const access = parseCookie(res.headers, 'token');
+    const refreshCookie = parseCookie(res.headers, 'refresh_token');
+    for (const attributes of [access, refreshCookie]) {
+      expect(attributes.has('httponly')).toBe(true);
+      expect(attributes.has('secure')).toBe(true);
+      expect(attributes.get('samesite')).toBe('None');
+      expect(attributes.get('path')).toBe('/');
+    }
+    expect(access.has('max-age')).toBe(false);
+    expect(refreshCookie.get('max-age')).toBe(SEVEN_DAYS_SECONDS);
+  });
+
+  it.each([
+    ['development', false, 'Lax'],
+    ['production', true, 'None'],
+  ])(
+    'logout clears both cookies with the %s attributes',
+    async (env, secure, sameSite) => {
+      vi.stubEnv('NODE_ENV', env);
+      const res = await logout();
+
+      expect(res.statusCode).toBe(200);
+      for (const name of ['token', 'refresh_token']) {
+        const attributes = parseCookie(res.headers, name);
+        expect(attributes.has('httponly')).toBe(true);
+        expect(attributes.has('secure')).toBe(secure);
+        expect(attributes.get('samesite')).toBe(sameSite);
+        expect(attributes.get('path')).toBe('/');
+        expect(attributes.get('max-age')).toBe('0');
+        expect(attributes.get('expires')).toBe('Thu, 01 Jan 1970 00:00:00 GMT');
+      }
+    },
+  );
 });
 
 describe('GET /auth/ws-token', () => {
