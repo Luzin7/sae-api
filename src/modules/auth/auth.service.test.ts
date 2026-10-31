@@ -185,23 +185,53 @@ describe('RefreshService', () => {
       generate: vi.fn().mockReturnValue('new-refresh-token'),
       hash: vi.fn((token: string) => `hash:${token}`),
     };
+    const logger = { warn: vi.fn() };
 
-    const service = new RefreshService(sessions, { sign }, refreshTokens);
+    const service = new RefreshService(
+      sessions,
+      { sign },
+      refreshTokens,
+      logger,
+    );
 
-    return { service, sessions, refreshTokens };
+    return { service, sessions, refreshTokens, logger };
   }
 
   it.each([
     ['unknown', SessionExpiredError],
     ['expired', SessionExpiredError],
-    ['revoked', SessionRevokedError],
-    ['reused', RefreshTokenReusedError],
   ] as const)('maps a %s token to its named error', async (status, error) => {
-    const { service, sessions } = makeSubject();
+    const { service, sessions, logger } = makeSubject();
     vi.mocked(sessions.rotate).mockResolvedValue({ status });
 
     await expect(service.execute('presented')).rejects.toBeInstanceOf(error);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [
+      'revoked',
+      SessionRevokedError,
+      'refresh token presented after revocation',
+    ],
+    ['reused', RefreshTokenReusedError, 'refresh token reuse detected'],
+  ] as const)(
+    'maps a %s token to its named error and logs a warning with ids only',
+    async (status, error, message) => {
+      const { service, sessions, logger } = makeSubject();
+      vi.mocked(sessions.rotate).mockResolvedValue({
+        status,
+        playerId: 'player-1',
+        familyId: 'family-1',
+      });
+
+      await expect(service.execute('presented')).rejects.toBeInstanceOf(error);
+      expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
+        { playerId: 'player-1', familyId: 'family-1' },
+        message,
+      );
+    },
+  );
 
   it('rejects an empty token without touching the repository', async () => {
     const { service, sessions } = makeSubject();

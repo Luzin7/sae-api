@@ -240,7 +240,12 @@ export function buildContainer(deps: {
           passwords,
           refreshTokens,
         ),
-        refresh: new RefreshService(authSessions, signing, refreshTokens),
+        refresh: new RefreshService(
+          authSessions,
+          signing,
+          refreshTokens,
+          deps.app.log,
+        ),
         logout: new LogoutService(authSessions),
         wsToken: new WsTokenService(signing),
       },

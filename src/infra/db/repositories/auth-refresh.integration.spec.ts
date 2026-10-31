@@ -57,7 +57,9 @@ async function buildApp(): Promise<FastifyInstance> {
       passwords,
       refreshTokens,
     ),
-    refresh: new RefreshService(sessions, signing, refreshTokens),
+    refresh: new RefreshService(sessions, signing, refreshTokens, {
+      warn: () => {},
+    }),
     logout: new LogoutService(sessions),
     wsToken: new WsTokenService(signing),
   };
@@ -177,6 +179,29 @@ describe.skipIf(!integrationEnabled)('refresh token rotation (real DB)', () => {
     expect(replay.statusCode).toBe(401);
     expect(afterReplay.statusCode).toBe(401);
     expect((await rowOf(latest)).revokedAt).not.toBeNull();
+  });
+
+  it('a replay after the window racing a legitimate rotation leaves no live token in the family', async () => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const { refreshToken } = await register();
+      const latest = cookieValue(await refresh(refreshToken), 'refresh_token');
+      await ageUse(refreshToken, REFRESH_GRACE_WINDOW_MS + 1_000);
+      const { familyId } = await rowOf(latest);
+
+      const [replay, legit] = await Promise.all([
+        refresh(refreshToken),
+        refresh(latest),
+      ]);
+
+      expect(replay.statusCode).toBe(401);
+      const family = await db
+        .select({ revokedAt: authSession.revokedAt })
+        .from(authSession)
+        .where(eq(authSession.familyId, familyId));
+      expect(family.filter((row) => row.revokedAt === null)).toHaveLength(0);
+      const successor = cookieValue(legit, 'refresh_token');
+      if (successor) expect((await refresh(successor)).statusCode).toBe(401);
+    }
   });
 
   it('logout revokes the session so the refresh token is rejected', async () => {

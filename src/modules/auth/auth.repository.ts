@@ -15,7 +15,8 @@ export interface RotateSessionInput {
 
 export type RotationOutcome =
   | { status: 'issued'; playerId: string; name: string }
-  | { status: 'unknown' | 'expired' | 'revoked' | 'reused' };
+  | { status: 'unknown' | 'expired' }
+  | { status: 'revoked' | 'reused'; playerId: string; familyId: string };
 
 export interface AuthSessionRepository {
   create(input: {

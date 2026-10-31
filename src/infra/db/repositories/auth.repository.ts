@@ -1,4 +1,5 @@
-import { and, eq, gt, isNull, lte } from 'drizzle-orm';
+import { and, eq, gt, isNull, lte, sql } from 'drizzle-orm';
+import { RefreshTokenIssueFailedError } from '@modules/auth/auth.errors.js';
 import type { Credentials, PublicPlayer } from '@modules/auth/auth.entity.js';
 import type {
   AuthSessionRepository,
@@ -43,9 +44,106 @@ async function insertSuccessor(
       expiresAt: input.successorExpiresAt,
     })
     .returning({ id: authSession.id });
-  if (!successor) throw new Error('Falha ao emitir o refresh token.');
+  if (!successor) throw new RefreshTokenIssueFailedError();
 
   return successor.id;
+}
+
+async function familyOf(tx: Tx, tokenHash: string): Promise<string | null> {
+  const [row] = await tx
+    .select({ familyId: authSession.familyId })
+    .from(authSession)
+    .where(eq(authSession.tokenHash, tokenHash));
+
+  return row?.familyId ?? null;
+}
+
+async function lockFamily(tx: Tx, familyId: string): Promise<void> {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${familyId}::text))`,
+  );
+}
+
+async function rotateClaimed(
+  tx: Tx,
+  input: RotateSessionInput,
+): Promise<RotationOutcome | null> {
+  const [claimed] = await tx
+    .update(authSession)
+    .set({ usedAt: input.now, lastUsedAt: input.now })
+    .where(
+      and(
+        eq(authSession.tokenHash, input.presentedHash),
+        isNull(authSession.usedAt),
+        isNull(authSession.revokedAt),
+        gt(authSession.expiresAt, input.now),
+      ),
+    )
+    .returning({
+      id: authSession.id,
+      playerId: authSession.playerId,
+      familyId: authSession.familyId,
+    });
+  if (!claimed) return null;
+
+  const successorId = await insertSuccessor(tx, claimed, input);
+  await tx
+    .update(authSession)
+    .set({ replacedById: successorId })
+    .where(eq(authSession.id, claimed.id));
+  await pruneExpired(tx, claimed.playerId, input.now);
+
+  return issued(tx, claimed.playerId);
+}
+
+async function classifyUnclaimed(
+  tx: Tx,
+  input: RotateSessionInput,
+): Promise<RotationOutcome> {
+  const [row] = await tx
+    .select({
+      playerId: authSession.playerId,
+      familyId: authSession.familyId,
+      expiresAt: authSession.expiresAt,
+      usedAt: authSession.usedAt,
+      revokedAt: authSession.revokedAt,
+    })
+    .from(authSession)
+    .where(eq(authSession.tokenHash, input.presentedHash));
+
+  if (!row) return { status: 'unknown' };
+  if (row.revokedAt) {
+    return {
+      status: 'revoked',
+      playerId: row.playerId,
+      familyId: row.familyId,
+    };
+  }
+  if (row.expiresAt.getTime() <= input.now.getTime()) {
+    return { status: 'expired' };
+  }
+  if (!row.usedAt || !isInsideGraceWindow(row.usedAt, input)) {
+    await revokeFamily(tx, row.familyId, input.now);
+
+    return { status: 'reused', playerId: row.playerId, familyId: row.familyId };
+  }
+
+  await insertSuccessor(tx, row, input);
+
+  return issued(tx, row.playerId);
+}
+
+async function revokeFamily(
+  tx: Tx,
+  familyId: string,
+  now: Date,
+): Promise<void> {
+  await tx
+    .update(authSession)
+    .set({ revokedAt: now })
+    .where(
+      and(eq(authSession.familyId, familyId), isNull(authSession.revokedAt)),
+    );
 }
 
 async function pruneExpired(
@@ -110,67 +208,15 @@ export function authSessionRepository(): AuthSessionRepository {
 
     async rotate(input: RotateSessionInput): Promise<RotationOutcome> {
       return db.transaction(async (tx) => {
-        const [claimed] = await tx
-          .update(authSession)
-          .set({ usedAt: input.now, lastUsedAt: input.now })
-          .where(
-            and(
-              eq(authSession.tokenHash, input.presentedHash),
-              isNull(authSession.usedAt),
-              isNull(authSession.revokedAt),
-              gt(authSession.expiresAt, input.now),
-            ),
-          )
-          .returning({
-            id: authSession.id,
-            playerId: authSession.playerId,
-            familyId: authSession.familyId,
-          });
+        const familyId = await familyOf(tx, input.presentedHash);
+        if (!familyId) return { status: 'unknown' };
 
-        if (claimed) {
-          const successorId = await insertSuccessor(tx, claimed, input);
-          await tx
-            .update(authSession)
-            .set({ replacedById: successorId })
-            .where(eq(authSession.id, claimed.id));
-          await pruneExpired(tx, claimed.playerId, input.now);
+        await lockFamily(tx, familyId);
 
-          return issued(tx, claimed.playerId);
-        }
-
-        const [row] = await tx
-          .select({
-            playerId: authSession.playerId,
-            familyId: authSession.familyId,
-            expiresAt: authSession.expiresAt,
-            usedAt: authSession.usedAt,
-            revokedAt: authSession.revokedAt,
-          })
-          .from(authSession)
-          .where(eq(authSession.tokenHash, input.presentedHash));
-
-        if (!row) return { status: 'unknown' };
-        if (row.revokedAt) return { status: 'revoked' };
-        if (row.expiresAt.getTime() <= input.now.getTime()) {
-          return { status: 'expired' };
-        }
-        if (!row.usedAt || !isInsideGraceWindow(row.usedAt, input)) {
-          await tx
-            .update(authSession)
-            .set({ revokedAt: input.now })
-            .where(
-              and(
-                eq(authSession.familyId, row.familyId),
-                isNull(authSession.revokedAt),
-              ),
-            );
-
-          return { status: 'reused' };
-        }
-
-        await insertSuccessor(tx, row, input);
-
-        return issued(tx, row.playerId);
+        return (
+          (await rotateClaimed(tx, input)) ??
+          (await classifyUnclaimed(tx, input))
+        );
       });
     },
 

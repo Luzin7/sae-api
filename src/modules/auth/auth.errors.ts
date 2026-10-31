@@ -58,3 +58,10 @@ export class RefreshTokenReusedError extends DomainError {
     super('Sessão encerrada por segurança. Entre novamente.');
   }
 }
+
+export class RefreshTokenIssueFailedError extends Error {
+  constructor() {
+    super('Falha ao emitir o refresh token.');
+    this.name = 'RefreshTokenIssueFailedError';
+  }
+}
