@@ -1,6 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 import authPlugin from '../../plugins/auth.plugin.js';
+import rateLimitPlugin from '../../plugins/rate-limit.plugin.js';
+import { parseTrustProxy } from '@infra/http/trust-proxy.js';
 import { registerErrorHandler } from '@infra/http/error-handler.js';
 import authRoutes, { type AuthServices } from './auth.routes.js';
 import type {
@@ -37,7 +39,7 @@ interface TestApp {
   sessions: AuthSessionRepository;
 }
 
-async function buildTestApp(): Promise<TestApp> {
+async function buildTestApp(trustProxy?: string): Promise<TestApp> {
   const credentials = makeCredentialsRepository();
   const sessions = makeSessionsRepository();
   const sign = vi.fn().mockReturnValue('signed-token');
@@ -70,7 +72,11 @@ async function buildTestApp(): Promise<TestApp> {
     wsToken: new WsTokenService({ sign }),
   };
 
-  const app = Fastify({ logger: false });
+  const app = Fastify({
+    logger: false,
+    trustProxy: parseTrustProxy(trustProxy),
+  });
+  await app.register(rateLimitPlugin);
   await app.register(authPlugin);
   registerErrorHandler(app);
   await app.register(authRoutes, { services });
@@ -221,5 +227,53 @@ describe('GET /auth/ws-token', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ token: 'signed-token' });
     expect(res.json().token).not.toBe(accessToken);
+  });
+});
+
+describe('POST /auth/login per-account rate limit', () => {
+  const REAL_CLIENT = '203.0.113.7';
+
+  function loginAs(app: FastifyInstance, name: string, attempt: number) {
+    return app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      headers: { 'x-forwarded-for': `fake-${attempt}, ${REAL_CLIENT}` },
+      payload: { name, password: 'wrong-password' },
+    });
+  }
+
+  it('blocks the 11th attempt for the same name despite a forged IP', async () => {
+    const { app } = await buildTestApp('2');
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      const res = await loginAs(app, 'Victim', attempt);
+      expect(res.statusCode).toBe(401);
+    }
+
+    const blocked = await loginAs(app, ' victim ', 11);
+
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.json().error.code).toBe('RATE_LIMITED');
+  });
+
+  it('does not affect a different name', async () => {
+    const { app } = await buildTestApp('2');
+    for (let attempt = 1; attempt <= 11; attempt++) {
+      await loginAs(app, 'victim', attempt);
+    }
+
+    const other = await loginAs(app, 'someone-else', 12);
+
+    expect(other.statusCode).toBe(401);
+  });
+
+  it('keeps invalid bodies as validation errors', async () => {
+    const { app } = await buildTestApp('2');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { name: 42 },
+    });
+
+    expect(res.statusCode).toBe(400);
   });
 });

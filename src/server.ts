@@ -11,6 +11,7 @@ import websocketPlugin from './plugins/websocket.plugin.js';
 
 import { db } from '@infra/db/index.js';
 import { registerErrorHandler } from '@infra/http/error-handler.js';
+import { parseTrustProxy } from '@infra/http/trust-proxy.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import bestiaryRoutes from './modules/bestiary/bestiary.routes.js';
 import characterRoutes from './modules/character/character.routes.js';
@@ -21,7 +22,10 @@ import rulesRoutes from './modules/rules/rules.routes.js';
 import sessionRoutes from './modules/session/session.routes.js';
 
 export async function buildApp() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: true,
+    trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+  });
 
   registerErrorHandler(app);
 
