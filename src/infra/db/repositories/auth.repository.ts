@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, lte, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { RefreshTokenIssueFailedError } from '@modules/auth/auth.errors.js';
 import type { Credentials, PublicPlayer } from '@modules/auth/auth.entity.js';
 import type {
@@ -151,11 +151,15 @@ async function pruneExpired(
   playerId: string,
   now: Date,
 ): Promise<void> {
-  await tx
-    .delete(authSession)
+  const lockable = tx
+    .select({ id: authSession.id })
+    .from(authSession)
     .where(
       and(eq(authSession.playerId, playerId), lte(authSession.expiresAt, now)),
-    );
+    )
+    .for('update', { skipLocked: true });
+
+  await tx.delete(authSession).where(inArray(authSession.id, lockable));
 }
 
 async function issued(tx: Tx, playerId: string): Promise<RotationOutcome> {

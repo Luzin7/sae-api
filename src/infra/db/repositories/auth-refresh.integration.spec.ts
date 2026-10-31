@@ -27,6 +27,8 @@ import {
 
 process.env.JWT_SECRET = 'integration-secret';
 
+const LOOP_TEST_TIMEOUT_MS = 30_000;
+
 const { cleanupSeed } = createSeed('auth-refresh');
 
 const refreshTokens = {
@@ -181,28 +183,35 @@ describe.skipIf(!integrationEnabled)('refresh token rotation (real DB)', () => {
     expect((await rowOf(latest)).revokedAt).not.toBeNull();
   });
 
-  it('a replay after the window racing a legitimate rotation leaves no live token in the family', async () => {
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      const { refreshToken } = await register();
-      const latest = cookieValue(await refresh(refreshToken), 'refresh_token');
-      await ageUse(refreshToken, REFRESH_GRACE_WINDOW_MS + 1_000);
-      const { familyId } = await rowOf(latest);
+  it(
+    'a replay after the window racing a legitimate rotation leaves no live token in the family',
+    async () => {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const { refreshToken } = await register();
+        const latest = cookieValue(
+          await refresh(refreshToken),
+          'refresh_token',
+        );
+        await ageUse(refreshToken, REFRESH_GRACE_WINDOW_MS + 1_000);
+        const { familyId } = await rowOf(latest);
 
-      const [replay, legit] = await Promise.all([
-        refresh(refreshToken),
-        refresh(latest),
-      ]);
+        const [replay, legit] = await Promise.all([
+          refresh(refreshToken),
+          refresh(latest),
+        ]);
 
-      expect(replay.statusCode).toBe(401);
-      const family = await db
-        .select({ revokedAt: authSession.revokedAt })
-        .from(authSession)
-        .where(eq(authSession.familyId, familyId));
-      expect(family.filter((row) => row.revokedAt === null)).toHaveLength(0);
-      const successor = cookieValue(legit, 'refresh_token');
-      if (successor) expect((await refresh(successor)).statusCode).toBe(401);
-    }
-  });
+        expect(replay.statusCode).toBe(401);
+        const family = await db
+          .select({ revokedAt: authSession.revokedAt })
+          .from(authSession)
+          .where(eq(authSession.familyId, familyId));
+        expect(family.filter((row) => row.revokedAt === null)).toHaveLength(0);
+        const successor = cookieValue(legit, 'refresh_token');
+        if (successor) expect((await refresh(successor)).statusCode).toBe(401);
+      }
+    },
+    LOOP_TEST_TIMEOUT_MS,
+  );
 
   it('logout revokes the session so the refresh token is rejected', async () => {
     const { refreshToken, accessToken } = await register();
@@ -216,6 +225,36 @@ describe.skipIf(!integrationEnabled)('refresh token rotation (real DB)', () => {
     expect(logout.statusCode).toBe(200);
     expect((await refresh(refreshToken)).statusCode).toBe(401);
   });
+
+  it(
+    'simultaneous logout and refresh never fail with anything but a 401 refresh',
+    async () => {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const { refreshToken, accessToken } = await register();
+        const { playerId } = await rowOf(refreshToken);
+        await db.insert(authSession).values(
+          Array.from({ length: 30 }, () => ({
+            playerId,
+            tokenHash: refreshTokens.generate(),
+            expiresAt: new Date(Date.now() - 1_000),
+          })),
+        );
+
+        const [logout, rotation] = await Promise.all([
+          app.inject({
+            method: 'POST',
+            url: '/auth/logout',
+            cookies: { token: accessToken },
+          }),
+          refresh(refreshToken),
+        ]);
+
+        expect(logout.statusCode).toBe(200);
+        expect([200, 401]).toContain(rotation.statusCode);
+      }
+    },
+    LOOP_TEST_TIMEOUT_MS,
+  );
 
   it('rejects an expired token', async () => {
     const { refreshToken } = await register();
