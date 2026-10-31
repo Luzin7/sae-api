@@ -54,11 +54,14 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Testes unitários
-        run: npx vitest run --exclude '**/node_modules/**' --exclude '**/dist/**' --exclude '**/*.integration.spec.ts'
+      - name: Lint, testes unitários e build em paralelo
+        run: |
+          npm run lint & lint=$!
+          npx vitest run --exclude '**/node_modules/**' --exclude '**/dist/**' --exclude '**/*.integration.spec.ts' & unit=$!
+          npm run build & build=$!
+          wait "$lint"
+          wait "$unit"
+          wait "$build"
 
       - name: Migrations
         run: npx tsx src/infra/db/migrate.ts
@@ -66,10 +69,7 @@ jobs:
       - name: Testes de integração
         run: npx vitest run .integration.spec.ts --no-file-parallelism --testTimeout=30000
 
-      - name: Build (também faz o typecheck)
-        run: npm run build
-
-      - name: Build de produção (dependências sem dev, como no Dockerfile)
+      - name: Runtime de produção (dependências sem dev, como no Dockerfile)
         run: |
-          npm ci --omit=dev --prefer-offline --no-audit --no-fund
+          npm prune --omit=dev --no-audit --no-fund
           NODE_ENV=production node dist/infra/db/migrate.js
