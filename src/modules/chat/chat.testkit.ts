@@ -3,6 +3,7 @@ import { pickUniqueValue } from '@shared/dice/initiative.js';
 import { systemRng } from '@shared/dice/random.js';
 import { vi } from 'vitest';
 import type { CharacterAccess } from './character-access.contract.js';
+import type { StoredChatMessage } from './chat.entity.js';
 import type { ChatMessageRepository } from './chat.repository.js';
 import type {
   AdvanceTurnInput,
@@ -50,6 +51,19 @@ export function makeChatMessages(): ChatMessageRepository {
 
 export function makeGameAccess(): GameAccess {
   return { findById: vi.fn(), isMember: vi.fn(), mastersAnyGame: vi.fn() };
+}
+
+export function storedChatMessage(
+  overrides: Partial<StoredChatMessage> = {},
+): StoredChatMessage {
+  return {
+    id: 'log-1',
+    sessionId: 'session-1',
+    playerId: 'p1',
+    body: 'Olá.',
+    createdAt: new Date('2024-01-01T00:00:00.000Z'),
+    ...overrides,
+  };
 }
 
 export function makeCombatants(): CombatantSource {

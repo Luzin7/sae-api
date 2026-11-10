@@ -8,6 +8,7 @@ import {
   makeCombat,
   makeGameAccess,
   makePlayerDirectory,
+  storedChatMessage,
 } from '../chat.testkit.js';
 import { ConnectService } from './connect.service.js';
 
@@ -100,6 +101,31 @@ describe('ConnectService', () => {
     expect(
       vi.mocked(messages.appendLog).mock.invocationCallOrder[0],
     ).toBeLessThan(publish.mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it('derives the author role of each history message against the game master', async () => {
+    const { messages, access, bus, service } = build();
+    vi.mocked(access.findById).mockResolvedValue({
+      id: 'game-1',
+      masterId: 'master-1',
+    });
+    vi.mocked(access.isMember).mockResolvedValue(true);
+    bus.register('socket-1', 'p1', () => undefined);
+    vi.mocked(messages.listRecentChat).mockResolvedValue([
+      storedChatMessage({ id: 'log-1', playerId: 'master-1' }),
+      storedChatMessage({ id: 'log-2', playerId: 'p1' }),
+    ]);
+
+    const result = await service.execute({
+      playerId: 'p1',
+      socketId: 'socket-1',
+      sessionId: 'session-1',
+    });
+
+    expect(result.history.map((message) => message.authorRole)).toEqual([
+      'master',
+      'player',
+    ]);
   });
 
   it('joins a player carrying every character in oldest-first order', async () => {

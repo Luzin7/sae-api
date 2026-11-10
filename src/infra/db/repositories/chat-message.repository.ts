@@ -1,5 +1,5 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
-import type { ChatMessage } from '@modules/chat/chat.entity.js';
+import type { StoredChatMessage } from '@modules/chat/chat.entity.js';
 import {
   type TestDeclaredPayload,
   TestDeclaredPayloadSchema,
@@ -30,7 +30,7 @@ function parseBody(payload: unknown): string {
 
 const TEST_ROLL_UNIQUE = 'session_log_test_roll_unique';
 
-function toChatMessage(row: SessionLogRow): ChatMessage {
+function toChatMessage(row: SessionLogRow): StoredChatMessage {
   return {
     id: row.id,
     sessionId: row.sessionId,
@@ -52,7 +52,9 @@ export function chatMessageRepository(): ChatMessageRepository {
       return row ?? null;
     },
 
-    async appendChat(input: AppendChatMessageInput): Promise<ChatMessage> {
+    async appendChat(
+      input: AppendChatMessageInput,
+    ): Promise<StoredChatMessage> {
       const [row] = await db
         .insert(sessionLog)
         .values({
@@ -81,7 +83,7 @@ export function chatMessageRepository(): ChatMessageRepository {
     async listRecentChat(
       sessionId: string,
       limit: number,
-    ): Promise<ChatMessage[]> {
+    ): Promise<StoredChatMessage[]> {
       const rows = await db
         .select()
         .from(sessionLog)
