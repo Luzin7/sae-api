@@ -1,5 +1,5 @@
 import type { TestDeclaredPayload } from '@modules/session/session.entity.js';
-import type { ChatMessage, InitiativeEntry } from './chat.entity.js';
+import type { InitiativeEntry, StoredChatMessage } from './chat.entity.js';
 
 export interface ChatSessionRef {
   id: string;
@@ -128,9 +128,12 @@ export interface AppendChatMessageInput {
  */
 export interface ChatMessageRepository {
   findSession(sessionId: string): Promise<ChatSessionRef | null>;
-  appendChat(input: AppendChatMessageInput): Promise<ChatMessage>;
+  appendChat(input: AppendChatMessageInput): Promise<StoredChatMessage>;
   appendLog(input: AppendSessionLogInput): Promise<void>;
-  listRecentChat(sessionId: string, limit: number): Promise<ChatMessage[]>;
+  listRecentChat(
+    sessionId: string,
+    limit: number,
+  ): Promise<StoredChatMessage[]>;
   findTestById(
     sessionId: string,
     testId: string,

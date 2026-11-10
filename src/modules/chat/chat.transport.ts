@@ -93,6 +93,7 @@ function toWireMessage(message: ChatMessage): ChatMessageWire {
     playerId: message.playerId,
     body: message.body,
     createdAt: message.createdAt.toISOString(),
+    authorRole: message.authorRole,
   };
 }
 

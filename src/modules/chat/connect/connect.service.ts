@@ -7,6 +7,7 @@ import {
   type ChatMessage,
   chatRoom,
   type OpenTestSnapshot,
+  withAuthorRole,
 } from '../chat.entity.js';
 import { resolvePlayerSummary, resolvePresence } from '../chat.players.js';
 import type { ChatMessageRepository } from '../chat.repository.js';
@@ -71,9 +72,12 @@ export class ConnectService {
     this.bus.publish(room, { type: 'presence', ...presence });
     this.bus.publish(room, { type: 'session.state', ...presence });
 
-    const history = await this.messages.listRecentChat(
+    const recent = await this.messages.listRecentChat(
       input.sessionId,
       CHAT_HISTORY_LIMIT,
+    );
+    const history = recent.map((message) =>
+      withAuthorRole(message, game.masterId),
     );
 
     const openTest = await this.resolveOpenTest(input.sessionId);

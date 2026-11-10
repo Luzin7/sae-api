@@ -4,12 +4,36 @@ import type {
 } from '@modules/session/session.entity.js';
 import type { RollKind } from '@shared/dice/roll.js';
 
+export type ChatAuthorRole = 'master' | 'player';
+
 export interface ChatMessage {
   id: string;
   sessionId: string;
   playerId: string | null;
   body: string;
   createdAt: Date;
+  authorRole: ChatAuthorRole;
+}
+
+export type StoredChatMessage = Omit<ChatMessage, 'authorRole'>;
+
+function resolveAuthorRole(
+  playerId: string | null,
+  masterId: string,
+): ChatAuthorRole {
+  if (playerId !== masterId) return 'player';
+
+  return 'master';
+}
+
+export function withAuthorRole(
+  message: StoredChatMessage,
+  masterId: string,
+): ChatMessage {
+  return {
+    ...message,
+    authorRole: resolveAuthorRole(message.playerId, masterId),
+  };
 }
 
 /** A player as seen by the wire (`session.state`, `presence`, dice, join). */

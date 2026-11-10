@@ -178,6 +178,7 @@ export const ChatMessageWireSchema = z.object({
   playerId: z.string().nullable(),
   body: z.string(),
   createdAt: z.string(),
+  authorRole: z.enum(['master', 'player']),
 });
 
 export type ChatMessageWire = z.infer<typeof ChatMessageWireSchema>;

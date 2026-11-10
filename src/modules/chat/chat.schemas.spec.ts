@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InboundFrameSchema } from './chat.schemas.js';
+import { ChatMessageWireSchema, InboundFrameSchema } from './chat.schemas.js';
 
 describe('InboundFrameSchema master.next-turn', () => {
   const SESSION_ID = '11111111-1111-4111-8111-111111111111';
@@ -124,5 +124,38 @@ describe('master.monster-afflictions-update frame', () => {
     expect(InboundFrameSchema.safeParse(frame(['inventada'])).success).toBe(
       false,
     );
+  });
+});
+
+describe('ChatMessageWireSchema authorRole', () => {
+  const message = (authorRole: unknown) => ({
+    id: 'log-1',
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    playerId: '22222222-2222-4222-8222-222222222222',
+    body: 'Olá.',
+    createdAt: '2024-01-01T00:00:00.000Z',
+    authorRole,
+  });
+
+  it.each(['master', 'player'])('accepts the role %s', (authorRole) => {
+    expect(ChatMessageWireSchema.safeParse(message(authorRole)).success).toBe(
+      true,
+    );
+  });
+
+  it.each(['MASTER', 'mestre', '', null, undefined])(
+    'rejects the role %s',
+    (authorRole) => {
+      expect(ChatMessageWireSchema.safeParse(message(authorRole)).success).toBe(
+        false,
+      );
+    },
+  );
+
+  it('requires the role', () => {
+    const withoutRole = message('master');
+    Reflect.deleteProperty(withoutRole, 'authorRole');
+
+    expect(ChatMessageWireSchema.safeParse(withoutRole).success).toBe(false);
   });
 });
